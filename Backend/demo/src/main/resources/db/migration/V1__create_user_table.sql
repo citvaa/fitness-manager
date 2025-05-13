@@ -8,5 +8,6 @@ CREATE TABLE "user" (
     id INT DEFAULT nextval('user_s') PRIMARY KEY,
     username VARCHAR UNIQUE,
     password VARCHAR,
-    email VARCHAR UNIQUE
+    email VARCHAR UNIQUE,
+    version INT NOT NULL
 );
