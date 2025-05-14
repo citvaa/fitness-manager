@@ -4,7 +4,7 @@ import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.impl.UserServiceImpl;
+import com.example.demo.service.impl.UserService;
 import com.example.demo.service.params.request.UserRequest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 public class UserServiceTest {
 
     @InjectMocks
-    private UserServiceImpl userService;
+    private UserService userService;
 
     @Mock
     private UserRepository userRepository;
@@ -34,14 +34,14 @@ public class UserServiceTest {
     private UserMapper userMapper;
 
     @Test
-    public void getUserById() {
+    public void getById() {
         User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com");
+        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com", 1);
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        Optional<UserDTO> result = userService.getUserById(1);
+        Optional<UserDTO> result = userService.getById(1);
 
         assertTrue(result.isPresent());
         assertEquals("Vuk", result.get().getUsername());
@@ -50,16 +50,16 @@ public class UserServiceTest {
     }
 
     @Test
-    public void createUser() {
+    public void create() {
         UserRequest userRequest = new UserRequest("Vuk", "Vuk", "vuk@example.com");
         User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com");
+        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com", 1);
 
         when(userMapper.toEntity(userRequest)).thenReturn(user);
         when(userRepository.save(user)).thenReturn(user);
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        UserDTO result = userService.createUser(userRequest);
+        UserDTO result = userService.create(userRequest);
 
         assertEquals("Vuk", result.getUsername());
         assertEquals("Vuk", result.getPassword());
@@ -67,16 +67,16 @@ public class UserServiceTest {
     }
 
     @Test
-    public void updateUser() {
+    public void update() {
         UserRequest userRequest = new UserRequest("Vuk Updated", "NewPass123", "vuk_updated@example.com");
         User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk Updated", "NewPass123", "vuk_updated@example.com");
+        UserDTO userDTO = new UserDTO(1, "Vuk Updated", "NewPass123", "vuk_updated@example.com", 1);
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        UserDTO result = userService.updateUser(1, userRequest);
+        UserDTO result = userService.update(1, userRequest);
 
         assertEquals("Vuk Updated", result.getUsername());
         assertEquals("NewPass123", result.getPassword());
@@ -84,10 +84,10 @@ public class UserServiceTest {
     }
 
     @Test
-    public void deleteUser() {
+    public void delete() {
         doNothing().when(userRepository).deleteById(1);
 
-        userService.deleteUser(1);
+        userService.delete(1);
 
         verify(userRepository, times(1)).deleteById(1);
     }

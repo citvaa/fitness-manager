@@ -14,5 +14,5 @@ public class UserDTO {
     private String username;
     private String password;
     private String email;
-    //TODO: treba da imas i polje version u DTO-u, nema razloga da se razlikuje
+    private Integer version;
 }
