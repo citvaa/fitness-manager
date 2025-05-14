@@ -3,9 +3,11 @@ package com.example.demo.controller;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.service.UserService;
 import com.example.demo.service.impl.UserServiceImpl;
-import com.example.demo.service.params.request.CreateUserRequest;
-import com.example.demo.service.params.request.RegisterUserRequest;
+import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
+import com.example.demo.service.params.request.UserRequest.LoginUserRequest;
+import com.example.demo.service.params.request.UserRequest.RegisterUserRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,8 +39,9 @@ public class UserController {
 
     @Operation(summary = "Create new user")
     @PostMapping
-    public UserDTO create(@RequestBody CreateUserRequest request) {
-        return userService.create(request);
+    public ResponseEntity<UserDTO> create(@RequestBody CreateUserRequest request) {
+        UserDTO createdUser = userService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
     @Operation(summary = "Update user")
@@ -58,6 +61,14 @@ public class UserController {
     @PostMapping("/register")
     public ResponseEntity<Void> register(@RequestBody RegisterUserRequest request) {
         userService.register(request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @Operation(summary = "Login user")
+    @PostMapping("/login")
+    public ResponseEntity<UserDTO> login(@RequestBody LoginUserRequest request) {
+        return userService.login(request)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 }

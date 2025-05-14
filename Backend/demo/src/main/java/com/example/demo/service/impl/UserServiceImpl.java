@@ -4,8 +4,9 @@ import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.params.request.CreateUserRequest;
-import com.example.demo.service.params.request.RegisterUserRequest;
+import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
+import com.example.demo.service.params.request.UserRequest.LoginUserRequest;
+import com.example.demo.service.params.request.UserRequest.RegisterUserRequest;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -76,5 +77,13 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     userRepository.clearRegistrationKey(user.getId());
                     userRepository.activateUser(user.getId());
                 });
+    }
+
+    public Optional<UserDTO> login(LoginUserRequest request) {
+        return Optional.ofNullable(userRepository.findByUsername(request.getUsername())
+                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
+                .filter(User::getIsActivated)
+                .map(userMapper::toDto)
+                .orElseThrow(() -> new RuntimeException("Invalid credentials or user not activated")));
     }
 }

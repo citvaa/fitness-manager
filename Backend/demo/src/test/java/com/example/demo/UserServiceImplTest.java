@@ -5,7 +5,7 @@ import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.impl.UserServiceImpl;
-import com.example.demo.service.params.request.CreateUserRequest;
+import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
