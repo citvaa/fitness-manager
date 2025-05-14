@@ -8,6 +8,9 @@ import java.util.Optional;
 
 public interface UserService {
 
+    //TODO: cisto stvar naming konvencije, ako se servis zove UserService, nema potrebe metode imaju u sebi rec Users
+    // mogu slobodno da se zovu getAll, getById, create, update, delete
+
     List<UserDTO> getAllUsers();
 
     Optional<UserDTO> getUserById(Integer id);

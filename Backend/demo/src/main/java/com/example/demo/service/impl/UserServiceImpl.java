@@ -28,6 +28,7 @@ public class UserServiceImpl implements UserService {
                 .stream()
                 .map(userMapper::toDto)
                 .collect(Collectors.toList());
+        //TODO: od neke verzije je moze pisati toList() umesto collect(Collectors.toList())
     }
 
     public Optional<UserDTO> getUserById(Integer id) {

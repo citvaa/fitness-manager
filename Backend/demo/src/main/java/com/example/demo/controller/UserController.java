@@ -13,6 +13,7 @@ import java.util.List;
 @RequestMapping("api/user")
 public class UserController {
 
+    //TODO: trebalo bi da se instancira interfejs a ne servis
     private final UserServiceImpl userServiceImpl;
 
     public UserController(UserServiceImpl userServiceImpl) {
