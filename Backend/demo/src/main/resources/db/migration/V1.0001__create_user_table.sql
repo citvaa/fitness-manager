@@ -9,5 +9,8 @@ CREATE TABLE "user" (
     username VARCHAR UNIQUE,
     password VARCHAR,
     email VARCHAR UNIQUE,
+    registration_key uuid,
+    registration_key_validity TIMESTAMP,
+    is_activated BOOLEAN,
     version INT NOT NULL
 );

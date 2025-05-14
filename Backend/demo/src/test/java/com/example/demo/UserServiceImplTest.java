@@ -4,8 +4,8 @@ import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.impl.UserService;
-import com.example.demo.service.params.request.UserRequest;
+import com.example.demo.service.impl.UserServiceImpl;
+import com.example.demo.service.params.request.CreateUserRequest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
@@ -22,10 +22,10 @@ import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @RunWith(MockitoJUnitRunner.class)
-public class UserServiceTest {
+public class UserServiceImplTest {
 
     @InjectMocks
-    private UserService userService;
+    private UserServiceImpl userServiceImpl;
 
     @Mock
     private UserRepository userRepository;
@@ -35,51 +35,65 @@ public class UserServiceTest {
 
     @Test
     public void getById() {
-        User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com", 1);
+        User user = new User();
+        user.setUsername("Vuk");
+        user.setEmail("vuk@example.com");
+
+        UserDTO userDTO = new UserDTO();
+        userDTO.setUsername("Vuk");
+        userDTO.setEmail("vuk@example.com");
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        Optional<UserDTO> result = userService.getById(1);
+        Optional<UserDTO> result = userServiceImpl.getById(1);
 
         assertTrue(result.isPresent());
         assertEquals("Vuk", result.get().getUsername());
-        assertEquals("Vuk", result.get().getPassword());
         assertEquals("vuk@example.com", result.get().getEmail());
     }
 
     @Test
     public void create() {
-        UserRequest userRequest = new UserRequest("Vuk", "Vuk", "vuk@example.com");
-        User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk", "Vuk", "vuk@example.com", 1);
+        CreateUserRequest createUserRequest = new CreateUserRequest("Vuk", "vuk@example.com");
 
-        when(userMapper.toEntity(userRequest)).thenReturn(user);
+        User user = new User();
+        user.setUsername("Vuk");
+        user.setEmail("vuk@example.com");
+
+        UserDTO userDTO = new UserDTO();
+        userDTO.setUsername("Vuk");
+        userDTO.setEmail("vuk@example.com");
+
+        when(userMapper.toEntity(createUserRequest)).thenReturn(user);
         when(userRepository.save(user)).thenReturn(user);
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        UserDTO result = userService.create(userRequest);
+        UserDTO result = userServiceImpl.create(createUserRequest);
 
         assertEquals("Vuk", result.getUsername());
-        assertEquals("Vuk", result.getPassword());
         assertEquals("vuk@example.com", result.getEmail());
     }
 
     @Test
     public void update() {
-        UserRequest userRequest = new UserRequest("Vuk Updated", "NewPass123", "vuk_updated@example.com");
-        User user = new User(1, "Vuk", "Vuk", "vuk@example.com", 1);
-        UserDTO userDTO = new UserDTO(1, "Vuk Updated", "NewPass123", "vuk_updated@example.com", 1);
+        CreateUserRequest createUserRequest = new CreateUserRequest("Vuk Updated", "vuk_updated@example.com");
+
+        User user = new User();
+        user.setUsername("Vuk");
+        user.setEmail("vuk@example.com");
+
+        UserDTO userDTO = new UserDTO();
+        userDTO.setUsername("Vuk Updated");
+        userDTO.setEmail("vuk_updated@example.com");
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toDto(user)).thenReturn(userDTO);
 
-        UserDTO result = userService.update(1, userRequest);
+        UserDTO result = userServiceImpl.update(1, createUserRequest);
 
         assertEquals("Vuk Updated", result.getUsername());
-        assertEquals("NewPass123", result.getPassword());
         assertEquals("vuk_updated@example.com", result.getEmail());
     }
 
@@ -87,7 +101,7 @@ public class UserServiceTest {
     public void delete() {
         doNothing().when(userRepository).deleteById(1);
 
-        userService.delete(1);
+        userServiceImpl.delete(1);
 
         verify(userRepository, times(1)).deleteById(1);
     }

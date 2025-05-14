@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -14,5 +17,8 @@ public class UserDTO {
     private String username;
     private String password;
     private String email;
+    private UUID registrationKey;
+    private LocalDateTime registrationKeyValidity;
+    private Boolean isActivated;
     private Integer version;
 }
