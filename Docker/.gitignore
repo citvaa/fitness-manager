@@ -1,3 +1,5 @@
 # Idea specific files
 /.idea
+# Docker specific files
 Docker.iml
+postgres_data
