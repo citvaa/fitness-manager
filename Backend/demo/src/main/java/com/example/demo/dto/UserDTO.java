@@ -20,5 +20,7 @@ public class UserDTO {
     private UUID registrationKey;
     private LocalDateTime registrationKeyValidity;
     private Boolean isActivated;
+    private UUID resetToken;
+    private LocalDateTime resetTokenValidity;
     private Integer version;
 }

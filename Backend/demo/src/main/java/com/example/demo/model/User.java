@@ -41,6 +41,12 @@ public class User {
     @Column(name = "is_activated")
     private Boolean isActivated;
 
+    @Column(name = "reset_token")
+    private UUID resetToken;
+
+    @Column(name = "reset_token_validity")
+    private LocalDateTime resetTokenValidity;
+
     @Version
     @Column(name = "version")
     private Integer version;

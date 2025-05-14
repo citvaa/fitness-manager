@@ -1,4 +1,4 @@
-package com.example.demo.service.params.request.UserRequest;
+package com.example.demo.service.params.request.User;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,7 +11,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Getter
 @Setter
-public class RegisterUserRequest {
-    private UUID registrationKey;
+public class ResetPasswordRequest {
+    private UUID resetToken;
     private String password;
 }

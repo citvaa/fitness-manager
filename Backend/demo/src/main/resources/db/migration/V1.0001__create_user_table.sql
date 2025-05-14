@@ -12,5 +12,7 @@ CREATE TABLE "user" (
     registration_key uuid,
     registration_key_validity TIMESTAMP,
     is_activated BOOLEAN,
+    reset_token uuid,
+    reset_token_validity TIMESTAMP,
     version INT NOT NULL
 );

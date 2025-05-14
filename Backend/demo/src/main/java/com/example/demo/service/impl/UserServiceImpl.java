@@ -4,9 +4,10 @@ import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
-import com.example.demo.service.params.request.UserRequest.LoginUserRequest;
-import com.example.demo.service.params.request.UserRequest.RegisterUserRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
+import com.example.demo.service.params.request.User.LoginUserRequest;
+import com.example.demo.service.params.request.User.RegisterUserRequest;
+import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         user.setRegistrationKeyValidity(registration_key_validity);
         user.setIsActivated(false);
 
+        //ovde se salje key na mejl
+
         User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
     }
@@ -57,7 +60,6 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         return userRepository.findById(id)
                 .map(user -> {
                     user.setUsername(request.getUsername());
-                    //user.setPassword(request.getPassword());
                     user.setEmail(request.getEmail());
                     User savedUser = userRepository.save(user);
                     return userMapper.toDto(savedUser);
@@ -73,9 +75,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 .filter(user -> user.getRegistrationKeyValidity().isAfter(LocalDateTime.now()))
                 .ifPresent(user -> {
                     String hashedPassword = passwordEncoder.encode(request.getPassword());
-                    userRepository.updatePasswordByRegistrationKey(request.getRegistrationKey(), hashedPassword);
-                    userRepository.clearRegistrationKey(user.getId());
-                    userRepository.activateUser(user.getId());
+                    user.setPassword(hashedPassword);
+                    user.setRegistrationKey(null);
+                    user.setRegistrationKeyValidity(null);
+                    user.setIsActivated(true);
+                    userRepository.save(user);
                 });
     }
 
@@ -86,4 +90,28 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 .map(userMapper::toDto)
                 .orElseThrow(() -> new RuntimeException("Invalid credentials or user not activated")));
     }
+
+    public void requestPasswordReset(String email) {
+        UUID resetToken = UUID.randomUUID();
+        LocalDateTime resetTokenValidity = LocalDateTime.now().plusDays(1);
+
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setResetToken(resetToken);
+            user.setResetTokenValidity(resetTokenValidity);
+            userRepository.save(user);
+            //ovde se salje token na mejl
+        });
+    }
+
+    public void resetPassword(ResetPasswordRequest request) {
+        userRepository.findByResetToken(request.getResetToken())
+                .ifPresent(user -> {
+                    String hashedPassword = passwordEncoder.encode(request.getPassword());
+                    user.setPassword(hashedPassword);
+                    user.setResetToken(null);
+                    user.setResetTokenValidity(null);
+                    userRepository.save(user);
+                });
+    }
+
 }

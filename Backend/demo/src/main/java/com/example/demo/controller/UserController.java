@@ -3,9 +3,10 @@ package com.example.demo.controller;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.service.UserService;
 import com.example.demo.service.impl.UserServiceImpl;
-import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
-import com.example.demo.service.params.request.UserRequest.LoginUserRequest;
-import com.example.demo.service.params.request.UserRequest.RegisterUserRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
+import com.example.demo.service.params.request.User.LoginUserRequest;
+import com.example.demo.service.params.request.User.RegisterUserRequest;
+import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -70,5 +71,19 @@ public class UserController {
         return userService.login(request)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    }
+
+    @Operation(summary = "User forgot password")
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> requestPasswordReset(@RequestParam String email) {
+        userService.requestPasswordReset(email);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "User reset password")
+    @PostMapping("reset-password")
+    public ResponseEntity<Void> resetPassword(@RequestBody ResetPasswordRequest request) {
+        userService.resetPassword(request);
+        return ResponseEntity.ok().build();
     }
 }

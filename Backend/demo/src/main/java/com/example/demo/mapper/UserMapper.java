@@ -2,7 +2,7 @@ package com.example.demo.mapper;
 
 import com.example.demo.dto.UserDTO;
 import com.example.demo.model.User;
-import com.example.demo.service.params.request.UserRequest.CreateUserRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
 import org.mapstruct.Mapper;
 
 import java.util.List;

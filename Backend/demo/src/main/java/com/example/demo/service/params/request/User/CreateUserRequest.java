@@ -1,4 +1,4 @@
-package com.example.demo.service.params.request.UserRequest;
+package com.example.demo.service.params.request.User;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
