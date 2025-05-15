@@ -1,59 +1,118 @@
 package com.example.demo.service.impl;
 
+import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.UserService;
-import com.example.demo.service.params.request.UserRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
+import com.example.demo.service.params.request.User.LoginUserRequest;
+import com.example.demo.service.params.request.User.RegisterUserRequest;
+import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
+@RequiredArgsConstructor
 @Service
-public class UserServiceImpl implements UserService {
+public class UserServiceImpl implements com.example.demo.service.UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
+    private final AppConfig appConfig;
 
-    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper) {
-        this.userRepository = userRepository;
-        this.userMapper = userMapper;
+    public List<UserDTO> getAll() {
+        List<User> users = userRepository.findAll();
+        return userMapper.toDto(users);
     }
 
-    public List<UserDTO> getAllUsers() {
-        return userRepository.findAll()
-                .stream()
+    public Optional<UserDTO> getById(Integer id) {
+        return Optional.ofNullable(userRepository.findById(id)
                 .map(userMapper::toDto)
-                .collect(Collectors.toList());
-        //TODO: od neke verzije je moze pisati toList() umesto collect(Collectors.toList())
+                .orElseThrow(() -> new EntityNotFoundException("User not found")));
     }
 
-    public Optional<UserDTO> getUserById(Integer id) {
-        return userRepository.findById(id)
-                .map(userMapper::toDto);
-    }
+    public UserDTO create(CreateUserRequest request) {
+        String registration_key = UUID.randomUUID().toString();
+        LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
-    public UserDTO createUser(UserRequest request) {
         User user = userMapper.toEntity(request);
+        user.setRegistrationKey(registration_key);
+        user.setRegistrationKeyValidity(registration_key_validity);
+        user.setIsActivated(false);
+
+        //ovde se salje key na mejl
+
         User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
     }
 
-    public UserDTO updateUser(Integer id, UserRequest request) {
+    public UserDTO update(Integer id, CreateUserRequest request) {
         return userRepository.findById(id)
                 .map(user -> {
                     user.setUsername(request.getUsername());
-                    user.setPassword(request.getPassword());
                     user.setEmail(request.getEmail());
                     User savedUser = userRepository.save(user);
                     return userMapper.toDto(savedUser);
-                }).orElseThrow(() -> new RuntimeException("User not found"));
+                }).orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
-    public void deleteUser(Integer id) {
-        userRepository.deleteById(id);
+    public void delete(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        userRepository.delete(user);
     }
+
+    public void register(RegisterUserRequest request) {
+        userRepository.findByRegistrationKey(request.getRegistrationKey())
+                .filter(user -> user.getRegistrationKeyValidity().isAfter(LocalDateTime.now()))
+                .ifPresent(user -> {
+                    String hashedPassword = passwordEncoder.encode(request.getPassword());
+                    user.setPassword(hashedPassword);
+                    user.setRegistrationKey(null);
+                    user.setRegistrationKeyValidity(null);
+                    user.setIsActivated(true);
+                    userRepository.save(user);
+                });
+    }
+
+    public Optional<UserDTO> login(LoginUserRequest request) {
+        return Optional.ofNullable(userRepository.findByUsername(request.getUsername())
+                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
+                .filter(User::getIsActivated)
+                .map(userMapper::toDto)
+                .orElseThrow(() -> new RuntimeException("Invalid credentials or user not activated")));
+    }
+
+    public void requestPasswordReset(String email) {
+        String resetKey = UUID.randomUUID().toString();
+        LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
+
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setResetKey(resetKey);
+            user.setResetTokenValidity(resetKeyValidity);
+            userRepository.save(user);
+            //ovde se salje token na mejl
+        });
+    }
+
+    public void resetPassword(ResetPasswordRequest request) {
+        userRepository.findByResetKey(request.getResetKey())
+                .ifPresent(user -> {
+                    String hashedPassword = passwordEncoder.encode(request.getPassword());
+                    user.setPassword(hashedPassword);
+                    user.setResetKey(null);
+                    user.setResetTokenValidity(null);
+                    userRepository.save(user);
+                });
+    }
+
 }

@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -14,5 +16,10 @@ public class UserDTO {
     private String username;
     private String password;
     private String email;
-    //TODO: treba da imas i polje version u DTO-u, nema razloga da se razlikuje
+    private String registrationKey;
+    private LocalDateTime registrationKeyValidity;
+    private Boolean isActivated;
+    private String resetKey;
+    private LocalDateTime resetKeyValidity;
+    private Integer version;
 }

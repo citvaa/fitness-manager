@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
@@ -28,6 +30,21 @@ public class User {
 
     @Column(name = "email")
     private String email;
+
+    @Column(name = "registration_key")
+    private String registrationKey;
+
+    @Column(name = "registration_key_validity")
+    private LocalDateTime registrationKeyValidity;
+
+    @Column(name = "is_activated")
+    private Boolean isActivated;
+
+    @Column(name = "reset_key")
+    private String resetKey;
+
+    @Column(name = "reset_key_validity")
+    private LocalDateTime resetTokenValidity;
 
     @Version
     @Column(name = "version")

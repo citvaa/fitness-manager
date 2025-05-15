@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: fitness-manager
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  datasource:
+    url: jdbc:postgresql://localhost:8877/fm
+    username: fm_dbuser
+    password: password
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+server:
+  port: 8088
+
+app:
+  registration-key-validity-minutes: 10
+  reset-key-validity-minutes: 10

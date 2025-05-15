@@ -1,23 +1,31 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.UserDTO;
-import com.example.demo.service.params.request.UserRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
+import com.example.demo.service.params.request.User.LoginUserRequest;
+import com.example.demo.service.params.request.User.RegisterUserRequest;
+import com.example.demo.service.params.request.User.ResetPasswordRequest;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface UserService {
 
-    //TODO: cisto stvar naming konvencije, ako se servis zove UserService, nema potrebe metode imaju u sebi rec Users
-    // mogu slobodno da se zovu getAll, getById, create, update, delete
+    List<UserDTO> getAll();
 
-    List<UserDTO> getAllUsers();
+    Optional<UserDTO> getById(Integer id);
 
-    Optional<UserDTO> getUserById(Integer id);
+    UserDTO create(CreateUserRequest request);
 
-    UserDTO createUser(UserRequest request);
+    UserDTO update(Integer id, CreateUserRequest request);
 
-    UserDTO updateUser(Integer id, UserRequest request);
+    void delete(Integer id);
 
-    void deleteUser(Integer id);
+    void register(RegisterUserRequest request);
+
+    Optional<UserDTO> login(LoginUserRequest request);
+
+    void requestPasswordReset(String email);
+
+    void resetPassword(ResetPasswordRequest request);
 }
