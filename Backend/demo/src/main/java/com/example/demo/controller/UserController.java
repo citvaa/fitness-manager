@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.service.UserService;
 import com.example.demo.service.params.request.User.CreateUserRequest;
@@ -19,6 +20,7 @@ public class UserController {
 
     private final UserService userService;
 
+    @RoleRequired("MANAGER")
     @GetMapping
     public Page<UserDTO> getUsers(
             @RequestParam(defaultValue = "0") int page,
@@ -28,6 +30,7 @@ public class UserController {
         return userService.getUsers(page, size, sortBy);
     }
 
+    @RoleRequired("MANAGER")
     @GetMapping("/{id}")
     public ResponseEntity<UserDTO> getById(@PathVariable Integer id) {
         return userService.getById(id)
@@ -35,17 +38,20 @@ public class UserController {
                 .orElseGet(()-> ResponseEntity.notFound().build());
     }
 
+    @RoleRequired("MANAGER")
     @PostMapping
     public ResponseEntity<UserDTO> create(@RequestBody CreateUserRequest request) {
         UserDTO createdUser = userService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
+    @RoleRequired("MANAGER")
     @PutMapping("/{id}")
     public ResponseEntity<UserDTO> update(@PathVariable Integer id, @RequestBody CreateUserRequest request) {
         return ResponseEntity.ok(userService.update(id, request));
     }
 
+    @RoleRequired("MANAGER")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         userService.delete(id);
@@ -75,12 +81,14 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @RoleRequired("MANAGER")
     @PatchMapping("/{id}/role/add")
     public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam String role) {
         userService.addRole(id, role);
         return ResponseEntity.ok().build();
     }
 
+    @RoleRequired("MANAGER")
     @PatchMapping("/{id}/role/remove")
     public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam String role) {
         userService.removeRole(id, role);

@@ -1,4 +1,4 @@
-package com.example.demo.configuration;
+package com.example.demo.interceptor;
 
 import com.example.demo.util.JwtUtil;
 import io.jsonwebtoken.Jwts;
@@ -19,7 +19,7 @@ public class JwtInterceptor implements HandlerInterceptor {
     private final JwtUtil jwtUtil;
 
     @Override
-    public boolean preHandle(@org.jetbrains.annotations.NotNull HttpServletRequest request, @NotNull HttpServletResponse response, @NotNull Object handler) throws IOException {
+    public boolean preHandle(HttpServletRequest request, @NotNull HttpServletResponse response, @NotNull Object handler) throws IOException {
         String token = request.getHeader("Authorization");
 
         if (token == null || !token.startsWith("Bearer ")) {
