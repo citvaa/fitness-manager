@@ -18,3 +18,7 @@ spring:
 
 server:
   port: 8088
+
+app:
+  registration-key-validity-minutes: 10
+  reset-token-validity-minutes: 10

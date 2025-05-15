@@ -1,5 +1,6 @@
 package com.example.demo.service.impl;
 
+import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
@@ -9,6 +10,7 @@ import com.example.demo.service.params.request.User.LoginUserRequest;
 import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -17,22 +19,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@RequiredArgsConstructor
 @Service
 public class UserServiceImpl implements com.example.demo.service.UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-
-    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.userMapper = userMapper;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private final AppConfig appConfig;
 
     public List<UserDTO> getAll() {
         List<User> users = userRepository.findAll();
-        return userMapper.toDTOList(users);
+        return userMapper.toDto(users);
     }
 
     public Optional<UserDTO> getById(Integer id) {
@@ -43,7 +41,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
 
     public UserDTO create(CreateUserRequest request) {
         UUID registration_key = UUID.randomUUID();
-        LocalDateTime registration_key_validity = LocalDateTime.now().plusDays(1);
+        LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
         User user = userMapper.toEntity(request);
         user.setRegistrationKey(registration_key);
@@ -63,11 +61,14 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     user.setEmail(request.getEmail());
                     User savedUser = userRepository.save(user);
                     return userMapper.toDto(savedUser);
-                }).orElseThrow(() -> new RuntimeException("User not found"));
+                }).orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
     public void delete(Integer id) {
-        userRepository.deleteById(id);
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        userRepository.delete(user);
     }
 
     public void register(RegisterUserRequest request) {
@@ -92,8 +93,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     public void requestPasswordReset(String email) {
-        UUID resetToken = UUID.randomUUID();
-        LocalDateTime resetTokenValidity = LocalDateTime.now().plusDays(1);
+        String resetToken = UUID.randomUUID().toString();
+        LocalDateTime resetTokenValidity = LocalDateTime.now().plusMinutes(appConfig.getResetTokenValidityMinutes());
 
         userRepository.findByEmail(email).ifPresent(user -> {
             user.setResetToken(resetToken);

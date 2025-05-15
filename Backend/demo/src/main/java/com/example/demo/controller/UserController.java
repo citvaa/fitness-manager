@@ -2,27 +2,24 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.UserDTO;
 import com.example.demo.service.UserService;
-import com.example.demo.service.impl.UserServiceImpl;
 import com.example.demo.service.params.request.User.CreateUserRequest;
 import com.example.demo.service.params.request.User.LoginUserRequest;
 import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("api/user")
 public class UserController {
 
     private final UserService userService;
-
-    public UserController(UserServiceImpl userService) {
-        this.userService = userService;
-    }
 
     @Operation(summary = "Get all users")
     @GetMapping

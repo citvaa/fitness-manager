@@ -42,7 +42,7 @@ public class User {
     private Boolean isActivated;
 
     @Column(name = "reset_token")
-    private UUID resetToken;
+    private String resetToken;
 
     @Column(name = "reset_token_validity")
     private LocalDateTime resetTokenValidity;
