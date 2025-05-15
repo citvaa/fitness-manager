@@ -21,7 +21,7 @@ public interface UserService {
 
     void register(RegisterUserRequest request);
 
-    Optional<UserDTO> login(LoginUserRequest request);
+    String login(LoginUserRequest request);
 
     void requestPasswordReset(String email);
 

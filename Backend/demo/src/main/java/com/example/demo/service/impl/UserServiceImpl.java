@@ -11,6 +11,7 @@ import com.example.demo.service.params.request.User.CreateUserRequest;
 import com.example.demo.service.params.request.User.LoginUserRequest;
 import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +36,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final PasswordEncoder passwordEncoder;
     private final AppConfig appConfig;
     private final RoleRepository roleRepository;
+    private final JwtUtil jwtUtil;
 
     public Page<UserDTO> getUsers(int page, int size, String sortBy) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
@@ -91,12 +94,15 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 });
     }
 
-    public Optional<UserDTO> login(LoginUserRequest request) {
-        return Optional.ofNullable(userRepository.findByUsername(request.getUsername())
-                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
-                .filter(User::getIsActivated)
-                .map(userMapper::toDto)
-                .orElseThrow(() -> new RuntimeException("Invalid credentials or user not activated")));
+    public String login(LoginUserRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Wrong password");
+        }
+
+        return jwtUtil.generateToken(user);
     }
 
     public void requestPasswordReset(String email) {
