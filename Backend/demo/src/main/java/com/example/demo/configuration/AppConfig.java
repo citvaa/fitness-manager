@@ -11,5 +11,5 @@ import org.springframework.stereotype.Component;
 @Setter
 public class AppConfig {
     private Integer registrationKeyValidityMinutes;
-    private Integer resetTokenValidityMinutes;
+    private Integer resetKeyValidityMinutes;
 }

@@ -40,7 +40,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     public UserDTO create(CreateUserRequest request) {
-        UUID registration_key = UUID.randomUUID();
+        String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
         User user = userMapper.toEntity(request);
@@ -93,23 +93,23 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     public void requestPasswordReset(String email) {
-        String resetToken = UUID.randomUUID().toString();
-        LocalDateTime resetTokenValidity = LocalDateTime.now().plusMinutes(appConfig.getResetTokenValidityMinutes());
+        String resetKey = UUID.randomUUID().toString();
+        LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
 
         userRepository.findByEmail(email).ifPresent(user -> {
-            user.setResetToken(resetToken);
-            user.setResetTokenValidity(resetTokenValidity);
+            user.setResetKey(resetKey);
+            user.setResetTokenValidity(resetKeyValidity);
             userRepository.save(user);
             //ovde se salje token na mejl
         });
     }
 
     public void resetPassword(ResetPasswordRequest request) {
-        userRepository.findByResetToken(request.getResetToken())
+        userRepository.findByResetKey(request.getResetKey())
                 .ifPresent(user -> {
                     String hashedPassword = passwordEncoder.encode(request.getPassword());
                     user.setPassword(hashedPassword);
-                    user.setResetToken(null);
+                    user.setResetKey(null);
                     user.setResetTokenValidity(null);
                     userRepository.save(user);
                 });

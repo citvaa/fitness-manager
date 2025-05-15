@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @AllArgsConstructor
@@ -33,7 +32,7 @@ public class User {
     private String email;
 
     @Column(name = "registration_key")
-    private UUID registrationKey;
+    private String registrationKey;
 
     @Column(name = "registration_key_validity")
     private LocalDateTime registrationKeyValidity;
@@ -41,10 +40,10 @@ public class User {
     @Column(name = "is_activated")
     private Boolean isActivated;
 
-    @Column(name = "reset_token")
-    private String resetToken;
+    @Column(name = "reset_key")
+    private String resetKey;
 
-    @Column(name = "reset_token_validity")
+    @Column(name = "reset_key_validity")
     private LocalDateTime resetTokenValidity;
 
     @Version

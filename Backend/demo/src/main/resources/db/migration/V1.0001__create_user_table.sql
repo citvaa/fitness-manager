@@ -9,10 +9,10 @@ CREATE TABLE "user" (
     username VARCHAR UNIQUE NOT NULL,
     password VARCHAR NULL,
     email VARCHAR UNIQUE NOT NULL,
-    registration_key uuid NULL,
+    registration_key VARCHAR NULL,
     registration_key_validity TIMESTAMP NULL,
     is_activated BOOLEAN NOT NULL,
-    reset_token VARCHAR NULL,
-    reset_token_validity TIMESTAMP NULL,
+    reset_key VARCHAR NULL,
+    reset_key_validity TIMESTAMP NULL,
     version INT NOT NULL
 );
