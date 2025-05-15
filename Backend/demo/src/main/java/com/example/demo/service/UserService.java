@@ -28,4 +28,8 @@ public interface UserService {
     void resetPassword(ResetPasswordRequest request);
 
     Page<UserDTO> getUsers(int page, int size, String sortBy);
+
+    void addRole(Integer userId, String roleName);
+
+    void removeRole(Integer userId, String roleName);
 }

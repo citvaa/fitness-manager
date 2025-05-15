@@ -85,4 +85,16 @@ public class UserController {
         userService.resetPassword(request);
         return ResponseEntity.ok().build();
     }
+
+    @PatchMapping("/{id}/role/add")
+    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam String role) {
+        userService.addRole(id, role);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/role/remove")
+    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam String role) {
+        userService.removeRole(id, role);
+        return ResponseEntity.ok().build();
+    }
 }

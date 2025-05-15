@@ -3,13 +3,16 @@ package com.example.demo.service.impl;
 import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
+import com.example.demo.model.Role;
 import com.example.demo.model.User;
+import com.example.demo.repository.RoleRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.params.request.User.CreateUserRequest;
 import com.example.demo.service.params.request.User.LoginUserRequest;
 import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +33,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final AppConfig appConfig;
+    private final RoleRepository roleRepository;
 
     public Page<UserDTO> getUsers(int page, int size, String sortBy) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
@@ -116,6 +120,30 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     user.setResetTokenValidity(null);
                     userRepository.save(user);
                 });
+    }
+
+    @Transactional
+    public void addRole(Integer userId, String roleName) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+
+        user.getRoles().add(role);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void removeRole(Integer userId, String roleName) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+
+        user.getRoles().remove(role);
+        userRepository.save(user);
     }
 
 }
