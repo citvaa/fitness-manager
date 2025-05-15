@@ -11,11 +11,14 @@ import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,9 +31,9 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final PasswordEncoder passwordEncoder;
     private final AppConfig appConfig;
 
-    public List<UserDTO> getAll() {
-        List<User> users = userRepository.findAll();
-        return userMapper.toDto(users);
+    public Page<UserDTO> getUsers(int page, int size, String sortBy) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
+        return userRepository.findAll(pageable).map(userMapper::toDto);
     }
 
     public Optional<UserDTO> getById(Integer id) {

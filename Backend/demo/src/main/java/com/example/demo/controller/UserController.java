@@ -8,11 +8,10 @@ import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -21,10 +20,13 @@ public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "Get all users")
     @GetMapping
-    public List<UserDTO> getAll() {
-        return userService.getAll();
+    public Page<UserDTO> getUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy
+    ) {
+        return userService.getUsers(page, size, sortBy);
     }
 
     @Operation(summary = "Get user by ID")

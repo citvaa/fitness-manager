@@ -5,13 +5,11 @@ import com.example.demo.service.params.request.User.CreateUserRequest;
 import com.example.demo.service.params.request.User.LoginUserRequest;
 import com.example.demo.service.params.request.User.RegisterUserRequest;
 import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import org.springframework.data.domain.Page;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface UserService {
-
-    List<UserDTO> getAll();
 
     Optional<UserDTO> getById(Integer id);
 
@@ -28,4 +26,6 @@ public interface UserService {
     void requestPasswordReset(String email);
 
     void resetPassword(ResetPasswordRequest request);
+
+    Page<UserDTO> getUsers(int page, int size, String sortBy);
 }
