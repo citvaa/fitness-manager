@@ -41,7 +41,7 @@ public class User {
     @Column(name = "is_activated")
     private Boolean isActivated;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserRole> userRoles;
 
     @Column(name = "reset_key")

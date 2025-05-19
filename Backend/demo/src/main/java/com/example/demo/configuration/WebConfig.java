@@ -14,12 +14,12 @@ public class WebConfig implements WebMvcConfigurer {
     private final JwtInterceptor jwtInterceptor;
     private final RoleInterceptor roleInterceptor;
 
-//    @Override
-//    public void addInterceptors(@NotNull InterceptorRegistry registry) {
-//        registry.addInterceptor(jwtInterceptor)
-//                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
-//
-//        registry.addInterceptor(roleInterceptor)
-//                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
-//    }
+    @Override
+    public void addInterceptors(@NotNull InterceptorRegistry registry) {
+        registry.addInterceptor(jwtInterceptor)
+                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
+
+        registry.addInterceptor(roleInterceptor)
+                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
+    }
 }

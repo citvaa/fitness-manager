@@ -2,8 +2,11 @@ package com.example.demo.interceptor;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.util.JwtUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -15,9 +18,14 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import javax.crypto.SecretKey;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Component
+@Order(2)
 public class RoleInterceptor implements HandlerInterceptor {
     private final JwtUtil jwtUtil;
 
@@ -32,13 +40,15 @@ public class RoleInterceptor implements HandlerInterceptor {
 
         String jwt = token.substring(7);
         Claims claims = Jwts.parser().verifyWith((SecretKey) jwtUtil.getKey()).build().parseSignedClaims(jwt).getPayload();
-        String userRole = claims.get("roles").toString();
+
+        List<String> roleList = new ObjectMapper().convertValue(claims.get("roles"), new TypeReference<>() {});
+        Set<String> userRoles = new HashSet<>(roleList);
 
         Method method = ((org.springframework.web.method.HandlerMethod) handler).getMethod();
         RoleRequired roleRequired = method.getAnnotation(RoleRequired.class);
 
-        if (roleRequired != null && !userRole.contains(roleRequired.value())) {
-            response.sendError(HttpStatus.FORBIDDEN.value(), "Forbidden: Role " + roleRequired.value() + " required");
+        if (roleRequired != null && Arrays.stream(roleRequired.value()).noneMatch(userRoles::contains)) {
+            response.sendError(HttpStatus.FORBIDDEN.value(), "Forbidden: Role " + Arrays.toString(roleRequired.value()) + " required");
             return false;
         }
 
