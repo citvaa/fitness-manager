@@ -141,7 +141,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        boolean alreadyHasRole = user.getUserRoles().stream().anyMatch(userRole -> userRole.getRole().equals(role));
+        boolean alreadyHasRole = user.getUserRoles() != null
+                && user.getUserRoles().stream().anyMatch(userRole -> userRole.getRole().equals(role));
 
         if (alreadyHasRole) {
             throw new IllegalArgumentException("User already has role " + role);
