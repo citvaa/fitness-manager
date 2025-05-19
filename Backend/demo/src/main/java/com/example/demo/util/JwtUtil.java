@@ -5,10 +5,12 @@ import com.example.demo.model.User;
 import com.example.demo.model.UserRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import lombok.Getter;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -24,7 +26,13 @@ public class JwtUtil {
     private final Integer tokenLifetime;
 
     public JwtUtil(JwtConfig jwtConfig) {
-        this.key = Jwts.SIG.HS256.key().build();
+        byte[] keyBytes = jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8);
+
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException("JWT secret key must be at least 32 bytes long");
+        }
+
+        this.key = Keys.hmacShaKeyFor(keyBytes);
         this.tokenLifetime = jwtConfig.getExpiration() * 1000;
     }
 
