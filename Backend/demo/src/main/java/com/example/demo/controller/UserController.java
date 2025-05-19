@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.Role;
 import com.example.demo.service.UserService;
 import com.example.demo.service.params.request.User.*;
 import lombok.RequiredArgsConstructor;
@@ -74,17 +75,17 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-//    @RoleRequired("MANAGER")
-//    @PatchMapping("/{id}/role/add")
-//    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam String role) {
-//        userService.addRole(id, role);
-//        return ResponseEntity.ok().build();
-//    }
-//
-//    @RoleRequired("MANAGER")
-//    @PatchMapping("/{id}/role/remove")
-//    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam String role) {
-//        userService.removeRole(id, role);
-//        return ResponseEntity.ok().build();
-//    }
+    @RoleRequired("MANAGER")
+    @PostMapping("/{id}/role")
+    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam Role role) {
+        userService.addRole(id, role);
+        return ResponseEntity.ok().build();
+    }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{id}/role")
+    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam Role role) {
+        userService.removeRole(id, role);
+        return ResponseEntity.ok().build();
+    }
 }

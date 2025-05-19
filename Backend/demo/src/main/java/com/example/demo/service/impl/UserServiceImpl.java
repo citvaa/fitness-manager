@@ -2,6 +2,7 @@ package com.example.demo.service.impl;
 
 import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.Role;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.RoleEntity;
 import com.example.demo.model.User;
@@ -130,28 +131,28 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 });
     }
 
-//    @Transactional
-//    public void addRole(Integer userId, String roleName) {
-//        User user = userRepository.findById(userId)
-//                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-//
-//        RoleEntity roleEntity = roleRepository.findByName(roleName)
-//                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
-//
-//        user.getRoleEntities().add(roleEntity);
-//        userRepository.save(user);
-//    }
-//
-//    @Transactional
-//    public void removeRole(Integer userId, String roleName) {
-//        User user = userRepository.findById(userId)
-//                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-//
-//        RoleEntity roleEntity = roleRepository.findByName(roleName)
-//                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
-//
-//        user.getRoleEntities().remove(roleEntity);
-//        userRepository.save(user);
-//    }
+    @Transactional
+    public void addRole(Integer userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        RoleEntity roleEntity = roleRepository.findByName(role)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+
+        user.getRoleEntities().add(roleEntity);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void removeRole(Integer userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        RoleEntity roleEntity = roleRepository.findByName(role)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+
+        user.getRoleEntities().remove(roleEntity);
+        userRepository.save(user);
+    }
 
 }

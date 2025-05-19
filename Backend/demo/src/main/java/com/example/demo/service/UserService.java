@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.Role;
 import com.example.demo.service.params.request.User.*;
 import org.springframework.data.domain.Page;
 
@@ -26,7 +27,7 @@ public interface UserService {
 
     Page<UserDTO> getUsers(SearchUserRequest request);
 
-//    void addRole(Integer userId, String roleName);
-//
-//    void removeRole(Integer userId, String roleName);
+    void addRole(Integer userId, Role role);
+
+    void removeRole(Integer userId, Role role);
 }
