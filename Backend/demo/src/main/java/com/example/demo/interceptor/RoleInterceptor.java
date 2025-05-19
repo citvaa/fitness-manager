@@ -6,7 +6,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -25,7 +24,6 @@ import java.util.Set;
 
 @RequiredArgsConstructor
 @Component
-@Order(2)
 public class RoleInterceptor implements HandlerInterceptor {
     private final JwtUtil jwtUtil;
 

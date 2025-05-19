@@ -6,7 +6,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -16,7 +15,6 @@ import java.io.IOException;
 
 @RequiredArgsConstructor
 @Component
-@Order(1)
 public class JwtInterceptor implements HandlerInterceptor {
     private final JwtUtil jwtUtil;
 
