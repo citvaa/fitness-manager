@@ -4,15 +4,17 @@ import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.enums.Role;
 import com.example.demo.mapper.UserMapper;
-import com.example.demo.model.RoleEntity;
 import com.example.demo.model.User;
-import com.example.demo.repository.RoleRepository;
+import com.example.demo.model.UserRole;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.repository.UserRoleRepository;
 import com.example.demo.service.params.request.User.*;
+import com.example.demo.service.params.response.User.LoginResponse;
 import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,10 +35,10 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final AppConfig appConfig;
-    private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
+    private final UserRoleRepository userRoleRepository;
 
-    public Page<UserDTO> getUsers(SearchUserRequest request) {
+    public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
 
         if (request.getSearch() == null || request.getSearch().isEmpty()) {
@@ -84,7 +86,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         userRepository.delete(user);
     }
 
-    public void register(RegisterUserRequest request) {
+    public void register(@NotNull RegisterUserRequest request) {
         userRepository.findByRegistrationKey(request.getRegistrationKey())
                 .filter(user -> user.getRegistrationKeyValidity().isAfter(LocalDateTime.now()))
                 .ifPresent(user -> {
@@ -97,7 +99,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 });
     }
 
-    public String login(LoginUserRequest request) {
+    public LoginResponse login(@NotNull LoginUserRequest request) {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -105,7 +107,10 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
             throw new BadCredentialsException("Wrong password");
         }
 
-        return jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user);
+        LocalDateTime expiresAt = jwtUtil.getExpirationTime(token);
+
+        return new LoginResponse(token, expiresAt);
     }
 
     public void requestPasswordReset(String email) {
@@ -120,7 +125,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         });
     }
 
-    public void resetPassword(ResetPasswordRequest request) {
+    public void resetPassword(@NotNull ResetPasswordRequest request) {
         userRepository.findByResetKey(request.getResetKey())
                 .ifPresent(user -> {
                     String hashedPassword = passwordEncoder.encode(request.getPassword());
@@ -136,10 +141,19 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        RoleEntity roleEntity = roleRepository.findByName(role)
-                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+        boolean alreadyHasRole = user.getUserRoles().stream().anyMatch(userRole -> userRole.getRole().equals(role));
 
-        user.getRoleEntities().add(roleEntity);
+        if (alreadyHasRole) {
+            throw new IllegalArgumentException("User already has role " + role);
+        }
+
+        UserRole userRole = new UserRole();
+        userRole.setUser(user);
+        userRole.setRole(role);
+
+        userRoleRepository.save(userRole);
+        user.getUserRoles().add(userRole);
+
         userRepository.save(user);
     }
 
@@ -148,10 +162,15 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        RoleEntity roleEntity = roleRepository.findByName(role)
-                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+        Optional<UserRole> userRoleToRemove = user.getUserRoles().stream().filter(userRole -> userRole.getRole().equals(role)).findFirst();
 
-        user.getRoleEntities().remove(roleEntity);
+        if (userRoleToRemove.isEmpty()) {
+            throw new IllegalArgumentException("User does not have role " + role);
+        }
+
+        userRoleRepository.delete(userRoleToRemove.get());
+        user.getUserRoles().remove(userRoleToRemove.get());
+
         userRepository.save(user);
     }
 

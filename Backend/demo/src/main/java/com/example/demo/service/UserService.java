@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.enums.Role;
 import com.example.demo.service.params.request.User.*;
+import com.example.demo.service.params.response.User.LoginResponse;
 import org.springframework.data.domain.Page;
 
 import java.util.Optional;
@@ -19,7 +20,7 @@ public interface UserService {
 
     void register(RegisterUserRequest request);
 
-    String login(LoginUserRequest request);
+    LoginResponse login(LoginUserRequest request);
 
     void requestPasswordReset(String email);
 
