@@ -13,8 +13,8 @@ CREATE SEQUENCE user_role_s
 CREATE TABLE user_role (
     id INT DEFAULT nextval('user_role_s') PRIMARY KEY,
     user_id INT REFERENCES "user"(id) NOT NULL,
-    role_name VARCHAR REFERENCES role(name) NOT NULL,
-    CONSTRAINT unique_user_role UNIQUE (user_id, role_name)
+    role VARCHAR REFERENCES role(name) NOT NULL,
+    CONSTRAINT unique_user_role UNIQUE (user_id, role)
 );
 
-INSERT INTO user_role (user_id, role_name) VALUES (1, 'MANAGER')
+INSERT INTO user_role (user_id, role) VALUES (1, 'MANAGER')
