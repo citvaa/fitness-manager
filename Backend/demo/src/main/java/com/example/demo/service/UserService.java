@@ -1,10 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.UserDTO;
-import com.example.demo.service.params.request.User.CreateUserRequest;
-import com.example.demo.service.params.request.User.LoginUserRequest;
-import com.example.demo.service.params.request.User.RegisterUserRequest;
-import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import com.example.demo.service.params.request.User.*;
 import org.springframework.data.domain.Page;
 
 import java.util.Optional;
@@ -27,9 +24,9 @@ public interface UserService {
 
     void resetPassword(ResetPasswordRequest request);
 
-    Page<UserDTO> getUsers(int page, int size, String sortBy);
+    Page<UserDTO> getUsers(SearchUserRequest request);
 
-    void addRole(Integer userId, String roleName);
-
-    void removeRole(Integer userId, String roleName);
+//    void addRole(Integer userId, String roleName);
+//
+//    void removeRole(Integer userId, String roleName);
 }

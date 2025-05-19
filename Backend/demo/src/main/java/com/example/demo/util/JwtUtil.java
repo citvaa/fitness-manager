@@ -1,7 +1,7 @@
 package com.example.demo.util;
 
 import com.example.demo.configuration.JwtConfig;
-import com.example.demo.model.Role;
+import com.example.demo.model.RoleEntity;
 import com.example.demo.model.User;
 import io.jsonwebtoken.Jwts;
 import lombok.Getter;
@@ -27,7 +27,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
-                .claim("roles", user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .claim("roles", user.getRoleEntities().stream().map(RoleEntity::getName).collect(Collectors.toSet()))
                 .expiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(key)
                 .compact();

@@ -3,10 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.service.UserService;
-import com.example.demo.service.params.request.User.CreateUserRequest;
-import com.example.demo.service.params.request.User.LoginUserRequest;
-import com.example.demo.service.params.request.User.RegisterUserRequest;
-import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import com.example.demo.service.params.request.User.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -22,12 +19,8 @@ public class UserController {
 
     @RoleRequired("MANAGER")
     @GetMapping
-    public Page<UserDTO> getUsers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "id") String sortBy
-    ) {
-        return userService.getUsers(page, size, sortBy);
+    public Page<UserDTO> getUsers(SearchUserRequest request) {
+        return userService.getUsers(request);
     }
 
     @RoleRequired("MANAGER")
@@ -81,17 +74,17 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    @RoleRequired("MANAGER")
-    @PatchMapping("/{id}/role/add")
-    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam String role) {
-        userService.addRole(id, role);
-        return ResponseEntity.ok().build();
-    }
-
-    @RoleRequired("MANAGER")
-    @PatchMapping("/{id}/role/remove")
-    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam String role) {
-        userService.removeRole(id, role);
-        return ResponseEntity.ok().build();
-    }
+//    @RoleRequired("MANAGER")
+//    @PatchMapping("/{id}/role/add")
+//    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam String role) {
+//        userService.addRole(id, role);
+//        return ResponseEntity.ok().build();
+//    }
+//
+//    @RoleRequired("MANAGER")
+//    @PatchMapping("/{id}/role/remove")
+//    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam String role) {
+//        userService.removeRole(id, role);
+//        return ResponseEntity.ok().build();
+//    }
 }

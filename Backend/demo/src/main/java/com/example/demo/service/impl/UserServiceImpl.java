@@ -3,14 +3,11 @@ package com.example.demo.service.impl;
 import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.mapper.UserMapper;
-import com.example.demo.model.Role;
+import com.example.demo.model.RoleEntity;
 import com.example.demo.model.User;
 import com.example.demo.repository.RoleRepository;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.params.request.User.CreateUserRequest;
-import com.example.demo.service.params.request.User.LoginUserRequest;
-import com.example.demo.service.params.request.User.RegisterUserRequest;
-import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import com.example.demo.service.params.request.User.*;
 import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -38,9 +35,14 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
 
-    public Page<UserDTO> getUsers(int page, int size, String sortBy) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
-        return userRepository.findAll(pageable).map(userMapper::toDto);
+    public Page<UserDTO> getUsers(SearchUserRequest request) {
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
+
+        if (request.getSearch() == null || request.getSearch().isEmpty()) {
+            return userRepository.findAll(pageable).map(userMapper::toDto);
+        }
+
+        return userRepository.findByEmailContainingOrUsernameContaining(request.getSearch(), request.getSearch(), pageable).map(userMapper::toDto);
     }
 
     public Optional<UserDTO> getById(Integer id) {
@@ -128,28 +130,28 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 });
     }
 
-    @Transactional
-    public void addRole(Integer userId, String roleName) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
-
-        user.getRoles().add(role);
-        userRepository.save(user);
-    }
-
-    @Transactional
-    public void removeRole(Integer userId, String roleName) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
-
-        user.getRoles().remove(role);
-        userRepository.save(user);
-    }
+//    @Transactional
+//    public void addRole(Integer userId, String roleName) {
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+//
+//        RoleEntity roleEntity = roleRepository.findByName(roleName)
+//                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+//
+//        user.getRoleEntities().add(roleEntity);
+//        userRepository.save(user);
+//    }
+//
+//    @Transactional
+//    public void removeRole(Integer userId, String roleName) {
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+//
+//        RoleEntity roleEntity = roleRepository.findByName(roleName)
+//                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+//
+//        user.getRoleEntities().remove(roleEntity);
+//        userRepository.save(user);
+//    }
 
 }
