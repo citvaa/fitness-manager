@@ -1,6 +1,7 @@
 package com.example.demo.model;
 
 import com.example.demo.enums.WorkStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -24,17 +25,19 @@ public class TrainerSchedule {
     @SequenceGenerator(name = "trainer_schedule_generator", sequenceName = "trainer_schedule_s", allocationSize = 1)
     private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "trainer_id", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "trainer_id", referencedColumnName = "id", nullable = false)
     private Trainer trainer;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "day", unique = true, nullable = false)
     private DayOfWeek day;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     @Column(name = "start_time")
     private LocalTime startTime;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     @Column(name = "end_time")
     private LocalTime endTime;
 
