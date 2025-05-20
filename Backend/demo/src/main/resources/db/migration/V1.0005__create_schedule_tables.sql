@@ -32,9 +32,8 @@ CREATE SEQUENCE trainer_schedule_s
 CREATE TABLE trainer_schedule (
     id INT DEFAULT nextval('trainer_schedule_s') PRIMARY KEY,
     trainer_id INT NOT NULL REFERENCES trainer(id),
-    day VARCHAR(10) NOT NULL,
+    date DATE NOT NULL,
     start_time TIME NULL,
     end_time TIME NULL,
-    status VARCHAR NOT NULL,
-    CONSTRAINT unique_trainer_id_day UNIQUE (trainer_id, day)
+    status VARCHAR NOT NULL
 );
