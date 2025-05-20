@@ -1,33 +1,31 @@
 package com.example.demo.controller;
 
+import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.Role;
 import com.example.demo.service.UserService;
-import com.example.demo.service.params.request.User.CreateUserRequest;
-import com.example.demo.service.params.request.User.LoginUserRequest;
-import com.example.demo.service.params.request.User.RegisterUserRequest;
-import com.example.demo.service.params.request.User.ResetPasswordRequest;
-import io.swagger.v3.oas.annotations.Operation;
+import com.example.demo.service.params.request.User.*;
+import com.example.demo.service.params.response.User.LoginResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("api/user")
+@RequestMapping("/api/user")
 public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "Get all users")
+    @RoleRequired("MANAGER")
     @GetMapping
-    public List<UserDTO> getAll() {
-        return userService.getAll();
+    public Page<UserDTO> getUsers(SearchUserRequest request) {
+        return userService.getUsers(request);
     }
 
-    @Operation(summary = "Get user by ID")
+    @RoleRequired("MANAGER")
     @GetMapping("/{id}")
     public ResponseEntity<UserDTO> getById(@PathVariable Integer id) {
         return userService.getById(id)
@@ -35,52 +33,60 @@ public class UserController {
                 .orElseGet(()-> ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Create new user")
+    @RoleRequired("MANAGER")
     @PostMapping
     public ResponseEntity<UserDTO> create(@RequestBody CreateUserRequest request) {
         UserDTO createdUser = userService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
-    @Operation(summary = "Update user")
+    @RoleRequired("MANAGER")
     @PutMapping("/{id}")
     public ResponseEntity<UserDTO> update(@PathVariable Integer id, @RequestBody CreateUserRequest request) {
         return ResponseEntity.ok(userService.update(id, request));
     }
 
-    @Operation(summary = "Delete user")
+    @RoleRequired("MANAGER")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         userService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Register user")
     @PostMapping("/register")
     public ResponseEntity<Void> register(@RequestBody RegisterUserRequest request) {
         userService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    @Operation(summary = "Login user")
     @PostMapping("/login")
-    public ResponseEntity<UserDTO> login(@RequestBody LoginUserRequest request) {
-        return userService.login(request)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginUserRequest request) {
+        return ResponseEntity.ok(userService.login(request));
     }
 
-    @Operation(summary = "User forgot password")
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> requestPasswordReset(@RequestParam String email) {
         userService.requestPasswordReset(email);
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "User reset password")
     @PostMapping("reset-password")
     public ResponseEntity<Void> resetPassword(@RequestBody ResetPasswordRequest request) {
         userService.resetPassword(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @RoleRequired("MANAGER")
+    @PostMapping("/{id}/role")
+    public ResponseEntity<Void> addRole(@PathVariable Integer id, @RequestParam Role role) {
+        userService.addRole(id, role);
+        return ResponseEntity.ok().build();
+    }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{id}/role")
+    public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam Role role) {
+        userService.removeRole(id, role);
         return ResponseEntity.ok().build();
     }
 }

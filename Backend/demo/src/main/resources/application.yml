@@ -22,3 +22,7 @@ server:
 app:
   registration-key-validity-minutes: 10
   reset-key-validity-minutes: 10
+
+  jwt:
+    expiration: 3600
+    secret: ThisIsAVeryStrongSecretKeyWithEnoughLength

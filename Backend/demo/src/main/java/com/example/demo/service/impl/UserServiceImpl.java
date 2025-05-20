@@ -2,20 +2,28 @@ package com.example.demo.service.impl;
 
 import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.Role;
 import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.User;
+import com.example.demo.model.UserRole;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.params.request.User.CreateUserRequest;
-import com.example.demo.service.params.request.User.LoginUserRequest;
-import com.example.demo.service.params.request.User.RegisterUserRequest;
-import com.example.demo.service.params.request.User.ResetPasswordRequest;
+import com.example.demo.repository.UserRoleRepository;
+import com.example.demo.service.params.request.User.*;
+import com.example.demo.service.params.response.User.LoginResponse;
+import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,10 +35,17 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final AppConfig appConfig;
+    private final JwtUtil jwtUtil;
+    private final UserRoleRepository userRoleRepository;
 
-    public List<UserDTO> getAll() {
-        List<User> users = userRepository.findAll();
-        return userMapper.toDto(users);
+    public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
+
+        if (request.getSearch() == null || request.getSearch().isEmpty()) {
+            return userRepository.findAll(pageable).map(userMapper::toDto);
+        }
+
+        return userRepository.findByEmailContainingOrUsernameContaining(request.getSearch(), request.getSearch(), pageable).map(userMapper::toDto);
     }
 
     public Optional<UserDTO> getById(Integer id) {
@@ -71,7 +86,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         userRepository.delete(user);
     }
 
-    public void register(RegisterUserRequest request) {
+    public void register(@NotNull RegisterUserRequest request) {
         userRepository.findByRegistrationKey(request.getRegistrationKey())
                 .filter(user -> user.getRegistrationKeyValidity().isAfter(LocalDateTime.now()))
                 .ifPresent(user -> {
@@ -84,12 +99,18 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 });
     }
 
-    public Optional<UserDTO> login(LoginUserRequest request) {
-        return Optional.ofNullable(userRepository.findByUsername(request.getUsername())
-                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
-                .filter(User::getIsActivated)
-                .map(userMapper::toDto)
-                .orElseThrow(() -> new RuntimeException("Invalid credentials or user not activated")));
+    public LoginResponse login(@NotNull LoginUserRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Wrong password");
+        }
+
+        String token = jwtUtil.generateToken(user);
+        LocalDateTime expiresAt = jwtUtil.getExpirationTime(token);
+
+        return new LoginResponse(token, expiresAt);
     }
 
     public void requestPasswordReset(String email) {
@@ -104,7 +125,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         });
     }
 
-    public void resetPassword(ResetPasswordRequest request) {
+    public void resetPassword(@NotNull ResetPasswordRequest request) {
         userRepository.findByResetKey(request.getResetKey())
                 .ifPresent(user -> {
                     String hashedPassword = passwordEncoder.encode(request.getPassword());
@@ -113,6 +134,45 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     user.setResetTokenValidity(null);
                     userRepository.save(user);
                 });
+    }
+
+    @Transactional
+    public void addRole(Integer userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        boolean alreadyHasRole = user.getUserRoles() != null
+                && user.getUserRoles().stream().anyMatch(userRole -> userRole.getRole().equals(role));
+
+        if (alreadyHasRole) {
+            throw new IllegalArgumentException("User already has role " + role);
+        }
+
+        UserRole userRole = new UserRole();
+        userRole.setUser(user);
+        userRole.setRole(role);
+
+        userRoleRepository.save(userRole);
+        user.getUserRoles().add(userRole);
+
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void removeRole(Integer userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        Optional<UserRole> userRoleToRemove = user.getUserRoles().stream().filter(userRole -> userRole.getRole().equals(role)).findFirst();
+
+        if (userRoleToRemove.isEmpty()) {
+            throw new IllegalArgumentException("User does not have role " + role);
+        }
+
+        userRoleRepository.delete(userRoleToRemove.get());
+        user.getUserRoles().remove(userRoleToRemove.get());
+
+        userRepository.save(user);
     }
 
 }

@@ -5,11 +5,9 @@ import com.example.demo.model.User;
 import com.example.demo.service.params.request.User.CreateUserRequest;
 import org.mapstruct.Mapper;
 
-import java.util.List;
-
 @Mapper(componentModel = "spring")
 public interface UserMapper {
     UserDTO toDto(User user);
-    List<UserDTO> toDto(List<User> users);
     User toEntity(CreateUserRequest createUserRequest);
+    User toEntity(UserDTO userDTO);
 }
