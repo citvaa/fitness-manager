@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 @AllArgsConstructor
@@ -29,9 +29,8 @@ public class TrainerSchedule {
     @JoinColumn(name = "trainer_id", referencedColumnName = "id", nullable = false)
     private Trainer trainer;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "day", unique = true, nullable = false)
-    private DayOfWeek day;
+    @Column(name = "date", unique = true, nullable = false)
+    private LocalDate date;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     @Column(name = "start_time")
