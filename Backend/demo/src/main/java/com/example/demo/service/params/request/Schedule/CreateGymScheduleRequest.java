@@ -14,7 +14,7 @@ import java.time.LocalTime;
 @NoArgsConstructor
 @Getter
 @Setter
-public class CreateScheduleRequest {
+public class CreateGymScheduleRequest {
     private DayOfWeek day;
 
     @Schema(example = "00:00:00")

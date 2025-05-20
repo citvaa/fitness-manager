@@ -5,7 +5,7 @@ import com.example.demo.mapper.GymScheduleMapper;
 import com.example.demo.model.GymSchedule;
 import com.example.demo.repository.GymScheduleRepository;
 import com.example.demo.service.GymScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateScheduleRequest;
+import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,7 +17,7 @@ public class GymScheduleServiceImpl implements GymScheduleService {
     private final GymScheduleMapper gymScheduleMapper;
 
     @Override
-    public GymScheduleDTO create(CreateScheduleRequest request) {
+    public GymScheduleDTO create(CreateGymScheduleRequest request) {
         if (gymScheduleRepository.existsByDay(request.getDay())) {
             throw new IllegalArgumentException("Schedule for " + request.getDay() + " already exists");
         }

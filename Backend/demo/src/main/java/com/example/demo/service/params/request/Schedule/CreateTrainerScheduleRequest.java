@@ -1,6 +1,5 @@
 package com.example.demo.service.params.request.Schedule;
 
-import com.example.demo.enums.WorkStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -27,6 +26,4 @@ public class CreateTrainerScheduleRequest {
     @Schema(example = "00:00:00")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     private LocalTime endTime;
-
-    private WorkStatus status;
 }

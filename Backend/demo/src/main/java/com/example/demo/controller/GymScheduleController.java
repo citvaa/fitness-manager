@@ -3,7 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.GymScheduleDTO;
 import com.example.demo.service.GymScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateScheduleRequest;
+import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +21,7 @@ public class GymScheduleController {
 
     @RoleRequired("MANAGER")
     @PostMapping
-    public ResponseEntity<GymScheduleDTO> create(@RequestBody CreateScheduleRequest request) {
+    public ResponseEntity<GymScheduleDTO> create(@RequestBody CreateGymScheduleRequest request) {
         GymScheduleDTO scheduleDTO = gymScheduleService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(scheduleDTO);
     }

@@ -12,6 +12,8 @@ import com.example.demo.repository.TrainerScheduleRepository;
 import com.example.demo.service.HolidayScheduleService;
 import com.example.demo.service.TrainerScheduleService;
 import com.example.demo.service.params.request.Schedule.CreateTrainerScheduleRequest;
+import com.example.demo.service.params.request.Schedule.CreateTrainerUnavailabilityRequest;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,12 +30,11 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final HolidayScheduleService holidayScheduleService;
 
     @Override
-    public TrainerScheduleDTO create(CreateTrainerScheduleRequest request) {
+    public TrainerScheduleDTO createSchedule(CreateTrainerScheduleRequest request) {
         Integer trainerId = request.getTrainerId();
         LocalDate date = request.getDate();
         LocalTime startTime = request.getStartTime();
         LocalTime endTime = request.getEndTime();
-        WorkStatus status = request.getStatus();
 
         GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
                 .orElseThrow(() -> new RuntimeException("No gym schedule found for " + date));
@@ -58,9 +59,36 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         trainerSchedule.setDate(date);
         trainerSchedule.setStartTime(startTime);
         trainerSchedule.setEndTime(endTime);
-        trainerSchedule.setStatus(status);
+        trainerSchedule.setStatus(WorkStatus.WORKING);
 
         TrainerSchedule savedTrainerSchedule = trainerScheduleRepository.save(trainerSchedule);
         return trainerScheduleMapper.toDto(savedTrainerSchedule);
+    }
+
+    @Override
+    public void createUnavailability(CreateTrainerUnavailabilityRequest request) {
+        Integer trainerId = request.getTrainerId();
+        LocalDate startDate = request.getStartDate();
+        LocalDate endDate = request.getEndDate();
+        WorkStatus status = request.getStatus();
+
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date cannot be after end date");
+        }
+
+        Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+
+        LocalDate currentDate = startDate;
+        while (!currentDate.isAfter(endDate)) {
+            TrainerSchedule schedule = new TrainerSchedule();
+            schedule.setTrainer(trainer);
+            schedule.setDate(currentDate);
+            schedule.setStartTime(LocalTime.of(0, 0));
+            schedule.setEndTime(LocalTime.of(23, 59));
+            schedule.setStatus(status);
+
+            trainerScheduleRepository.save(schedule);
+            currentDate = currentDate.plusDays(1);
+        }
     }
 }

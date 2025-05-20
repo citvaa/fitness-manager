@@ -12,6 +12,7 @@ import com.example.demo.repository.UserRepository;
 import com.example.demo.service.TrainerService;
 import com.example.demo.service.UserService;
 import com.example.demo.service.params.request.Trainer.CreateTrainerRequest;
+import com.example.demo.service.params.request.User.CreateUserRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,13 +29,14 @@ public class TrainerServiceImpl implements TrainerService {
 
     @Override
     public TrainerDTO create(CreateTrainerRequest request) {
-        Optional<User> existingUser = userRepository.findByEmail(request.getCreateUserRequest().getEmail());
+        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
 
         User user;
         if (existingUser.isPresent()) {
             user = existingUser.get();
         } else {
-            UserDTO newUserDto = userService.create(request.getCreateUserRequest());
+            CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername(), request.getEmail());
+            UserDTO newUserDto = userService.create(createUserRequest);
             user = userMapper.toEntity(newUserDto);
         }
 
