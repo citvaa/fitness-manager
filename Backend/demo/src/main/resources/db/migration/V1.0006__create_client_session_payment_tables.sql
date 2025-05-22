@@ -19,8 +19,16 @@ CREATE SEQUENCE session_s
 CREATE TABLE session (
     id INT DEFAULT nextval('session_s') PRIMARY KEY,
     type VARCHAR NOT NULL,
-    max_participants INT NOT NULL
+    max_participants INT NOT NULL,
+    CHECK (type <> 'INDIVIDUAL' OR max_participants = 1),
+    CONSTRAINT unique_group_participants UNIQUE (type, max_participants)
 );
+CREATE UNIQUE INDEX unique_individual_type ON session(type) WHERE type = 'INDIVIDUAL';
+
+INSERT INTO session (type, max_participants) VALUES
+    ('INDIVIDUAL', 1),
+    ('GROUP', 3),
+    ('GROUP', 10);
 
 CREATE SEQUENCE payment_s
     START WITH 1

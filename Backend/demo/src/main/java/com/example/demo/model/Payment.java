@@ -22,11 +22,11 @@ public class Payment {
     @SequenceGenerator(name = "payment_generator", sequenceName = "payment_s", allocationSize = 1)
     private Integer id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", referencedColumnName = "id", nullable = false)
     private Client client;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", referencedColumnName = "id", nullable = false)
     private Session session;
 
