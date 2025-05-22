@@ -9,7 +9,7 @@ import com.example.demo.model.TrainerSchedule;
 import com.example.demo.repository.GymScheduleRepository;
 import com.example.demo.repository.TrainerRepository;
 import com.example.demo.repository.TrainerScheduleRepository;
-import com.example.demo.service.HolidayScheduleService;
+import com.example.demo.service.HolidayService;
 import com.example.demo.service.TrainerScheduleService;
 import com.example.demo.service.params.request.Schedule.CreateTrainerScheduleRequest;
 import com.example.demo.service.params.request.Schedule.CreateTrainerUnavailabilityRequest;
@@ -27,7 +27,7 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final TrainerRepository trainerRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final TrainerScheduleMapper trainerScheduleMapper;
-    private final HolidayScheduleService holidayScheduleService;
+    private final HolidayService holidayService;
 
     @Override
     public TrainerScheduleDTO createSchedule(CreateTrainerScheduleRequest request) {
@@ -39,7 +39,7 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
                 .orElseThrow(() -> new RuntimeException("No gym schedule found for " + date));
 
-        if (holidayScheduleService.isGymClosedOn(date)) {
+        if (holidayService.isGymClosedOn(date)) {
             throw new IllegalArgumentException("Gym is closed on " + date);
         }
 

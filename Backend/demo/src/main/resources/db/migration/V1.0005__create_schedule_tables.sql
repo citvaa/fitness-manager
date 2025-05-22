@@ -11,14 +11,14 @@ CREATE TABLE gym_schedule (
     closing_time TIME NOT NULL
 );
 
-CREATE SEQUENCE holiday_schedule_s
+CREATE SEQUENCE holiday_s
     START WITH 1
     INCREMENT BY 1
     MINVALUE 1
     NO MAXVALUE;
 
-CREATE TABLE holiday_schedule (
-    id INT DEFAULT nextval('holiday_schedule_s') PRIMARY KEY,
+CREATE TABLE holiday (
+    id INT DEFAULT nextval('holiday_s') PRIMARY KEY,
     date DATE UNIQUE NOT NULL,
     description VARCHAR NOT NULL
 );

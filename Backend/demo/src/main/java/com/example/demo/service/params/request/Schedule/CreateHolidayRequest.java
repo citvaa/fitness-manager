@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @Getter
 @Setter
-public class CreateHolidayScheduleRequest {
+public class CreateHolidayRequest {
     private LocalDate date;
     private String description;
 }

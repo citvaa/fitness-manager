@@ -13,13 +13,13 @@ import java.time.LocalDate;
 @Getter
 @Setter
 @Entity
-@Table(name = "holiday_schedule")
-public class HolidaySchedule {
+@Table(name = "holiday")
+public class Holiday {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "holiday_schedule_generator")
-    @SequenceGenerator(name = "holiday_schedule_generator", sequenceName = "holiday_schedule_s", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "holiday_generator")
+    @SequenceGenerator(name = "holiday_generator", sequenceName = "holiday_s", allocationSize = 1)
     private Integer id;
 
     @Column(name = "date", nullable = false, unique = true)
