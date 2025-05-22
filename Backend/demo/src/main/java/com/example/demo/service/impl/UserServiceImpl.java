@@ -63,6 +63,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         user.setRegistrationKey(registration_key);
         user.setRegistrationKeyValidity(registration_key_validity);
         user.setIsActivated(false);
+        user.setUserRoles(new HashSet<>());
 
         //ovde se salje key na mejl
 
@@ -141,10 +142,6 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     public void addRole(Integer userId, Role role) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        if (user.getUserRoles() == null) {
-            user.setUserRoles(new HashSet<>());
-        }
 
         boolean alreadyHasRole = user.getUserRoles() != null
                 && user.getUserRoles().stream().anyMatch(userRole -> userRole.getRole().equals(role));
