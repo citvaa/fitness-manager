@@ -8,9 +8,11 @@ import com.example.demo.service.HolidayService;
 import com.example.demo.service.params.request.Schedule.CreateHolidayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class HolidayServiceImpl implements HolidayService {
@@ -18,14 +20,13 @@ public class HolidayServiceImpl implements HolidayService {
     private final HolidayMapper holidayMapper;
     private final HolidayRepository holidayRepository;
 
-    @Override
+    @Transactional
     public HolidayDTO create(CreateHolidayRequest request) {
         Holiday holiday = holidayMapper.toEntity(request);
         Holiday savedHoliday = holidayRepository.save(holiday);
         return holidayMapper.toDTO(savedHoliday);
     }
 
-    @Override
     public boolean isGymClosedOn(LocalDate date) {
         return holidayRepository.existsByDate(date);
     }

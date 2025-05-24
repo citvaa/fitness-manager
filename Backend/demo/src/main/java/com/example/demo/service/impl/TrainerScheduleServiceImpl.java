@@ -15,11 +15,14 @@ import com.example.demo.service.params.request.Schedule.CreateTrainerScheduleReq
 import com.example.demo.service.params.request.Schedule.CreateTrainerUnavailabilityRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class TrainerScheduleServiceImpl implements TrainerScheduleService {
@@ -29,8 +32,8 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final TrainerScheduleMapper trainerScheduleMapper;
     private final HolidayService holidayService;
 
-    @Override
-    public TrainerScheduleDTO createSchedule(CreateTrainerScheduleRequest request) {
+    @Transactional
+    public TrainerScheduleDTO createSchedule(@NotNull CreateTrainerScheduleRequest request) {
         Integer trainerId = request.getTrainerId();
         LocalDate date = request.getDate();
         LocalTime startTime = request.getStartTime();
@@ -65,8 +68,8 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         return trainerScheduleMapper.toDto(savedTrainerSchedule);
     }
 
-    @Override
-    public void createUnavailability(CreateTrainerUnavailabilityRequest request) {
+    @Transactional
+    public void createUnavailability(@NotNull CreateTrainerUnavailabilityRequest request) {
         Integer trainerId = request.getTrainerId();
         LocalDate startDate = request.getStartDate();
         LocalDate endDate = request.getEndDate();

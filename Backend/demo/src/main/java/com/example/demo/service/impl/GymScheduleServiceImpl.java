@@ -7,8 +7,11 @@ import com.example.demo.repository.GymScheduleRepository;
 import com.example.demo.service.GymScheduleService;
 import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class GymScheduleServiceImpl implements GymScheduleService {
@@ -16,8 +19,8 @@ public class GymScheduleServiceImpl implements GymScheduleService {
     private final GymScheduleRepository gymScheduleRepository;
     private final GymScheduleMapper gymScheduleMapper;
 
-    @Override
-    public GymScheduleDTO create(CreateGymScheduleRequest request) {
+    @Transactional
+    public GymScheduleDTO create(@NotNull CreateGymScheduleRequest request) {
         if (gymScheduleRepository.existsByDay(request.getDay())) {
             throw new IllegalArgumentException("Schedule for " + request.getDay() + " already exists");
         }

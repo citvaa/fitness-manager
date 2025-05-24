@@ -12,7 +12,6 @@ import com.example.demo.service.params.request.User.*;
 import com.example.demo.service.params.response.User.LoginResponse;
 import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.data.domain.Page;
@@ -22,12 +21,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
 
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class UserServiceImpl implements com.example.demo.service.UserService {
@@ -55,6 +56,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 .orElseThrow(() -> new EntityNotFoundException("User not found")));
     }
 
+    @Transactional
     public UserDTO create(CreateUserRequest request) {
         String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
@@ -71,6 +73,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         return userMapper.toDto(savedUser);
     }
 
+    @Transactional
     public UserDTO update(Integer id, CreateUserRequest request) {
         return userRepository.findById(id)
                 .map(user -> {
@@ -81,6 +84,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 }).orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
+    @Transactional
     public void delete(Integer id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -88,6 +92,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         userRepository.delete(user);
     }
 
+    @Transactional
     public void register(@NotNull RegisterUserRequest request) {
         userRepository.findByRegistrationKey(request.getRegistrationKey())
                 .filter(user -> user.getRegistrationKeyValidity().isAfter(LocalDateTime.now()))
@@ -115,6 +120,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         return new LoginResponse(token, expiresAt);
     }
 
+    @Transactional
     public void requestPasswordReset(String email) {
         String resetKey = UUID.randomUUID().toString();
         LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
@@ -127,6 +133,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         });
     }
 
+    @Transactional
     public void resetPassword(@NotNull ResetPasswordRequest request) {
         userRepository.findByResetKey(request.getResetKey())
                 .ifPresent(user -> {
@@ -175,6 +182,16 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         user.getUserRoles().remove(userRoleToRemove.get());
 
         userRepository.save(user);
+    }
+
+    @Transactional
+    public User findOrCreateUser(@NotNull CreateUserRequest request) {
+        return userRepository.findByEmail(request.getEmail())
+                .orElseGet(() -> {
+                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername(), request.getEmail());
+                    UserDTO newUserDto = create(createUserRequest);
+                    return userMapper.toEntity(newUserDto);
+                });
     }
 
 }

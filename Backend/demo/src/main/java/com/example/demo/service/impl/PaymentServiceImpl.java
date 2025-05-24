@@ -13,7 +13,9 @@ import com.example.demo.service.params.request.Client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class PaymentServiceImpl implements PaymentService {
@@ -23,7 +25,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ClientRepository clientRepository;
     private final SessionRepository sessionRepository;
 
-    @Override
+    @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {
         if (request.getPaidSessions() <= 0) {
             throw new IllegalArgumentException("Paid sessions must be greater than zero");
