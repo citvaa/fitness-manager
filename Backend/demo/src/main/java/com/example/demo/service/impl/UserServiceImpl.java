@@ -47,7 +47,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
             return userRepository.findAll(pageable).map(userMapper::toDto);
         }
 
-        return userRepository.findByEmailContainingOrUsernameContaining(request.getSearch(), request.getSearch(), pageable).map(userMapper::toDto);
+        return userRepository.findByUsernameContaining(request.getSearch(), pageable).map(userMapper::toDto);
     }
 
     public Optional<UserDTO> getById(Integer id) {
@@ -78,7 +78,6 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         return userRepository.findById(id)
                 .map(user -> {
                     user.setUsername(request.getUsername());
-                    user.setEmail(request.getEmail());
                     User savedUser = userRepository.save(user);
                     return userMapper.toDto(savedUser);
                 }).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -121,11 +120,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     @Transactional
-    public void requestPasswordReset(String email) {
+    public void requestPasswordReset(String username) {
         String resetKey = UUID.randomUUID().toString();
         LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
 
-        userRepository.findByEmail(email).ifPresent(user -> {
+        userRepository.findByUsername(username).ifPresent(user -> {
             user.setResetKey(resetKey);
             user.setResetTokenValidity(resetKeyValidity);
             userRepository.save(user);
@@ -186,9 +185,9 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
 
     @Transactional
     public User findOrCreateUser(@NotNull CreateUserRequest request) {
-        return userRepository.findByEmail(request.getEmail())
+        return userRepository.findByUsername(request.getUsername())
                 .orElseGet(() -> {
-                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername(), request.getEmail());
+                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername());
                     UserDTO newUserDto = create(createUserRequest);
                     return userMapper.toEntity(newUserDto);
                 });

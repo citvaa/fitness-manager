@@ -16,7 +16,5 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     Optional<User> findByResetKey(String token);
 
-    Optional<User> findByEmail(String email);
-
-    Page<User> findByEmailContainingOrUsernameContaining(String email, String username, Pageable pageable);
+    Page<User> findByUsernameContaining(String username, Pageable pageable);
 }

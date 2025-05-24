@@ -26,7 +26,7 @@ public class TrainerServiceImpl implements TrainerService {
 
     @Transactional
     public TrainerDTO create(@NotNull CreateTrainerRequest request) {
-        CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername(), request.getEmail());
+        CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername());
         User user = userService.findOrCreateUser(createUserRequest);
 
         userService.addRole(user.getId(), Role.TRAINER);
