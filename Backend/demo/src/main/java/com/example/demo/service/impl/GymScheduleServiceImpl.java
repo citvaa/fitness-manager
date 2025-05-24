@@ -25,10 +25,11 @@ public class GymScheduleServiceImpl implements GymScheduleService {
             throw new IllegalArgumentException("Schedule for " + request.getDay() + " already exists");
         }
 
-        GymSchedule schedule = new GymSchedule();
-        schedule.setDay(request.getDay());
-        schedule.setOpeningTime(request.getStartTime());
-        schedule.setClosingTime(request.getEndTime());
+        GymSchedule schedule = GymSchedule.builder()
+                .day(request.getDay())
+                .openingTime(request.getStartTime())
+                .closingTime(request.getEndTime())
+                .build();
 
         GymSchedule savedSchedule = gymScheduleRepository.save(schedule);
 

@@ -31,10 +31,11 @@ public class ClientServiceImpl implements ClientService {
 
         userService.addRole(user.getId(), Role.CLIENT);
 
-        Client client = new Client();
-        client.setUser(user);
-        client.setPayments(new ArrayList<>());
-        client.setRemainingSessions(0);
+        Client client = Client.builder()
+                .user(user)
+                .payments(new ArrayList<>())
+                .remainingSessions(0)
+                .build();
 
         Client savedClient = clientRepository.save(client);
 

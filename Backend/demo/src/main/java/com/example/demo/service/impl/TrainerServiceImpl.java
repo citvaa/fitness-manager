@@ -31,11 +31,12 @@ public class TrainerServiceImpl implements TrainerService {
 
         userService.addRole(user.getId(), Role.TRAINER);
 
-        Trainer trainer = new Trainer();
-        trainer.setUser(user);
-        trainer.setEmploymentDate(request.getEmploymentDate());
-        trainer.setBirthYear(request.getBirthYear());
-        trainer.setStatus(request.getStatus());
+        Trainer trainer = Trainer.builder()
+                .user(user)
+                .employmentDate(request.getEmploymentDate())
+                .birthYear(request.getBirthYear())
+                .status(request.getStatus())
+                .build();
 
         Trainer savedTrainer = trainerRepository.save(trainer);
 

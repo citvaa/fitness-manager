@@ -40,11 +40,12 @@ public class PaymentServiceImpl implements PaymentService {
         Session session = sessionRepository.findById(request.getSessionId())
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
-        Payment payment = new Payment();
-        payment.setClient(client);
-        payment.setSession(session);
-        payment.setPaidSessions(request.getPaidSessions());
-        payment.setPaymentDate(request.getPaymentDate());
+        Payment payment = Payment.builder()
+                .client(client)
+                .session(session)
+                .paidSessions(request.getPaidSessions())
+                .paymentDate(request.getPaymentDate())
+                .build();
 
         return paymentMapper.toDto(paymentRepository.save(payment));
     }

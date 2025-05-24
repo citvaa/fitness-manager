@@ -61,11 +61,13 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
-        User user = userMapper.toEntity(request);
-        user.setRegistrationKey(registration_key);
-        user.setRegistrationKeyValidity(registration_key_validity);
-        user.setIsActivated(false);
-        user.setUserRoles(new HashSet<>());
+        User user = User.builder()
+                .username(request.getUsername())
+                .registrationKey(registration_key)
+                .registrationKeyValidity(registration_key_validity)
+                .isActivated(false)
+                .userRoles(new HashSet<>())
+                .build();
 
         //ovde se salje key na mejl
 

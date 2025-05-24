@@ -57,12 +57,13 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
 
         Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new RuntimeException("Trainer not found"));
 
-        TrainerSchedule trainerSchedule = new TrainerSchedule();
-        trainerSchedule.setTrainer(trainer);
-        trainerSchedule.setDate(date);
-        trainerSchedule.setStartTime(startTime);
-        trainerSchedule.setEndTime(endTime);
-        trainerSchedule.setStatus(WorkStatus.WORKING);
+        TrainerSchedule trainerSchedule = TrainerSchedule.builder()
+                .trainer(trainer)
+                .date(date)
+                .startTime(startTime)
+                .endTime(endTime)
+                .status(WorkStatus.WORKING)
+                .build();
 
         TrainerSchedule savedTrainerSchedule = trainerScheduleRepository.save(trainerSchedule);
         return trainerScheduleMapper.toDto(savedTrainerSchedule);

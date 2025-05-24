@@ -3,10 +3,7 @@ package com.example.demo.model;
 import com.example.demo.enums.WorkStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -17,6 +14,7 @@ import java.time.LocalTime;
 @Setter
 @Entity
 @Table(name = "trainer_schedule")
+@Builder
 public class TrainerSchedule {
 
     @Id

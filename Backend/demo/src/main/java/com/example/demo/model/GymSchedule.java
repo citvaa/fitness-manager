@@ -2,10 +2,7 @@ package com.example.demo.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
@@ -16,6 +13,7 @@ import java.time.LocalTime;
 @Setter
 @Entity
 @Table(name = "gym_schedule")
+@Builder
 public class GymSchedule {
 
     @Id
