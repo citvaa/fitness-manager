@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.GymScheduleDTO;
-import com.example.demo.service.GymScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
+import com.example.demo.dto.ClientDTO;
+import com.example.demo.service.ClientService;
+import com.example.demo.service.params.request.User.CreateUserRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,15 +14,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/schedule/gym")
-public class GymScheduleController {
+@RequestMapping("/api/client")
+public class ClientController {
 
-    private final GymScheduleService gymScheduleService;
+    private final ClientService clientService;
 
     @RoleRequired("MANAGER")
     @PostMapping
-    public ResponseEntity<GymScheduleDTO> create(@RequestBody CreateGymScheduleRequest request) {
-        GymScheduleDTO scheduleDTO = gymScheduleService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(scheduleDTO);
+    public ResponseEntity<ClientDTO> create(@RequestBody CreateUserRequest request) {
+        ClientDTO createdClient = clientService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdClient);
     }
 }

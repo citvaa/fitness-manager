@@ -4,6 +4,7 @@ import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.TrainerScheduleDTO;
 import com.example.demo.service.TrainerScheduleService;
 import com.example.demo.service.params.request.Schedule.CreateTrainerScheduleRequest;
+import com.example.demo.service.params.request.Schedule.CreateTrainerUnavailabilityRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +22,15 @@ public class TrainerScheduleController {
 
     @RoleRequired("MANAGER")
     @PostMapping
-    public ResponseEntity<TrainerScheduleDTO> createTrainerSchedule(@RequestBody CreateTrainerScheduleRequest request) {
-        TrainerScheduleDTO trainerScheduleDTO = trainerScheduleService.create(request);
+    public ResponseEntity<TrainerScheduleDTO> createSchedule(@RequestBody CreateTrainerScheduleRequest request) {
+        TrainerScheduleDTO trainerScheduleDTO = trainerScheduleService.createSchedule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleDTO);
+    }
+
+    @RoleRequired("MANAGER")
+    @PostMapping("/unavailable")
+    public ResponseEntity<Void> createUnavailability(@RequestBody CreateTrainerUnavailabilityRequest request) {
+        trainerScheduleService.createUnavailability(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }

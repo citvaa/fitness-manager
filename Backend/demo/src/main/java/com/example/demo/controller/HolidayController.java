@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.GymScheduleDTO;
-import com.example.demo.service.GymScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
+import com.example.demo.dto.HolidayDTO;
+import com.example.demo.service.HolidayService;
+import com.example.demo.service.params.request.Schedule.CreateHolidayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,15 +14,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/schedule/gym")
-public class GymScheduleController {
+@RequestMapping("/api/schedule/holiday")
+public class HolidayController {
 
-    private final GymScheduleService gymScheduleService;
+    private final HolidayService holidayService;
 
     @RoleRequired("MANAGER")
     @PostMapping
-    public ResponseEntity<GymScheduleDTO> create(@RequestBody CreateGymScheduleRequest request) {
-        GymScheduleDTO scheduleDTO = gymScheduleService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(scheduleDTO);
+    public ResponseEntity<HolidayDTO> create(@RequestBody CreateHolidayRequest request) {
+        HolidayDTO holidayDTO = holidayService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(holidayDTO);
     }
 }

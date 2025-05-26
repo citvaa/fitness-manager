@@ -2,7 +2,7 @@ CREATE TABLE role (
     name VARCHAR PRIMARY KEY
 );
 
-INSERT INTO role (name) VALUES ('MANAGER'), ('TRAINER'), ('USER');
+INSERT INTO role (name) VALUES ('MANAGER'), ('TRAINER'), ('CLIENT');
 
 CREATE SEQUENCE user_role_s
     START WITH 1

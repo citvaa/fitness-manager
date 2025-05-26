@@ -1,7 +1,6 @@
 package com.example.demo.service.params.request.Trainer;
 
 import com.example.demo.enums.EmploymentStatus;
-import com.example.demo.service.params.request.User.CreateUserRequest;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,7 +13,8 @@ import java.time.LocalDate;
 @Getter
 @Setter
 public class CreateTrainerRequest {
-    private CreateUserRequest createUserRequest;
+    private String username;
+    private String email;
     private LocalDate employmentDate;
     private Integer birthYear;
     private EmploymentStatus status;

@@ -14,14 +14,14 @@ import java.time.LocalTime;
 @NoArgsConstructor
 @Getter
 @Setter
-public class CreateScheduleRequest {
+public class CreateGymScheduleRequest {
     private DayOfWeek day;
 
+    @Schema(example = "00:00:00")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
-    @Schema(description = "Start time in HH:mm:ss format", example = "08:00:00")
     private LocalTime startTime;
 
-    @Schema(description = "Start time in HH:mm:ss format", example = "21:00:00")
+    @Schema(example = "00:00:00")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     private LocalTime endTime;
 }

@@ -1,4 +1,4 @@
-package com.example.demo.service.params.request.User;
+package com.example.demo.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,6 +9,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
-public class CreateUserRequest {
-    private String username;
+public class ClientDTO {
+    private Integer id;
+    private UserDTO user;
+    private Integer remainingSessions;
 }

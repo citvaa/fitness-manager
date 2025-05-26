@@ -1,10 +1,7 @@
 package com.example.demo.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -15,6 +12,7 @@ import java.util.Set;
 @Getter
 @Setter
 @Table(name = "\"user\"")
+@Builder
 public class User {
 
     @Id
@@ -28,9 +26,6 @@ public class User {
 
     @Column(name = "password")
     private String password;
-
-    @Column(name = "email")
-    private String email;
 
     @Column(name = "registration_key")
     private String registrationKey;
