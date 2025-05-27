@@ -38,7 +38,7 @@ CREATE SEQUENCE payment_s
 
 CREATE TABLE payment (
     id INT DEFAULT nextval('payment_s') PRIMARY KEY,
-    client_id INT NOT NULL REFERENCES client(id),
+    client_id INT NOT NULL REFERENCES client(id) ON DELETE CASCADE,
     session_id INT NOT NULL REFERENCES session(id),
     paid_sessions INT NOT NULL,
     payment_date DATE NOT NULL

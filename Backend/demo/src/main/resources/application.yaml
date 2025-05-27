@@ -16,6 +16,15 @@ spring:
       ddl-auto: none
     show-sql: true
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+#      password: podesi password i na docker-compose, sad je bez passworda
+
+  cache:
+    type: redis
+
 server:
   port: 8088
 

@@ -10,8 +10,10 @@ import com.example.demo.service.TrainerService;
 import com.example.demo.service.UserService;
 import com.example.demo.service.params.request.Trainer.CreateTrainerRequest;
 import com.example.demo.service.params.request.User.CreateUserRequest;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ public class TrainerServiceImpl implements TrainerService {
     private final TrainerMapper trainerMapper;
 
     @Transactional
+    //@CachePut(value = "TRAINER_CACHE", key = "#result.id")
     public TrainerDTO create(@NotNull CreateTrainerRequest request) {
         CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername());
         User user = userService.findOrCreateUser(createUserRequest);
@@ -41,5 +44,12 @@ public class TrainerServiceImpl implements TrainerService {
         Trainer savedTrainer = trainerRepository.save(trainer);
 
         return trainerMapper.toDto(savedTrainer);
+    }
+
+    @Cacheable(value = "TRAINER_CACHE", key = "#id")
+    public TrainerDTO getById(Integer id) {
+        return trainerRepository.findById(id)
+                .map(trainerMapper::toDto)
+                .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
     }
 }

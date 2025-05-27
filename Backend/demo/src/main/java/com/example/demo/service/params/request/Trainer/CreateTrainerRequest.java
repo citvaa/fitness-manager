@@ -14,7 +14,6 @@ import java.time.LocalDate;
 @Setter
 public class CreateTrainerRequest {
     private String username;
-    private String email;
     private LocalDate employmentDate;
     private Integer birthYear;
     private EmploymentStatus status;

@@ -5,4 +5,6 @@ import com.example.demo.service.params.request.Trainer.CreateTrainerRequest;
 
 public interface TrainerService {
     TrainerDTO create(CreateTrainerRequest request);
+
+    TrainerDTO getById(Integer id);
 }

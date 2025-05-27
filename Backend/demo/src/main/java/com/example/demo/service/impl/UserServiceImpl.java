@@ -57,7 +57,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     @Transactional
-    public UserDTO create(CreateUserRequest request) {
+    public UserDTO create(@NotNull CreateUserRequest request) {
         String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
