@@ -43,7 +43,7 @@ public class User {
     private String resetKey;
 
     @Column(name = "reset_key_validity")
-    private LocalDateTime resetTokenValidity;
+    private LocalDateTime resetKeyValidity;
 
     @Version
     @Column(name = "version")

@@ -8,8 +8,12 @@ import com.example.demo.model.User;
 import com.example.demo.model.UserRole;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserRoleRepository;
+import com.example.demo.service.EmailService;
+import com.example.demo.service.params.request.Email.ActivationEmailData;
+import com.example.demo.service.params.request.Email.ForgetPasswordEmailData;
 import com.example.demo.service.params.request.User.*;
 import com.example.demo.service.params.response.User.LoginResponse;
+import com.example.demo.util.DateTimeUtil;
 import com.example.demo.util.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +43,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final AppConfig appConfig;
     private final JwtUtil jwtUtil;
     private final UserRoleRepository userRoleRepository;
-    private final EmailServiceImpl emailServiceImpl;
+    private final EmailService emailService;
 
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
@@ -70,7 +74,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                 .userRoles(new HashSet<>())
                 .build();
 
-        emailServiceImpl.sendEmail(user.getEmail(), "Welcome!", registration_key);
+        ActivationEmailData emailData = ActivationEmailData.builder()
+                .registrationKey(registration_key)
+                .registrationKeyValidity(DateTimeUtil.formatTime(registration_key_validity))
+                .build();
+        emailService.sendActivationEmail(request.getEmail(), emailData);
 
         User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
@@ -123,15 +131,20 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     @Transactional
-    public void requestPasswordReset(String username) {
+    public void requestPasswordReset(String email) {
         String resetKey = UUID.randomUUID().toString();
         LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
 
-        userRepository.findByEmail(username).ifPresent(user -> {
+        userRepository.findByEmail(email).ifPresent(user -> {
             user.setResetKey(resetKey);
-            user.setResetTokenValidity(resetKeyValidity);
+            user.setResetKeyValidity(resetKeyValidity);
             userRepository.save(user);
-            emailServiceImpl.sendEmail(user.getEmail(), "Reset password", resetKey);
+
+            ForgetPasswordEmailData emailData = ForgetPasswordEmailData.builder()
+                    .resetKey(resetKey)
+                    .resetKeyValidity(DateTimeUtil.formatTime(resetKeyValidity))
+                    .build();
+            emailService.sendResetPasswordEmail(email, emailData);
         });
     }
 
@@ -142,7 +155,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     String hashedPassword = passwordEncoder.encode(request.getPassword());
                     user.setPassword(hashedPassword);
                     user.setResetKey(null);
-                    user.setResetTokenValidity(null);
+                    user.setResetKeyValidity(null);
                     userRepository.save(user);
                 });
     }
