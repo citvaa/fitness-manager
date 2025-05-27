@@ -25,6 +25,18 @@ spring:
   cache:
     type: redis
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: cedajuric@gmail.com
+    password: juriccedakrivogleda
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 server:
   port: 8088
 

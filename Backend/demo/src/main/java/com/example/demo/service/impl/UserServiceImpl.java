@@ -39,6 +39,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final AppConfig appConfig;
     private final JwtUtil jwtUtil;
     private final UserRoleRepository userRoleRepository;
+    private final EmailServiceImpl emailServiceImpl;
 
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
@@ -47,7 +48,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
             return userRepository.findAll(pageable).map(userMapper::toDto);
         }
 
-        return userRepository.findByUsernameContaining(request.getSearch(), pageable).map(userMapper::toDto);
+        return userRepository.findByEmailContaining(request.getSearch(), pageable).map(userMapper::toDto);
     }
 
     public Optional<UserDTO> getById(Integer id) {
@@ -62,14 +63,14 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
         User user = User.builder()
-                .username(request.getUsername())
+                .email(request.getEmail())
                 .registrationKey(registration_key)
                 .registrationKeyValidity(registration_key_validity)
                 .isActivated(false)
                 .userRoles(new HashSet<>())
                 .build();
 
-        //ovde se salje key na mejl
+        emailServiceImpl.sendEmail(user.getEmail(), "Welcome!", registration_key);
 
         User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
@@ -79,7 +80,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     public UserDTO update(Integer id, CreateUserRequest request) {
         return userRepository.findById(id)
                 .map(user -> {
-                    user.setUsername(request.getUsername());
+                    user.setEmail(request.getEmail());
                     User savedUser = userRepository.save(user);
                     return userMapper.toDto(savedUser);
                 }).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -108,7 +109,7 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     public LoginResponse login(@NotNull LoginUserRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
+        User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
@@ -126,11 +127,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
         String resetKey = UUID.randomUUID().toString();
         LocalDateTime resetKeyValidity = LocalDateTime.now().plusMinutes(appConfig.getResetKeyValidityMinutes());
 
-        userRepository.findByUsername(username).ifPresent(user -> {
+        userRepository.findByEmail(username).ifPresent(user -> {
             user.setResetKey(resetKey);
             user.setResetTokenValidity(resetKeyValidity);
             userRepository.save(user);
-            //ovde se salje token na mejl
+            emailServiceImpl.sendEmail(user.getEmail(), "Reset password", resetKey);
         });
     }
 
@@ -187,9 +188,9 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
 
     @Transactional
     public User findOrCreateUser(@NotNull CreateUserRequest request) {
-        return userRepository.findByUsername(request.getUsername())
+        return userRepository.findByEmail(request.getEmail())
                 .orElseGet(() -> {
-                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername());
+                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getEmail());
                     UserDTO newUserDto = create(createUserRequest);
                     return userMapper.toEntity(newUserDto);
                 });

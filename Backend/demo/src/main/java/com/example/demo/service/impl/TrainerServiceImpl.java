@@ -29,7 +29,7 @@ public class TrainerServiceImpl implements TrainerService {
     @Transactional
     //@CachePut(value = "TRAINER_CACHE", key = "#result.id")
     public TrainerDTO create(@NotNull CreateTrainerRequest request) {
-        CreateUserRequest createUserRequest = new CreateUserRequest(request.getUsername());
+        CreateUserRequest createUserRequest = new CreateUserRequest(request.getEmail());
         User user = userService.findOrCreateUser(createUserRequest);
 
         userService.addRole(user.getId(), Role.TRAINER);
