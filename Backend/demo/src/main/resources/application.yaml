@@ -20,7 +20,7 @@ spring:
     redis:
       host: localhost
       port: 6379
-#      password: podesi password i na docker-compose, sad je bez passworda
+      password: password
 
   cache:
     type: redis

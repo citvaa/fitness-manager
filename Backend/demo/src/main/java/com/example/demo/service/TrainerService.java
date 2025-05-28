@@ -7,4 +7,6 @@ public interface TrainerService {
     TrainerDTO create(CreateTrainerRequest request);
 
     TrainerDTO getById(Integer id);
+
+    TrainerDTO update(Integer id, CreateTrainerRequest request);
 }
