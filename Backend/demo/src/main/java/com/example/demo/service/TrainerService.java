@@ -9,4 +9,6 @@ public interface TrainerService {
     TrainerDTO getById(Integer id);
 
     TrainerDTO update(Integer id, CreateTrainerRequest request);
+
+    void delete(Integer id);
 }

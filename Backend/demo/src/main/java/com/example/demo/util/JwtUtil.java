@@ -39,7 +39,7 @@ public class JwtUtil {
     public String generateToken(User user) {
         return Jwts.builder()
                 .subject(user.getId().toString())
-                .claim("username", user.getUsername())
+                .claim("username", user.getEmail())
                 .claim("roles", new HashSet<>(user.getUserRoles().stream().map(UserRole::getRole).collect(Collectors.toSet())))
                 .expiration(new Date(System.currentTimeMillis() + tokenLifetime))
                 .signWith(key)

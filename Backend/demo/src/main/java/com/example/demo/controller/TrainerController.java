@@ -34,4 +34,11 @@ public class TrainerController {
     public ResponseEntity<TrainerDTO> update(@PathVariable Integer id, @RequestBody CreateTrainerRequest request) {
         return ResponseEntity.ok(trainerService.update(id, request));
     }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+        trainerService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

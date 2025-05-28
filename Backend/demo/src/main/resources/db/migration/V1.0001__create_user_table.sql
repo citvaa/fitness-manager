@@ -6,7 +6,7 @@ NO MAXVALUE;
 
 CREATE TABLE "user" (
     id INT DEFAULT nextval('user_s') PRIMARY KEY,
-    username VARCHAR UNIQUE NOT NULL,
+    email VARCHAR UNIQUE NOT NULL,
     password VARCHAR NULL,
     registration_key VARCHAR NULL,
     registration_key_validity TIMESTAMP NULL,

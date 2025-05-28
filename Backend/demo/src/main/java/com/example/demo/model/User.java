@@ -21,8 +21,8 @@ public class User {
     @SequenceGenerator(name = "user_generator", sequenceName = "user_s", allocationSize = 1)
     private Integer id;
 
-    @Column(name = "username")
-    private String username;
+    @Column(name = "email")
+    private String email;
 
     @Column(name = "password")
     private String password;

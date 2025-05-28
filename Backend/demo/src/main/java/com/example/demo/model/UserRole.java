@@ -21,7 +21,7 @@ public class UserRole {
     @SequenceGenerator(name = "user_role_generator", sequenceName = "user_role_s", allocationSize = 1)
     private Integer id;
 
-    @ManyToOne(cascade = CascadeType.REMOVE, fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
 
