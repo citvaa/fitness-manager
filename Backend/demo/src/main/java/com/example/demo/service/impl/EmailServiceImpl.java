@@ -5,7 +5,6 @@ import com.example.demo.service.EmailService;
 import com.example.demo.service.params.request.Email.ActivationEmailData;
 import com.example.demo.service.params.request.Email.ForgetPasswordEmailData;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,7 +15,6 @@ import java.util.Locale;
 
 @RequiredArgsConstructor
 @Service
-@Slf4j
 public class EmailServiceImpl implements EmailService {
 
     private final TemplateEngine templateEngine;
@@ -38,14 +36,14 @@ public class EmailServiceImpl implements EmailService {
         asyncEmailService.sendHtmlEmail(recipient, "Zaboravljena lozinka", emailContent);
     }
 
-    public String generateEmailContent(@NotNull ActivationEmailData emailData) {
+    private String generateEmailContent(@NotNull ActivationEmailData emailData) {
         Context context = new Context(Locale.getDefault());
         context.setVariables(emailData.toMap());
 
         return templateEngine.process(activationTemplatePath, context);
     }
 
-    public String generateEmailContent(@NotNull ForgetPasswordEmailData emailData) {
+    private String generateEmailContent(@NotNull ForgetPasswordEmailData emailData) {
         Context context = new Context(Locale.getDefault());
         context.setVariables(emailData.toMap());
 

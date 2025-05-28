@@ -34,7 +34,7 @@ public class AsyncEmailServiceImpl implements AsyncEmailService {
             mailSender.send(message);
             log.info("Email sent to {}", recipient);
         } catch (Exception e) {
-            log.error("Error trying to send email;");
+            log.error("Error trying to send email");
         }
     }
 }

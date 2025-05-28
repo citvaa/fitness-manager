@@ -8,6 +8,4 @@ public interface EmailService {
     void sendActivationEmail(String recipient, ActivationEmailData emailData);
 
     void sendResetPasswordEmail(String recipient, ForgetPasswordEmailData emailData);
-
-    String generateEmailContent(ActivationEmailData emailData);
 }
