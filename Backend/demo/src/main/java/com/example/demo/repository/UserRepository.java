@@ -12,9 +12,9 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByRegistrationKey(String registrationKey);
 
-    Optional<User> findByUsername(String username);
+    Optional<User> findByEmail(String email);
 
     Optional<User> findByResetKey(String token);
 
-    Page<User> findByUsernameContaining(String username, Pageable pageable);
+    Page<User> findByEmailContaining(String email, Pageable pageable);
 }

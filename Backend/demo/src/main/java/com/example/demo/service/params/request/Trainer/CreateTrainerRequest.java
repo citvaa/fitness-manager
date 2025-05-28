@@ -13,7 +13,6 @@ import java.time.LocalDate;
 @Getter
 @Setter
 public class CreateTrainerRequest {
-    private String username;
     private String email;
     private LocalDate employmentDate;
     private Integer birthYear;
