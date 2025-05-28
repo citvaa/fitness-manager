@@ -59,6 +59,62 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
     }
 
+    @Transactional
+    public AppointmentDTO addTrainer(Integer appointmentId, Integer trainerId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        Trainer trainer = trainerRepository.findById(trainerId)
+                .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+
+        appointment.setTrainer(trainer);
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    @Transactional
+    public AppointmentDTO addClients(Integer appointmentId, @NotNull Set<Integer> clientIds) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        Set<ClientAppointment> clientAppointments = clientIds.stream()
+                .map(clientId -> {
+                    Client client = clientRepository.findById(clientId)
+                            .orElseThrow(() -> new EntityNotFoundException("Client not found"));
+
+                    return ClientAppointment.builder()
+                            .client(client)
+                            .appointment(appointment)
+                            .build();
+                })
+                .collect(Collectors.toSet());
+
+        appointment.getClientAppointments().addAll(clientAppointments);
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    @Transactional
+    public AppointmentDTO removeTrainer(Integer appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        appointment.setTrainer(null);
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    @Transactional
+    public AppointmentDTO removeClient(Integer appointmentId, Integer clientId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        appointment.getClientAppointments().removeIf(clientAppointment -> clientAppointment.getClient().getId().equals(clientId));
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+
 
     private void validateTimeRange(@NotNull LocalTime startTime, LocalTime endTime) {
         if (startTime.isAfter(endTime)) {

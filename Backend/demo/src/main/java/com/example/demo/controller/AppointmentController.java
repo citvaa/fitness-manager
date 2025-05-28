@@ -7,10 +7,9 @@ import com.example.demo.service.params.request.Appointment.CreateAppointmentRequ
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Set;
 
 @RequiredArgsConstructor
 @RestController
@@ -24,5 +23,33 @@ public class AppointmentController {
     public ResponseEntity<AppointmentDTO> create(@RequestBody CreateAppointmentRequest request) {
         AppointmentDTO createdAppointment = appointmentServiceImpl.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
+    }
+
+    @RoleRequired("MANAGER")
+    @PostMapping("/{appointmentId}/add-trainer")
+    public ResponseEntity<AppointmentDTO> addTrainer(@PathVariable Integer appointmentId, @RequestParam Integer trainerId) {
+        AppointmentDTO updatedAppointment = appointmentServiceImpl.addTrainer(appointmentId, trainerId);
+        return ResponseEntity.ok(updatedAppointment);
+    }
+
+    @RoleRequired("MANAGER")
+    @PostMapping("/{appointmentId}/add-clients")
+    public ResponseEntity<AppointmentDTO> addClient(@PathVariable Integer appointmentId, @RequestParam Set<Integer> clientIds) {
+        AppointmentDTO updatedAppointment = appointmentServiceImpl.addClients(appointmentId, clientIds);
+        return ResponseEntity.ok(updatedAppointment);
+    }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{id}/remove-trainer")
+    public ResponseEntity<AppointmentDTO> removeTrainer(@PathVariable Integer id) {
+        AppointmentDTO updatedAppointment = appointmentServiceImpl.removeTrainer(id);
+        return ResponseEntity.ok(updatedAppointment);
+    }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{appointmentId}/remove-client")
+    public ResponseEntity<AppointmentDTO> removeClient(@PathVariable Integer appointmentId, @RequestParam Integer clientId) {
+        AppointmentDTO updatedAppointment = appointmentServiceImpl.removeClient(appointmentId, clientId);
+        return ResponseEntity.ok(updatedAppointment);
     }
 }
