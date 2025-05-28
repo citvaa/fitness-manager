@@ -28,4 +28,17 @@ public class TrainerController {
     public ResponseEntity<TrainerDTO> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(trainerService.getById(id));
     }
+
+    @RoleRequired("MANAGER")
+    @PutMapping("/{id}")
+    public ResponseEntity<TrainerDTO> update(@PathVariable Integer id, @RequestBody CreateTrainerRequest request) {
+        return ResponseEntity.ok(trainerService.update(id, request));
+    }
+
+    @RoleRequired("MANAGER")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+        trainerService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

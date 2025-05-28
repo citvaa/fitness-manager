@@ -1,7 +1,9 @@
 package com.example.demo.repository;
 
+import com.example.demo.model.Trainer;
 import com.example.demo.model.TrainerSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -26,4 +28,9 @@ public interface TrainerScheduleRepository extends JpaRepository<TrainerSchedule
                                                  @Param("date") LocalDate date,
                                                  @Param("startTime") LocalTime startTime,
                                                  @Param("endTime") LocalTime endTime);
+
+
+    @Modifying
+    @Query("DELETE FROM TrainerSchedule t WHERE t.trainer = :trainer")
+    void deleteByTrainer(@Param("trainer") Trainer trainer);
 }

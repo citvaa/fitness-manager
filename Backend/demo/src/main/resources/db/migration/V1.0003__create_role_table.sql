@@ -12,7 +12,7 @@ CREATE SEQUENCE user_role_s
 
 CREATE TABLE user_role (
     id INT DEFAULT nextval('user_role_s') PRIMARY KEY,
-    user_id INT REFERENCES "user"(id) ON DELETE CASCADE NOT NULL,
+    user_id INT REFERENCES "user"(id) NOT NULL,
     role VARCHAR REFERENCES role(name) NOT NULL,
     CONSTRAINT unique_user_role UNIQUE (user_id, role)
 );

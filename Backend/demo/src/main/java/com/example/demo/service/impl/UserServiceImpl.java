@@ -11,6 +11,7 @@ import com.example.demo.repository.UserRoleRepository;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.params.request.Email.ActivationEmailData;
 import com.example.demo.service.params.request.Email.ForgetPasswordEmailData;
+import com.example.demo.repository.*;
 import com.example.demo.service.params.request.User.*;
 import com.example.demo.service.params.response.User.LoginResponse;
 import com.example.demo.util.DateTimeUtil;
@@ -43,6 +44,9 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final AppConfig appConfig;
     private final JwtUtil jwtUtil;
     private final UserRoleRepository userRoleRepository;
+    private final TrainerRepository trainerRepository;
+    private final ClientRepository clientRepository;
+    private final PaymentRepository paymentRepository;
     private final EmailService emailService;
 
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
@@ -98,6 +102,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     public void delete(Integer id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        paymentRepository.deleteByUser(user);
+        clientRepository.deleteByUser(user);
+        trainerRepository.deleteByUser(user);
+        userRoleRepository.deleteByUser(user);
 
         userRepository.delete(user);
     }
