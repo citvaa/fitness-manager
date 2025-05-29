@@ -37,7 +37,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalTime startTime = request.getStartTime();
         LocalTime endTime = request.getEndTime();
 
-        validateTimeRange(startTime, endTime);
+        validateDateAndTimeRange(date, startTime, endTime);
         validateGymSchedule(date, startTime, endTime);
         validateTrainerAvailability(request.getTrainerId(), date, startTime, endTime);
         validateClientAvailability(request.getClientIds(), date, startTime, endTime);
@@ -77,21 +77,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
 
-        Set<ClientAppointment> clientAppointments = clientIds.stream()
-                .map(clientId -> {
-                    Client client = clientRepository.findById(clientId)
-                            .orElseThrow(() -> new EntityNotFoundException("Client not found"));
-
-                    return ClientAppointment.builder()
-                            .client(client)
-                            .appointment(appointment)
-                            .build();
-                })
-                .collect(Collectors.toSet());
+        Set<ClientAppointment> clientAppointments = createClientAppointments(clientIds, appointment);
 
         appointment.getClientAppointments().addAll(clientAppointments);
+        appointmentRepository.save(appointment);
 
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        return appointmentMapper.toDto(appointment);
     }
 
     @Transactional
@@ -116,9 +107,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
 
 
-    private void validateTimeRange(@NotNull LocalTime startTime, LocalTime endTime) {
+    private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         if (startTime.isAfter(endTime)) {
             throw new IllegalArgumentException("Start time is after end time");
+        }
+
+        if (date.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Appointment date cannot be in the past!");
         }
     }
 
@@ -157,8 +152,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .stream()
                 .filter(schedule -> schedule.getStatus() == WorkStatus.WORKING)
                 .anyMatch(schedule ->
-                        startTime.isAfter(schedule.getStartTime()) &&
-                                endTime.isBefore(schedule.getEndTime())
+                        startTime.isAfter(schedule.getStartTime()) || startTime.equals(schedule.getStartTime()) &&
+                                endTime.isBefore(schedule.getEndTime()) || endTime.equals(schedule.getEndTime())
                 );
     }
 
@@ -180,6 +175,10 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .map(clientId -> {
                     Client client = clientRepository.findById(clientId)
                             .orElseThrow(() -> new EntityNotFoundException("Client not found"));
+
+                    client.setReservedAppointments(client.getReservedAppointments() + 1);
+                    client.setRemainingAppointments(client.getRemainingAppointments() - 1);
+                    clientRepository.save(client);
 
                     return ClientAppointment.builder()
                             .client(client)

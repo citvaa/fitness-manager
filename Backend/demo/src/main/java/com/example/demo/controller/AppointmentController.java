@@ -34,7 +34,7 @@ public class AppointmentController {
 
     @RoleRequired("MANAGER")
     @PostMapping("/{appointmentId}/add-clients")
-    public ResponseEntity<AppointmentDTO> addClient(@PathVariable Integer appointmentId, @RequestParam Set<Integer> clientIds) {
+    public ResponseEntity<AppointmentDTO> addClients(@PathVariable Integer appointmentId, @RequestParam Set<Integer> clientIds) {
         AppointmentDTO updatedAppointment = appointmentServiceImpl.addClients(appointmentId, clientIds);
         return ResponseEntity.ok(updatedAppointment);
     }

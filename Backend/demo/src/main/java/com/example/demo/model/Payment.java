@@ -28,8 +28,8 @@ public class Payment {
     @JoinColumn(name = "session_id", referencedColumnName = "id", nullable = false)
     private Session session;
 
-    @Column(name = "paid_sessions", nullable = false)
-    private Integer paidSessions;
+    @Column(name = "paid_appointments", nullable = false)
+    private Integer paidAppointments;
 
     @Column(name = "payment_date", nullable = false)
     private LocalDate paymentDate;

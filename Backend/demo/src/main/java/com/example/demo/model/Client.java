@@ -27,6 +27,9 @@ public class Client {
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
 
-    @Column(name = "remaining_sessions")
-    private Integer remainingSessions;
+    @Column(name = "remaining_appointments", nullable = false)
+    private Integer remainingAppointments;
+
+    @Column(name = "reserved_appointments", nullable = false)
+    private Integer reservedAppointments;
 }

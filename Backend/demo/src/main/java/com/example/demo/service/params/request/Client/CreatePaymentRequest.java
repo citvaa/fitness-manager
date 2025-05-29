@@ -14,6 +14,6 @@ import java.time.LocalDate;
 public class CreatePaymentRequest {
     private Integer clientId;
     private Integer sessionId;
-    private Integer paidSessions;
+    private Integer paidAppointments;
     private LocalDate paymentDate;
 }
