@@ -36,6 +36,7 @@ public class ClientServiceImpl implements ClientService {
                 .user(user)
                 .payments(new ArrayList<>())
                 .clientSessionTracking(new HashSet<>())
+                .clientAppointments(new HashSet<>())
                 .build();
 
         Client savedClient = clientRepository.save(client);
