@@ -12,6 +12,4 @@ import lombok.Setter;
 public class ClientDTO {
     private Integer id;
     private UserDTO user;
-    private Integer remainingAppointments;
-    private Integer reservedAppointments;
 }
