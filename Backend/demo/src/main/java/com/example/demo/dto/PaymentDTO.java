@@ -15,6 +15,6 @@ public class PaymentDTO {
     private Integer id;
     private ClientDTO client;
     private SessionDTO session;
-    private Integer paidSessions;
+    private Integer paidAppointments;
     private LocalDate paymentDate;
 }

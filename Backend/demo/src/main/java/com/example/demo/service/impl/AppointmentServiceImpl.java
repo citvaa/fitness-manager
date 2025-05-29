@@ -30,6 +30,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
+    private final ClientSessionTrackingRepository clientSessionTrackingRepository;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
@@ -176,15 +177,34 @@ public class AppointmentServiceImpl implements AppointmentService {
                     Client client = clientRepository.findById(clientId)
                             .orElseThrow(() -> new EntityNotFoundException("Client not found"));
 
-                    client.setReservedAppointments(client.getReservedAppointments() + 1);
-                    client.setRemainingAppointments(client.getRemainingAppointments() - 1);
-                    clientRepository.save(client);
+                    ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
+                    updateClientSessionTracking(tracking);
 
-                    return ClientAppointment.builder()
-                            .client(client)
-                            .appointment(appointment)
-                            .build();
+                    return createClientAppointment(client, appointment);
                 })
                 .collect(Collectors.toSet());
+    }
+
+    private ClientSessionTracking getOrCreateClientSessionTracking(Client client, Session session) {
+        return clientSessionTrackingRepository.findByClientAndSession(client, session)
+                .orElseGet(() -> ClientSessionTracking.builder()
+                        .client(client)
+                        .session(session)
+                        .remainingAppointments(0)
+                        .reservedAppointments(0)
+                        .build());
+    }
+
+    private void updateClientSessionTracking(@NotNull ClientSessionTracking tracking) {
+        tracking.setReservedAppointments(tracking.getReservedAppointments() + 1);
+        tracking.setRemainingAppointments(tracking.getRemainingAppointments() - 1);
+        clientSessionTrackingRepository.save(tracking);
+    }
+
+    private ClientAppointment createClientAppointment(Client client, Appointment appointment) {
+        return ClientAppointment.builder()
+                .client(client)
+                .appointment(appointment)
+                .build();
     }
 }
