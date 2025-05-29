@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="sr">
+<body>
+<p>Poštovani korisniče, za aktivaciju vašeg naloga kliknite na link:</p>
+<a th:href="'https://nesto.com?registration_key=' + ${registrationKey}">Aktiviraj nalog</a>
+<p>Link je validan do <strong th:text="${registrationKeyValidity}"></strong>.</p>
+</body>
+</html>

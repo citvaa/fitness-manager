@@ -27,14 +27,14 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {
-        if (request.getPaidSessions() <= 0) {
+        if (request.getPaidAppointments() <= 0) {
             throw new IllegalArgumentException("Paid sessions must be greater than zero");
         }
 
         Client client = clientRepository.findById(request.getClientId())
                 .orElseThrow(() -> new IllegalArgumentException("Client not found"));
 
-        client.setRemainingSessions(client.getRemainingSessions() + request.getPaidSessions());
+        client.setRemainingAppointments(client.getRemainingAppointments() + request.getPaidAppointments());
         clientRepository.save(client);
 
         Session session = sessionRepository.findById(request.getSessionId())
@@ -43,7 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = Payment.builder()
                 .client(client)
                 .session(session)
-                .paidSessions(request.getPaidSessions())
+                .paidAppointments(request.getPaidAppointments())
                 .paymentDate(request.getPaymentDate())
                 .build();
 

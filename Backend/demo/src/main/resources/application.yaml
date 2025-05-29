@@ -25,12 +25,28 @@ spring:
   cache:
     type: redis
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: cedajuric@gmail.com
+    password: ccio ttnh rmdz leif
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 server:
   port: 8088
 
 app:
   registration-key-validity-minutes: 10
   reset-key-validity-minutes: 10
+
+  email:
+    activation-template: email/activation-email.html
+    reset-password-template: email/reset-password-email.html
 
   jwt:
     expiration: 3600

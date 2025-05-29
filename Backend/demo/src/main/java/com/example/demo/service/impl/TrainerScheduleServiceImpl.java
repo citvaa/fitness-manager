@@ -34,39 +34,14 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
 
     @Transactional
     public TrainerScheduleDTO createSchedule(@NotNull CreateTrainerScheduleRequest request) {
-        Integer trainerId = request.getTrainerId();
-        LocalDate date = request.getDate();
-        LocalTime startTime = request.getStartTime();
-        LocalTime endTime = request.getEndTime();
+        validateScheduleRequest(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateGymHours(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
 
-        GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
-                .orElseThrow(() -> new RuntimeException("No gym schedule found for " + date));
+        Trainer trainer = fetchTrainer(request.getTrainerId());
+        TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, request.getDate(), request.getStartTime(), request.getEndTime());
 
-        if (holidayService.isGymClosedOn(date)) {
-            throw new IllegalArgumentException("Gym is closed on " + date);
-        }
-
-        if (startTime.isBefore(gymSchedule.getOpeningTime()) || endTime.isAfter(gymSchedule.getClosingTime())) {
-            throw new IllegalArgumentException("Trainer schedule must be within gym hours: " + gymSchedule.getOpeningTime() + " - " + gymSchedule.getClosingTime());
-        }
-
-        boolean overlapExists = trainerScheduleRepository.existsByTrainerIdAndDateAndTimeRange(trainerId, date, startTime, endTime);
-        if (overlapExists) {
-            throw new IllegalArgumentException("Trainer already has a shift overlapping with this time range");
-        }
-
-        Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new RuntimeException("Trainer not found"));
-
-        TrainerSchedule trainerSchedule = TrainerSchedule.builder()
-                .trainer(trainer)
-                .date(date)
-                .startTime(startTime)
-                .endTime(endTime)
-                .status(WorkStatus.WORKING)
-                .build();
-
-        TrainerSchedule savedTrainerSchedule = trainerScheduleRepository.save(trainerSchedule);
-        return trainerScheduleMapper.toDto(savedTrainerSchedule);
+        return trainerScheduleMapper.toDto(trainerScheduleRepository.save(trainerSchedule));
     }
 
     @Transactional
@@ -94,5 +69,52 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
             trainerScheduleRepository.save(schedule);
             currentDate = currentDate.plusDays(1);
         }
+    }
+
+
+
+    private void validateScheduleRequest(LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
+        if (startTime.isAfter(endTime)) {
+            throw new IllegalArgumentException("Start time is after end time");
+        }
+
+        if (date.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Schedule date cannot be in the past!");
+        }
+    }
+
+    private void validateGymHours(@NotNull LocalDate date, LocalTime startTime, LocalTime endTime) {
+        GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
+                .orElseThrow(() -> new RuntimeException("No gym schedule found for " + date));
+
+        if (holidayService.isGymClosedOn(date)) {
+            throw new IllegalArgumentException("Gym is closed on " + date);
+        }
+
+        if (startTime.isBefore(gymSchedule.getOpeningTime()) || endTime.isAfter(gymSchedule.getClosingTime())) {
+            throw new IllegalArgumentException("Trainer schedule must be within gym hours: " + gymSchedule.getOpeningTime() + " - " + gymSchedule.getClosingTime());
+        }
+    }
+
+    private void validateTrainerAvailability(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        boolean overlapExists = trainerScheduleRepository.existsByTrainerIdAndDateAndTimeRange(trainerId, date, startTime, endTime);
+        if (overlapExists) {
+            throw new IllegalArgumentException("Trainer already has a shift overlapping with this time range");
+        }
+    }
+
+    private Trainer fetchTrainer(Integer trainerId) {
+        return trainerRepository.findById(trainerId)
+                .orElseThrow(() -> new RuntimeException("Trainer not found"));
+    }
+
+    private TrainerSchedule buildTrainerSchedule(Trainer trainer, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        return TrainerSchedule.builder()
+                .trainer(trainer)
+                .date(date)
+                .startTime(startTime)
+                .endTime(endTime)
+                .status(WorkStatus.WORKING)
+                .build();
     }
 }

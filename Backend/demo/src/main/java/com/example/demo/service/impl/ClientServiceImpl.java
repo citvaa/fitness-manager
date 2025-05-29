@@ -34,7 +34,8 @@ public class ClientServiceImpl implements ClientService {
         Client client = Client.builder()
                 .user(user)
                 .payments(new ArrayList<>())
-                .remainingSessions(0)
+                .remainingAppointments(0)
+                .reservedAppointments(0)
                 .build();
 
         Client savedClient = clientRepository.save(client);
