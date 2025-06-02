@@ -1,6 +1,7 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.TrainerNotificationDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.*;
@@ -11,6 +12,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -31,6 +33,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
@@ -57,7 +60,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         Set<ClientAppointment> clientAppointments = createClientAppointments(request.getClientIds(), appointment);
         appointment.setClientAppointments(clientAppointments);
 
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
+
+        TrainerNotificationDTO notification = TrainerNotificationDTO.builder()
+                .appointment(appointmentDTO)
+                .build();
+        messagingTemplate.convertAndSend("/topic/trainer" + notification.getAppointment().getId(), notification);
+
+        return appointmentDTO;
     }
 
     @Transactional
