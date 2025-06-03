@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.service.params.request.Appointment.CreateAppointmentRequest;
 
+import java.util.List;
 import java.util.Set;
 
 public interface AppointmentService {
@@ -15,4 +16,12 @@ public interface AppointmentService {
     AppointmentDTO removeTrainer(Integer appointmentId);
 
     AppointmentDTO removeClient(Integer appointmentId, Integer clientId);
+
+    List<AppointmentDTO> getAvailable();
+
+    AppointmentDTO addClient(Integer appointmentId, Integer clientId);
+
+    List<AppointmentDTO> getAllWithoutTrainer();
+
+    AppointmentDTO cancel(Integer appointmentId, Integer clientId);
 }

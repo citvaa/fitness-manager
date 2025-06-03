@@ -18,6 +18,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
@@ -107,6 +108,62 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
     }
+
+    public List<AppointmentDTO> getAvailable() {
+        return appointmentRepository.findAll().stream()
+                .filter(appointment -> appointment.getClientAppointments().size() < appointment.getSession().getMaxParticipants())
+                .map(appointmentMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AppointmentDTO addClient(Integer appointmentId, Integer clientId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Appointment not found!"));
+
+        if (appointment.getClientAppointments().size() >= appointment.getSession().getMaxParticipants()) {
+            throw new RuntimeException("No available spots for this appointment!");
+        }
+
+        Client client = clientRepository.findById(clientId)
+                .orElseThrow(() -> new RuntimeException("Client not found!"));
+
+        ClientAppointment clientAppointment = createClientAppointment(client, appointment);
+        appointment.getClientAppointments().add(clientAppointment);
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    public List<AppointmentDTO> getAllWithoutTrainer() {
+        return appointmentRepository.findAll().stream()
+                .filter(appointment -> appointment.getTrainer() == null)
+                .map(appointmentMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AppointmentDTO cancel(Integer appointmentId, Integer clientId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        LocalDateTime appointmentTime = LocalDateTime.of(appointment.getDate(), appointment.getStartTime());
+        LocalDateTime cancellationDeadline = appointmentTime.minusHours(24);
+
+        if (LocalDateTime.now().isBefore(cancellationDeadline)) {
+            boolean removed = appointment.getClientAppointments().removeIf(clientAppointment ->
+                    clientAppointment.getClient().getId().equals(clientId));
+
+            if (!removed) {
+                throw new RuntimeException("Client is not registered for this appointment!");
+            }
+
+            return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        } else {
+            throw new RuntimeException("Too late to cancel! Cancellation must be at least 24 hours before the appointment.");
+        }
+    }
+
+
 
 
 
