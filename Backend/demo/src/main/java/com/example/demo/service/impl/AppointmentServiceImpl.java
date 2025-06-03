@@ -11,7 +11,9 @@ import com.example.demo.service.params.request.Appointment.CreateAppointmentRequ
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.data.util.Pair;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -37,35 +39,24 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
-        LocalDate date = request.getDate();
-        LocalTime startTime = request.getStartTime();
-        LocalTime endTime = request.getEndTime();
+        validateAppointment(request);
 
-        validateDateAndTimeRange(date, startTime, endTime);
-        validateGymSchedule(date, startTime, endTime);
-        validateTrainerAvailability(request.getTrainerId(), date, startTime, endTime);
-        validateClientAvailability(request.getClientIds(), date, startTime, endTime);
-
-        Session session = fetchSession(request.getSessionId());
-        Trainer trainer = fetchTrainer(request.getTrainerId());
+        Pair<Session, Trainer> sessionTrainer = fetchSessionAndTrainer(request.getSessionId(), request.getTrainerId());
 
         Appointment appointment = Appointment.builder()
-                .date(date)
-                .startTime(startTime)
-                .endTime(endTime)
-                .session(session)
-                .trainer(trainer)
+                .date(request.getDate())
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
+                .session(sessionTrainer.getFirst())
+                .trainer(sessionTrainer.getSecond())
                 .build();
 
-        Set<ClientAppointment> clientAppointments = createClientAppointments(request.getClientIds(), appointment);
-        appointment.setClientAppointments(clientAppointments);
+        appointment.setClientAppointments(createClientAppointments(request.getClientIds(), appointment));
 
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
-        TrainerNotificationDTO notification = TrainerNotificationDTO.builder()
-                .appointment(appointmentDTO)
-                .build();
-        messagingTemplate.convertAndSend("/topic/trainer" + notification.getAppointment().getId(), notification);
+        messagingTemplate.convertAndSend("/topic/trainer" + appointmentDTO.getId(),
+                TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
 
         return appointmentDTO;
     }
@@ -117,6 +108,21 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
 
+
+
+
+
+    @Contract("_, _ -> new")
+    private @NotNull Pair<Session, Trainer> fetchSessionAndTrainer(Integer sessionId, Integer trainerId) {
+        return Pair.of(fetchSession(sessionId), fetchTrainer(trainerId));
+    }
+
+    private void validateAppointment(@NotNull CreateAppointmentRequest request) {
+        validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateGymSchedule(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        validateClientAvailability(request.getClientIds(), request.getDate(), request.getStartTime(), request.getEndTime());
+    }
 
     private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         if (startTime.isAfter(endTime)) {

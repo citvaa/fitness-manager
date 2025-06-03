@@ -29,7 +29,7 @@ public class Client {
     private List<Payment> payments;
 
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ClientSessionTracking> clientSessionTracking;
+    private Set<ClientSessionTracking> clientSessionTrackings;
 
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ClientAppointment> clientAppointments;

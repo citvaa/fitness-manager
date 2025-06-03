@@ -27,17 +27,17 @@ public class User {
     @Column(name = "password")
     private String password;
 
-    @Column(name = "registration_key")
-    private String registrationKey;
-
-    @Column(name = "registration_key_validity")
-    private LocalDateTime registrationKeyValidity;
-
     @Column(name = "is_activated")
     private Boolean isActivated;
 
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserRole> userRoles;
+
+    @Column(name = "registration_key")
+    private String registrationKey;
+
+    @Column(name = "registration_key_validity")
+    private LocalDateTime registrationKeyValidity;
 
     @Column(name = "reset_key")
     private String resetKey;
