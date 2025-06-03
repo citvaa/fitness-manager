@@ -15,6 +15,6 @@ public class TrainerNotificationController {
 
     @MessageMapping("send-notification")
     public void sendNotification(@Payload TrainerNotificationDTO notification) {
-        messagingTemplate.convertAndSend("/topic/trainer" + notification.getAppointment().getId(), notification);
+        messagingTemplate.convertAndSend("/topic/trainer" + notification.getAppointment().getTrainer().getId(), notification);
     }
 }

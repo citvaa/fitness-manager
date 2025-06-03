@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -55,7 +56,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
-        messagingTemplate.convertAndSend("/topic/trainer" + appointmentDTO.getId(),
+        messagingTemplate.convertAndSend("/topic/trainer" + sessionTrainer.getSecond().getId(),
                 TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
 
         return appointmentDTO;
@@ -165,12 +166,17 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private boolean isTrainerAvailable(Integer trainerId, @NotNull LocalDate date, LocalTime startTime, LocalTime endTime) {
-        return trainerScheduleRepository.findByTrainerIdAndDate(trainerId, date)
-                .stream()
+        List<TrainerSchedule> schedules = trainerScheduleRepository.findByTrainerIdAndDate(trainerId, date);
+
+        if (schedules.isEmpty()) {
+            return true;
+        }
+
+        return schedules.stream()
                 .filter(schedule -> schedule.getStatus() == WorkStatus.WORKING)
                 .anyMatch(schedule ->
-                        startTime.isAfter(schedule.getStartTime()) || startTime.equals(schedule.getStartTime()) &&
-                                endTime.isBefore(schedule.getEndTime()) || endTime.equals(schedule.getEndTime())
+                        (startTime.equals(schedule.getStartTime()) || startTime.isAfter(schedule.getStartTime())) &&
+                                (endTime.equals(schedule.getEndTime()) || endTime.isBefore(schedule.getEndTime()))
                 );
     }
 
