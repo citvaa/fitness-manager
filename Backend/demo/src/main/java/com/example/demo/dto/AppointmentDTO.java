@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Set;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -18,6 +19,6 @@ public class AppointmentDTO {
     private LocalTime startTime;
     private LocalTime endTime;
     private SessionDTO session;
-    private TrainerDTO trainer;
-    //private Set<ClientDTO> clients;
+    private TrainerSummaryDTO trainer;
+    private Set<ClientSummaryDTO> clients;
 }

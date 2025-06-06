@@ -6,9 +6,7 @@ CREATE SEQUENCE client_s
 
 CREATE TABLE client (
     id INT DEFAULT nextval('client_s') PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES "user"(id),
-    remaining_appointments INT NOT NULL,
-    reserved_appointments INT NOT NULL
+    user_id INT NOT NULL REFERENCES "user"(id)
 );
 
 CREATE SEQUENCE session_s

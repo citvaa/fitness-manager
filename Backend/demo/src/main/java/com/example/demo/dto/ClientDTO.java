@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -12,6 +14,7 @@ import lombok.Setter;
 public class ClientDTO {
     private Integer id;
     private UserDTO user;
-    private Integer remainingAppointments;
-    private Integer reservedAppointments;
+    private List<PaymentDTO> payments;
+    private List<ClientSessionTrackingDTO> sessionTrackings;
+    private List<AppointmentDTO> appointments;
 }

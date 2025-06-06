@@ -1,5 +1,6 @@
 package com.example.demo.configuration;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -7,8 +8,11 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
+@RequiredArgsConstructor
 @Configuration
 public class SecurityConfig {
+
+    private final JwtConfig jwtConfig;
 
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
@@ -29,9 +33,17 @@ public class SecurityConfig {
                                 "/webjars/**",
                                 "/api/**",
                                 "/api/user/register",
-                                "/api/user/login"
+                                "/api/user/login",
+                                "/ws/**",
+                                "/topic/**",
+                                "/app/**",
+                                "/**",
+                                "/public/**"
                         ).permitAll()
                         .anyRequest().authenticated()
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.decoder(jwtConfig.jwtDecoder()))
                 )
                 .csrf(AbstractHttpConfigurer::disable);
 

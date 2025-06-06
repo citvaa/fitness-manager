@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.List;
+import java.util.Set;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -27,9 +28,9 @@ public class Client {
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
 
-    @Column(name = "remaining_appointments", nullable = false)
-    private Integer remainingAppointments;
+    @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ClientSessionTracking> clientSessionTrackings;
 
-    @Column(name = "reserved_appointments", nullable = false)
-    private Integer reservedAppointments;
+    @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ClientAppointment> clientAppointments;
 }

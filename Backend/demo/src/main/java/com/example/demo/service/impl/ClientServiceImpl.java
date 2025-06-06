@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -34,8 +35,8 @@ public class ClientServiceImpl implements ClientService {
         Client client = Client.builder()
                 .user(user)
                 .payments(new ArrayList<>())
-                .remainingAppointments(0)
-                .reservedAppointments(0)
+                .clientSessionTrackings(new HashSet<>())
+                .clientAppointments(new HashSet<>())
                 .build();
 
         Client savedClient = clientRepository.save(client);

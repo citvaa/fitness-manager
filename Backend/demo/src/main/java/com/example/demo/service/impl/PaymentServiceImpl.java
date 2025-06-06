@@ -3,9 +3,11 @@ package com.example.demo.service.impl;
 import com.example.demo.dto.PaymentDTO;
 import com.example.demo.mapper.PaymentMapper;
 import com.example.demo.model.Client;
+import com.example.demo.model.ClientSessionTracking;
 import com.example.demo.model.Payment;
 import com.example.demo.model.Session;
 import com.example.demo.repository.ClientRepository;
+import com.example.demo.repository.ClientSessionTrackingRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.service.PaymentService;
@@ -24,29 +26,62 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final ClientRepository clientRepository;
     private final SessionRepository sessionRepository;
+    private final ClientSessionTrackingRepository clientSessionTrackingRepository;
 
     @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {
+        validatePaymentRequest(request);
+
+        Client client = fetchClient(request.getClientId());
+        Session session = fetchSession(request.getSessionId());
+
+        ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, session);
+        updateClientSessionTracking(tracking, request.getPaidAppointments());
+
+        Payment payment = createPayment(client, session, request);
+        return paymentMapper.toDto(paymentRepository.save(payment));
+    }
+
+
+
+
+    private void validatePaymentRequest(@NotNull CreatePaymentRequest request) {
         if (request.getPaidAppointments() <= 0) {
             throw new IllegalArgumentException("Paid sessions must be greater than zero");
         }
+    }
 
-        Client client = clientRepository.findById(request.getClientId())
+    private Client fetchClient(Integer clientId) {
+        return clientRepository.findById(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("Client not found"));
+    }
 
-        client.setRemainingAppointments(client.getRemainingAppointments() + request.getPaidAppointments());
-        clientRepository.save(client);
-
-        Session session = sessionRepository.findById(request.getSessionId())
+    private Session fetchSession(Integer sessionId) {
+        return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+    }
 
-        Payment payment = Payment.builder()
+    private ClientSessionTracking getOrCreateClientSessionTracking(Client client, Session session) {
+        return clientSessionTrackingRepository.findByClientAndSession(client, session)
+                .orElseGet(() -> ClientSessionTracking.builder()
+                        .client(client)
+                        .session(session)
+                        .remainingAppointments(0)
+                        .reservedAppointments(0)
+                        .build());
+    }
+
+    private void updateClientSessionTracking(@NotNull ClientSessionTracking tracking, Integer paidAppointments) {
+        tracking.setRemainingAppointments(tracking.getRemainingAppointments() + paidAppointments);
+        clientSessionTrackingRepository.save(tracking);
+    }
+
+    private Payment createPayment(Client client, Session session, @NotNull CreatePaymentRequest request) {
+        return Payment.builder()
                 .client(client)
                 .session(session)
                 .paidAppointments(request.getPaidAppointments())
                 .paymentDate(request.getPaymentDate())
                 .build();
-
-        return paymentMapper.toDto(paymentRepository.save(payment));
     }
 }

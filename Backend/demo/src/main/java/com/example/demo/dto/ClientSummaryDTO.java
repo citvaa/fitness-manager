@@ -5,16 +5,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDate;
-
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
-public class PaymentDTO {
+public class ClientSummaryDTO {
     private Integer id;
-    private ClientSummaryDTO client;
-    private SessionDTO session;
-    private Integer paidAppointments;
-    private LocalDate paymentDate;
+    private String email;
 }
