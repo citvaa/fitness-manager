@@ -11,10 +11,13 @@ import com.example.demo.service.params.request.Appointment.CreateAppointmentRequ
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.data.util.Pair;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -43,22 +46,25 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
         validateAppointment(request);
 
-        Pair<Session, Trainer> sessionTrainer = fetchSessionAndTrainer(request.getSessionId(), request.getTrainerId());
+        Session session = fetchSession(request.getSessionId());
+        Trainer trainer = fetchTrainer(request.getTrainerId());
 
         Appointment appointment = Appointment.builder()
                 .date(request.getDate())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .session(sessionTrainer.getFirst())
-                .trainer(sessionTrainer.getSecond())
+                .session(session)
+                .trainer(trainer)
                 .build();
 
         appointment.setClientAppointments(createClientAppointments(request.getClientIds(), appointment));
 
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
-        messagingTemplate.convertAndSend("/topic/trainer" + sessionTrainer.getSecond().getId(),
-                TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
+        if (trainer != null) {
+            messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(),
+                    TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
+        }
 
         return appointmentDTO;
     }
@@ -77,6 +83,16 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Transactional
+    public AppointmentDTO removeTrainer(Integer id) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        appointment.setTrainer(null);
+
+        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    @Transactional
     public AppointmentDTO addClients(Integer appointmentId, @NotNull Set<Integer> clientIds) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
@@ -87,16 +103,6 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointmentRepository.save(appointment);
 
         return appointmentMapper.toDto(appointment);
-    }
-
-    @Transactional
-    public AppointmentDTO removeTrainer(Integer appointmentId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
-
-        appointment.setTrainer(null);
-
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
     }
 
     @Transactional
@@ -117,21 +123,47 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Transactional
-    public AppointmentDTO addClient(Integer appointmentId, Integer clientId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
+    public AppointmentDTO reserve(Integer id) {
+        Client client = getAuthenticatedClient();
+
+        Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Appointment not found!"));
 
         if (appointment.getClientAppointments().size() >= appointment.getSession().getMaxParticipants()) {
             throw new RuntimeException("No available spots for this appointment!");
         }
 
-        Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new RuntimeException("Client not found!"));
-
         ClientAppointment clientAppointment = createClientAppointment(client, appointment);
         appointment.getClientAppointments().add(clientAppointment);
 
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    @Transactional
+    public AppointmentDTO cancel(Integer id) {
+        Client client = getAuthenticatedClient();
+
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        LocalDateTime appointmentTime = LocalDateTime.of(appointment.getDate(), appointment.getStartTime());
+        LocalDateTime cancellationDeadline = appointmentTime.minusHours(24);
+
+        if (LocalDateTime.now().isBefore(cancellationDeadline)) {
+            boolean removed = appointment.getClientAppointments().removeIf(clientAppointment ->
+                    clientAppointment.getClient().getId().equals(client.getId()));
+
+            if (!removed) {
+                throw new RuntimeException("Client is not registered for this appointment!");
+            }
+
+            ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
+            decrementReservedAppointments(tracking);
+
+            return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        } else {
+            throw new RuntimeException("Too late to cancel! Cancellation must be at least 24 hours before the appointment.");
+        }
     }
 
     public List<AppointmentDTO> getAllWithoutTrainer() {
@@ -142,25 +174,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Transactional
-    public AppointmentDTO cancel(Integer appointmentId, Integer clientId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+    public AppointmentDTO assign(Integer appointmentId) {
+        Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
+        trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
+        return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+    }
 
-        LocalDateTime appointmentTime = LocalDateTime.of(appointment.getDate(), appointment.getStartTime());
-        LocalDateTime cancellationDeadline = appointmentTime.minusHours(24);
-
-        if (LocalDateTime.now().isBefore(cancellationDeadline)) {
-            boolean removed = appointment.getClientAppointments().removeIf(clientAppointment ->
-                    clientAppointment.getClient().getId().equals(clientId));
-
-            if (!removed) {
-                throw new RuntimeException("Client is not registered for this appointment!");
-            }
-
-            return appointmentMapper.toDto(appointmentRepository.save(appointment));
-        } else {
-            throw new RuntimeException("Too late to cancel! Cancellation must be at least 24 hours before the appointment.");
+    @Transactional
+    public AppointmentDTO unassign(Integer appointmentId) {
+        Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
+        if (!trainerAppointment.getFirst().equals(trainerAppointment.getSecond().getTrainer())) {
+            throw new RuntimeException("Trainer is not assigned to this appointment!");
         }
+        trainerAppointment.getSecond().setTrainer(null);
+        return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
 
 
@@ -168,12 +195,6 @@ public class AppointmentServiceImpl implements AppointmentService {
 
 
 
-
-
-    @Contract("_, _ -> new")
-    private @NotNull Pair<Session, Trainer> fetchSessionAndTrainer(Integer sessionId, Integer trainerId) {
-        return Pair.of(fetchSession(sessionId), fetchTrainer(trainerId));
-    }
 
     private void validateAppointment(@NotNull CreateAppointmentRequest request) {
         validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
@@ -182,13 +203,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         validateClientAvailability(request.getClientIds(), request.getDate(), request.getStartTime(), request.getEndTime());
     }
 
-    private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
-        if (startTime.isAfter(endTime)) {
-            throw new IllegalArgumentException("Start time is after end time");
+    private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, @NotNull LocalTime endTime) {
+        if (startTime.isAfter(endTime) || startTime.equals(endTime)) {
+            throw new IllegalArgumentException("Start time must be before end time!");
         }
 
-        if (date.isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("Appointment date cannot be in the past!");
+        if (date.isBefore(LocalDate.now()) || date.equals(LocalDate.now())) {
+            throw new IllegalArgumentException("Appointment date must be in the future!");
         }
     }
 
@@ -201,15 +222,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private void validateTrainerAvailability(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
-        if (trainerId != null && !isTrainerAvailable(trainerId, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trainer with ID " + trainerId + " is already occupied in this time slot!");
+    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        if (id != null && !isTrainerAvailable(id, date, startTime, endTime)) {
+            throw new IllegalArgumentException("Trainer with ID " + id + " is already occupied in this time slot!");
         }
     }
 
-    private void validateClientAvailability(Set<Integer> clientIds, LocalDate date, LocalTime startTime, LocalTime endTime) {
-        if (clientIds != null) {
-            for (Integer clientId : clientIds) {
+    private void validateClientAvailability(Set<Integer> ids, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        if (ids != null) {
+            for (Integer clientId : ids) {
                 if (!isClientAvailable(clientId, date, startTime, endTime)) {
                     throw new IllegalArgumentException("Client with ID " + clientId + " is already booked in this time slot!");
                 }
@@ -217,17 +238,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private boolean isClientAvailable(Integer clientId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+    private boolean isClientAvailable(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
         return !appointmentRepository.existsByClientAppointmentsClientIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(
-                clientId, date, endTime, startTime);
+                id, date, endTime, startTime);
     }
 
-    private boolean isTrainerAvailable(Integer trainerId, @NotNull LocalDate date, LocalTime startTime, LocalTime endTime) {
-        List<TrainerSchedule> schedules = trainerScheduleRepository.findByTrainerIdAndDate(trainerId, date);
-
-        if (schedules.isEmpty()) {
-            return true;
-        }
+    private boolean isTrainerAvailable(Integer id, @NotNull LocalDate date, LocalTime startTime, LocalTime endTime) {
+        List<TrainerSchedule> schedules = trainerScheduleRepository.findByTrainerIdAndDate(id, date);
 
         return schedules.stream()
                 .filter(schedule -> schedule.getStatus() == WorkStatus.WORKING)
@@ -237,13 +254,13 @@ public class AppointmentServiceImpl implements AppointmentService {
                 );
     }
 
-    private Session fetchSession(Integer sessionId) {
-        return sessionRepository.findById(sessionId)
+    private Session fetchSession(Integer id) {
+        return sessionRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Session not found"));
     }
 
-    private Trainer fetchTrainer(Integer trainerId) {
-        return (trainerId != null) ? trainerRepository.findById(trainerId).orElse(null) : null;
+    private Trainer fetchTrainer(Integer id) {
+        return (id != null) ? trainerRepository.findById(id).orElse(null) : null;
     }
 
     private Set<ClientAppointment> createClientAppointments(Set<Integer> clientIds, Appointment appointment) {
@@ -257,7 +274,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                             .orElseThrow(() -> new EntityNotFoundException("Client not found"));
 
                     ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
-                    updateClientSessionTracking(tracking);
+                    incrementReservedAppointments(tracking);
 
                     return createClientAppointment(client, appointment);
                 })
@@ -274,16 +291,54 @@ public class AppointmentServiceImpl implements AppointmentService {
                         .build());
     }
 
-    private void updateClientSessionTracking(@NotNull ClientSessionTracking tracking) {
+    private void incrementReservedAppointments(@NotNull ClientSessionTracking tracking) {
         tracking.setReservedAppointments(tracking.getReservedAppointments() + 1);
         tracking.setRemainingAppointments(tracking.getRemainingAppointments() - 1);
         clientSessionTrackingRepository.save(tracking);
     }
 
-    private ClientAppointment createClientAppointment(Client client, Appointment appointment) {
+    private void decrementReservedAppointments(@NotNull ClientSessionTracking tracking) {
+        tracking.setReservedAppointments(tracking.getReservedAppointments() - 1);
+        tracking.setRemainingAppointments(tracking.getRemainingAppointments() + 1);
+        clientSessionTrackingRepository.save(tracking);
+    }
+
+    private ClientAppointment createClientAppointment(Client client, @NotNull Appointment appointment) {
+        ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
+        incrementReservedAppointments(tracking);
+
         return ClientAppointment.builder()
                 .client(client)
                 .appointment(appointment)
                 .build();
+    }
+
+    private Client getAuthenticatedClient() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+
+        String email = jwt.getClaim("email");
+
+        return clientRepository.findByUserEmail(email)
+                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+    }
+
+    private @NotNull Pair<Trainer, Appointment> getAuthenticatedTrainerAndAppointment(Integer id) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+
+        String email = jwt.getClaim("email");
+
+        Trainer trainer = trainerRepository.findByUserEmail(email)
+                .orElseThrow(() -> new RuntimeException("Trainer not found for the logged-in user!"));
+
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        return Pair.of(trainer, appointment);
     }
 }

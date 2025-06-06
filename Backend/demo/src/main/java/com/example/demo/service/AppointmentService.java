@@ -11,17 +11,21 @@ public interface AppointmentService {
 
     AppointmentDTO addTrainer(Integer appointmentId, Integer trainerId);
 
-    AppointmentDTO addClients(Integer appointmentId, Set<Integer> clientIds);
+    AppointmentDTO removeTrainer(Integer id);
 
-    AppointmentDTO removeTrainer(Integer appointmentId);
+    AppointmentDTO addClients(Integer appointmentId, Set<Integer> clientIds);
 
     AppointmentDTO removeClient(Integer appointmentId, Integer clientId);
 
     List<AppointmentDTO> getAvailable();
 
-    AppointmentDTO addClient(Integer appointmentId, Integer clientId);
+    AppointmentDTO reserve(Integer id);
+
+    AppointmentDTO cancel(Integer id);
 
     List<AppointmentDTO> getAllWithoutTrainer();
 
-    AppointmentDTO cancel(Integer appointmentId, Integer clientId);
+    AppointmentDTO assign(Integer id);
+
+    AppointmentDTO unassign(Integer id);
 }

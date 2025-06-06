@@ -26,7 +26,7 @@ public class AppointmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
     }
 
-    @RoleRequired({"MANAGER", "TRAINER"})
+    @RoleRequired("MANAGER")
     @PostMapping("/{appointmentId}/add-trainer")
     public ResponseEntity<AppointmentDTO> addTrainer(@PathVariable Integer appointmentId, @RequestParam Integer trainerId) {
         AppointmentDTO updatedAppointment = appointmentService.addTrainer(appointmentId, trainerId);
@@ -34,16 +34,16 @@ public class AppointmentController {
     }
 
     @RoleRequired("MANAGER")
-    @PostMapping("/{appointmentId}/add-clients")
-    public ResponseEntity<AppointmentDTO> addClients(@PathVariable Integer appointmentId, @RequestParam Set<Integer> clientIds) {
-        AppointmentDTO updatedAppointment = appointmentService.addClients(appointmentId, clientIds);
+    @DeleteMapping("/{id}/remove-trainer")
+    public ResponseEntity<AppointmentDTO> removeTrainer(@PathVariable Integer id) {
+        AppointmentDTO updatedAppointment = appointmentService.removeTrainer(id);
         return ResponseEntity.ok(updatedAppointment);
     }
 
     @RoleRequired("MANAGER")
-    @DeleteMapping("/{id}/remove-trainer")
-    public ResponseEntity<AppointmentDTO> removeTrainer(@PathVariable Integer id) {
-        AppointmentDTO updatedAppointment = appointmentService.removeTrainer(id);
+    @PostMapping("/{appointmentId}/add-clients")
+    public ResponseEntity<AppointmentDTO> addClients(@PathVariable Integer appointmentId, @RequestParam Set<Integer> clientIds) {
+        AppointmentDTO updatedAppointment = appointmentService.addClients(appointmentId, clientIds);
         return ResponseEntity.ok(updatedAppointment);
     }
 
@@ -60,9 +60,16 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAvailable());
     }
 
-    @PostMapping("/{appointmentId}/add-client")
-    public ResponseEntity<AppointmentDTO> reserve(@PathVariable Integer appointmentId, @RequestParam Integer clientId) {
-        return ResponseEntity.ok(appointmentService.addClient(appointmentId, clientId));
+    @RoleRequired("CLIENT")
+    @PostMapping("/{id}/reserve")
+    public ResponseEntity<AppointmentDTO> reserve(@PathVariable Integer id) {
+        return ResponseEntity.ok(appointmentService.reserve(id));
+    }
+
+    @RoleRequired("CLIENT")
+    @DeleteMapping("/{id}/cancel")
+    public ResponseEntity<AppointmentDTO> cancel(@PathVariable Integer id) {
+        return ResponseEntity.ok(appointmentService.cancel(id));
     }
 
     @RoleRequired({"MANAGER", "TRAINER"})
@@ -71,9 +78,15 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAllWithoutTrainer());
     }
 
-    @RoleRequired({"MANAGER", "CLIENT"})
-    @DeleteMapping("/{appointmentId}/cancel")
-    public ResponseEntity<AppointmentDTO> cancel(@PathVariable Integer appointmentId, @RequestParam Integer clientId) {
-        return ResponseEntity.ok(appointmentService.cancel(appointmentId, clientId));
+    @RoleRequired("TRAINER")
+    @PostMapping("/{id}/assign")
+    public ResponseEntity<AppointmentDTO> assign(@PathVariable Integer id) {
+        return ResponseEntity.ok(appointmentService.assign(id));
+    }
+
+    @RoleRequired("TRAINER")
+    @DeleteMapping("/{id}/unassign")
+    public ResponseEntity<AppointmentDTO> unassign(@PathVariable Integer id) {
+        return ResponseEntity.ok(appointmentService.unassign(id));
     }
 }

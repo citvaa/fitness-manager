@@ -7,6 +7,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.Getter;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -36,7 +37,7 @@ public class JwtUtil {
         this.tokenLifetime = jwtConfig.getExpiration() * 1000;
     }
 
-    public String generateToken(User user) {
+    public String generateToken(@NotNull User user) {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
