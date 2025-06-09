@@ -1,7 +1,7 @@
 package com.example.demo.mapper;
 
 import com.example.demo.dto.TrainerDTO;
-import com.example.demo.dto.TrainerSummaryDTO;
+import com.example.demo.dto.summary.TrainerSummaryDTO;
 import com.example.demo.model.Trainer;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

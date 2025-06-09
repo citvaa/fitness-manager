@@ -2,8 +2,13 @@ package com.example.demo.service.impl;
 
 import com.example.demo.configuration.AppConfig;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.dto.notification.ClientNotificationDTO;
+import com.example.demo.dto.notification.TrainerNotificationDTO;
+import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
+import com.example.demo.mapper.AppointmentMapperImpl;
 import com.example.demo.mapper.UserMapper;
+import com.example.demo.model.Appointment;
 import com.example.demo.model.User;
 import com.example.demo.model.UserRole;
 import com.example.demo.repository.UserRepository;
@@ -23,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,6 +55,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     private final ClientRepository clientRepository;
     private final PaymentRepository paymentRepository;
     private final EmailService emailService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final AppointmentMapperImpl appointmentMapperImpl;
 
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
@@ -72,6 +81,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
 
         User user = User.builder()
                 .email(request.getEmail())
+                .password(null)
+                .notificationPreference(NotificationPreference.PUSH)
                 .registrationKey(registration_key)
                 .registrationKeyValidity(registration_key_validity)
                 .isActivated(false)
@@ -170,8 +181,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     @Transactional
-    public void addRole(Integer userId, Role role) {
-        User user = userRepository.findById(userId)
+    public void addRole(Integer id, Role role) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         boolean alreadyHasRole = user.getUserRoles() != null
@@ -192,8 +203,8 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
     }
 
     @Transactional
-    public void removeRole(Integer userId, Role role) {
-        User user = userRepository.findById(userId)
+    public void removeRole(Integer id, Role role) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         Optional<UserRole> userRoleToRemove = user.getUserRoles().stream().filter(userRole -> userRole.getRole().equals(role)).findFirst();
@@ -216,6 +227,41 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
                     UserDTO newUserDto = create(createUserRequest);
                     return userMapper.toEntity(newUserDto);
                 });
+    }
+
+    @Transactional
+    public void updateNotificationPreference(Integer id, NotificationPreference notificationPreference) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        user.setNotificationPreference(notificationPreference);
+        userRepository.save(user);
+    }
+
+    public void sendTrainerNotification(@NotNull User trainer, List<Appointment> appointments) {
+        TrainerNotificationDTO notificationDTO = new TrainerNotificationDTO(appointmentMapperImpl.toDto(appointments));
+
+        switch (trainer.getNotificationPreference()) {
+            case BOTH -> {
+                emailService.sendTrainerScheduleEmail(trainer.getEmail(), appointments);
+                messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), notificationDTO);
+            }
+            case EMAIL -> emailService.sendTrainerScheduleEmail(trainer.getEmail(), appointments);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), notificationDTO);
+        }
+    }
+
+    public void sendClientNotification(@NotNull User client, Appointment appointment) {
+        ClientNotificationDTO notificationDTO = new ClientNotificationDTO(appointmentMapperImpl.toDto(appointment));
+
+        switch (client.getNotificationPreference()) {
+            case BOTH -> {
+                emailService.sendClientNotificationEmail(client.getEmail(), appointment);
+                messagingTemplate.convertAndSend("/topic/client" + client.getId(), notificationDTO);
+            }
+            case EMAIL -> emailService.sendClientNotificationEmail(client.getEmail(), appointment);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), notificationDTO);
+        }
     }
 
 }

@@ -11,9 +11,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableCaching
 @EnableAsync
 public class FitnessManagerApplication {
-
-	public static void main(String[] args) {
+    public static void main(String[] args) {
 		SpringApplication.run(FitnessManagerApplication.class, args);
 	}
-
 }

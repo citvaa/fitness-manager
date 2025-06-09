@@ -1,12 +1,15 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
+import com.example.demo.model.Appointment;
 import com.example.demo.model.User;
 import com.example.demo.service.params.request.User.*;
 import com.example.demo.service.params.response.User.LoginResponse;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserService {
@@ -29,9 +32,15 @@ public interface UserService {
 
     Page<UserDTO> getUsers(SearchUserRequest request);
 
-    void addRole(Integer userId, Role role);
+    void addRole(Integer id, Role role);
 
-    void removeRole(Integer userId, Role role);
+    void removeRole(Integer id, Role role);
 
     User findOrCreateUser(CreateUserRequest request);
+
+    void updateNotificationPreference(Integer id, NotificationPreference notificationPreference);
+
+    void sendTrainerNotification(User trainer, List<Appointment> appointments);
+
+    void sendClientNotification(User client, Appointment appointment);
 }

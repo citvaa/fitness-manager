@@ -1,5 +1,6 @@
 package com.example.demo.model;
 
+import com.example.demo.enums.NotificationPreference;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -32,6 +33,10 @@ public class User {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserRole> userRoles;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "notification_preference")
+    private NotificationPreference notificationPreference;
 
     @Column(name = "registration_key")
     private String registrationKey;

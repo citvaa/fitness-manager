@@ -1,4 +1,4 @@
-package com.example.demo.dto;
+package com.example.demo.dto.summary;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,7 +9,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
-public class ClientSummaryDTO {
+public class TrainerSummaryDTO {
     private Integer id;
     private String email;
 }

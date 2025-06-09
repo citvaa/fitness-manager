@@ -1,7 +1,7 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
-import com.example.demo.dto.TrainerNotificationDTO;
+import com.example.demo.dto.notification.TrainerAppointmentNotificationDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.*;
@@ -63,7 +63,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         if (trainer != null) {
             messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(),
-                    TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
+                    TrainerAppointmentNotificationDTO.builder().appointment(appointmentDTO).build());
         }
 
         return appointmentDTO;

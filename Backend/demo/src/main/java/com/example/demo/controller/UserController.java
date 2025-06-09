@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
 import com.example.demo.service.UserService;
 import com.example.demo.service.params.request.User.*;
@@ -87,6 +88,13 @@ public class UserController {
     @DeleteMapping("/{id}/role")
     public ResponseEntity<Void> removeRole(@PathVariable Integer id, @RequestParam Role role) {
         userService.removeRole(id, role);
+        return ResponseEntity.ok().build();
+    }
+
+    @RoleRequired("MANAGER")
+    @PatchMapping("/{id}/notification-preference")
+    public ResponseEntity<Void> updateNotificationPreference(@PathVariable Integer id, NotificationPreference notificationPreference) {
+        userService.updateNotificationPreference(id, notificationPreference);
         return ResponseEntity.ok().build();
     }
 }
