@@ -3,6 +3,8 @@ package com.example.demo.service;
 import com.example.demo.dto.TrainerDTO;
 import com.example.demo.service.params.request.Trainer.CreateTrainerRequest;
 
+import java.util.List;
+
 public interface TrainerService {
     TrainerDTO create(CreateTrainerRequest request);
 
@@ -11,4 +13,6 @@ public interface TrainerService {
     TrainerDTO update(Integer id, CreateTrainerRequest request);
 
     void delete(Integer id);
+
+    List<TrainerDTO> getAll();
 }

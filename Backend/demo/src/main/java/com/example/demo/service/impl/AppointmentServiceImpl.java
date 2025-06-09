@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +42,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final NotificationService notificationService;
+    private final ClientAppointmentRepository clientAppointmentRepository;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
@@ -189,6 +191,26 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
 
+    public List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date) {
+        return appointmentRepository.findByTrainerIdAndDate(trainerId, date)
+                .stream()
+                .map(appointmentMapper::toDto)
+                .toList();
+    }
+
+    public Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date) {
+        return clientAppointmentRepository.findByClientIdAndAppointmentDate(clientId, date)
+                .stream()
+                .findFirst()
+                .map(clientAppointment -> appointmentMapper.toDto(clientAppointment.getAppointment()));
+    }
+
+    public List<Appointment> findAppointmentsStartingBetween(LocalTime start, LocalTime end, LocalDate date) {
+        return appointmentRepository.findByStartTimeBetweenAndDate(start, end, date);
+    }
+
+
+
 
 
 
@@ -207,7 +229,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new IllegalArgumentException("Start time must be before end time!");
         }
 
-        if (date.isBefore(LocalDate.now()) || date.equals(LocalDate.now())) {
+        if (date.isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("Appointment date must be in the future!");
         }
     }

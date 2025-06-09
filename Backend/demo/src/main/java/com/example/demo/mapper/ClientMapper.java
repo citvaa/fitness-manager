@@ -9,6 +9,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,4 +31,7 @@ public interface ClientMapper {
                 .collect(Collectors.toSet());
     }
 
+    List<Client> toEntity(List<ClientDTO> dtos);
+
+    List<ClientDTO> toDto(List<Client> clients);
 }

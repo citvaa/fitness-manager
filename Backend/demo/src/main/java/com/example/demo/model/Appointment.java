@@ -39,6 +39,6 @@ public class Appointment {
     @JoinColumn(name = "trainer_id", referencedColumnName = "id")
     private Trainer trainer;
 
-    @OneToMany(mappedBy = "appointment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "appointment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<ClientAppointment> clientAppointments;
 }

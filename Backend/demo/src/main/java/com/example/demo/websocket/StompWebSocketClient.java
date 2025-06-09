@@ -21,6 +21,7 @@ public class StompWebSocketClient {
             public void afterConnected(@NotNull StompSession session, @NotNull StompHeaders headers) {
                 System.out.println("✅ STOMP Connected!");
                 session.subscribe("/topic/trainer1", this);
+                session.subscribe("/topic/client1", this);
                 session.send("/app/sendNotification", "Test push notification!");
             }
 

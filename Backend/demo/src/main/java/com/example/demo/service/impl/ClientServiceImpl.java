@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -42,5 +43,9 @@ public class ClientServiceImpl implements ClientService {
         Client savedClient = clientRepository.save(client);
 
         return clientMapper.toDto(savedClient);
+    }
+
+    public List<ClientDTO> getAll() {
+        return clientMapper.toDto(clientRepository.findAll());
     }
 }

@@ -20,6 +20,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
@@ -81,4 +83,9 @@ public class TrainerServiceImpl implements TrainerService {
 
         trainerRepository.delete(trainer);
     }
+
+    public List<TrainerDTO> getAll() {
+        return trainerMapper.toDto(trainerRepository.findAll());
+    }
+
 }
