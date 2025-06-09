@@ -2,12 +2,13 @@ package com.example.demo.service;
 
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.service.params.request.Appointment.CreateAppointmentRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.util.List;
 import java.util.Set;
 
 public interface AppointmentService {
-    AppointmentDTO create(CreateAppointmentRequest request);
+    AppointmentDTO create(CreateAppointmentRequest request) throws JsonProcessingException;
 
     AppointmentDTO addTrainer(Integer appointmentId, Integer trainerId);
 

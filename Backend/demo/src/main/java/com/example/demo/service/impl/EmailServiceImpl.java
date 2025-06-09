@@ -1,7 +1,7 @@
 package com.example.demo.service.impl;
 
-import com.example.demo.model.Appointment;
-import com.example.demo.model.ClientAppointment;
+import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.service.AsyncEmailService;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.params.request.Email.ActivationEmailData;
@@ -40,24 +40,24 @@ public class EmailServiceImpl implements EmailService {
         asyncEmailService.sendHtmlEmail(recipient, "Zaboravljena lozinka", emailContent);
     }
 
-    public void sendClientNotificationEmail(String clientEmail, @NotNull Appointment appointment) {
+    public void sendClientNotificationEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
         String subject = "Training Reminder";
         String body = "Hello, you have a training session scheduled tomorrow at " + appointment.getStartTime();
         asyncEmailService.sendEmail(clientEmail, subject, body);
     }
 
-    public void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<Appointment> appointments) {
+    public void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<AppointmentDTO> appointments) {
         String subject = "Your Schedule for Tomorrow";
         StringBuilder body = new StringBuilder("Hello, here is your schedule for tomorrow:\n\n");
 
-        for (Appointment appointment : appointments) {
+        for (AppointmentDTO appointment : appointments) {
             body.append("⏰ ").append(appointment.getStartTime())
                     .append(" - ").append(appointment.getEndTime())
                     .append(" | Clients: ");
 
-            Set<ClientAppointment> clientAppointments = appointment.getClientAppointments();
-            List<String> clientNames = clientAppointments.stream()
-                    .map(clientAppointment -> clientAppointment.getClient().getUser().getEmail())
+            Set<ClientSummaryDTO> clients = appointment.getClients();
+            List<String> clientNames = clients.stream()
+                    .map(ClientSummaryDTO::getEmail)
                     .toList();
 
             body.append(String.join(", ", clientNames)).append("\n");

@@ -1,19 +1,19 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
-import com.example.demo.dto.notification.TrainerAppointmentNotificationDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.*;
 import com.example.demo.repository.*;
 import com.example.demo.service.AppointmentService;
+import com.example.demo.service.NotificationService;
 import com.example.demo.service.params.request.Appointment.CreateAppointmentRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.data.util.Pair;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -40,10 +40,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
 
     @Transactional
-    public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
+    public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
         validateAppointment(request);
 
         Session session = fetchSession(request.getSessionId());
@@ -62,8 +62,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
         if (trainer != null) {
-            messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(),
-                    TrainerAppointmentNotificationDTO.builder().appointment(appointmentDTO).build());
+            notificationService.sendTrainerNotification(trainer.getId(), appointmentDTO);
         }
 
         return appointmentDTO;

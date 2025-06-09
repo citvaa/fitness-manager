@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.model.Appointment;
+import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.service.params.request.Email.ActivationEmailData;
 import com.example.demo.service.params.request.Email.ForgetPasswordEmailData;
 import org.jetbrains.annotations.NotNull;
@@ -13,7 +13,7 @@ public interface EmailService {
 
     void sendResetPasswordEmail(String recipient, ForgetPasswordEmailData emailData);
 
-    void sendClientNotificationEmail(String clientEmail, @NotNull Appointment appointment);
+    void sendClientNotificationEmail(String clientEmail, @NotNull AppointmentDTO appointment);
 
-    void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<Appointment> appointments);
+    void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<AppointmentDTO> appointments);
 }
