@@ -1,7 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.HolidayDTO;
-import com.example.demo.service.params.request.Schedule.CreateHolidayRequest;
+import com.example.demo.service.params.request.schedule.CreateHolidayRequest;
 
 import java.time.LocalDate;
 

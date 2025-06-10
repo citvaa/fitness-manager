@@ -1,10 +1,10 @@
 package com.example.demo.mapper;
 
-import com.example.demo.dto.UserDTO;
+import com.example.demo.dto.user.UserDTO;
 import com.example.demo.enums.Role;
-import com.example.demo.model.User;
-import com.example.demo.model.UserRole;
-import com.example.demo.service.params.request.User.CreateUserRequest;
+import com.example.demo.model.user.User;
+import com.example.demo.model.user.UserRole;
+import com.example.demo.service.params.request.user.CreateUserRequest;
 import org.jetbrains.annotations.NotNull;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

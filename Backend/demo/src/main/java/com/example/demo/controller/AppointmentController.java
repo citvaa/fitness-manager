@@ -3,7 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.service.AppointmentService;
-import com.example.demo.service.params.request.Appointment.CreateAppointmentRequest;
+import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

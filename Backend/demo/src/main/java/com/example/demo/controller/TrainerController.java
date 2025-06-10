@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.TrainerDTO;
-import com.example.demo.service.TrainerService;
-import com.example.demo.service.params.request.Trainer.CreateTrainerRequest;
+import com.example.demo.dto.user.TrainerDTO;
+import com.example.demo.service.user.TrainerService;
+import com.example.demo.service.params.request.user.trainer.CreateTrainerRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

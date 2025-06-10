@@ -1,7 +1,7 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.DailyScheduleDTO;
-import com.example.demo.service.CalendarService;
+import com.example.demo.dto.schedule.DailyScheduleDTO;
+import com.example.demo.service.schedule.CalendarService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

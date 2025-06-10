@@ -1,12 +1,12 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.UserDTO;
+import com.example.demo.dto.user.UserDTO;
 import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
-import com.example.demo.service.UserService;
-import com.example.demo.service.params.request.User.*;
-import com.example.demo.service.params.response.User.LoginResponse;
+import com.example.demo.service.user.UserService;
+import com.example.demo.service.params.request.user.*;
+import com.example.demo.service.params.response.user.LoginResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;

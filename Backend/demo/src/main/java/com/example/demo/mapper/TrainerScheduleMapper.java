@@ -1,7 +1,7 @@
 package com.example.demo.mapper;
 
-import com.example.demo.dto.TrainerScheduleDTO;
-import com.example.demo.model.TrainerSchedule;
+import com.example.demo.dto.schedule.TrainerScheduleDTO;
+import com.example.demo.model.schedule.TrainerSchedule;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")

@@ -5,7 +5,7 @@ import com.example.demo.mapper.HolidayMapper;
 import com.example.demo.model.Holiday;
 import com.example.demo.repository.HolidayRepository;
 import com.example.demo.service.HolidayService;
-import com.example.demo.service.params.request.Schedule.CreateHolidayRequest;
+import com.example.demo.service.params.request.schedule.CreateHolidayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

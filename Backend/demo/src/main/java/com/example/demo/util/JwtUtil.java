@@ -1,8 +1,8 @@
 package com.example.demo.util;
 
-import com.example.demo.configuration.JwtConfig;
-import com.example.demo.model.User;
-import com.example.demo.model.UserRole;
+import com.example.demo.config.JwtConfig;
+import com.example.demo.model.user.User;
+import com.example.demo.model.user.UserRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;

@@ -1,5 +1,7 @@
 package com.example.demo.model;
 
+import com.example.demo.model.user.ClientAppointment;
+import com.example.demo.model.user.Trainer;
 import jakarta.persistence.*;
 import lombok.*;
 

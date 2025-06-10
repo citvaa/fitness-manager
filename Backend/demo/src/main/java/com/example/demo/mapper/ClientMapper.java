@@ -1,9 +1,9 @@
 package com.example.demo.mapper;
 
-import com.example.demo.dto.ClientDTO;
+import com.example.demo.dto.user.ClientDTO;
 import com.example.demo.dto.summary.ClientSummaryDTO;
-import com.example.demo.model.Client;
-import com.example.demo.model.ClientAppointment;
+import com.example.demo.model.user.Client;
+import com.example.demo.model.user.ClientAppointment;
 import org.jetbrains.annotations.NotNull;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
