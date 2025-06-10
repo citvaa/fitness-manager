@@ -13,7 +13,7 @@ public interface EmailService {
 
     void sendResetPasswordEmail(String recipient, ForgetPasswordEmailData emailData);
 
-    void sendClientNotificationEmail(String clientEmail, @NotNull AppointmentDTO appointment);
+    void sendClientAppointmentReminderEmail(String clientEmail, @NotNull AppointmentDTO appointment);
 
     void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<AppointmentDTO> appointments);
 }

@@ -10,11 +10,11 @@ import org.jetbrains.annotations.NotNull;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TrainingReminderDTO {
+public class ClientUpcomingAppointmentNotificationDTO {
     private String message;
 
     @Contract(pure = true)
-    public TrainingReminderDTO(@NotNull AppointmentDTO appointment) {
+    public ClientUpcomingAppointmentNotificationDTO(@NotNull AppointmentDTO appointment) {
         this.message = "Reminder: You have a training session at " + appointment.getStartTime();
     }
 }

@@ -11,11 +11,11 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TrainerNotificationDTO {
+public class TrainerScheduleNotificationDTO {
     private LocalDate date;
     private List<AppointmentDTO> appointments;
 
-    public TrainerNotificationDTO(List<AppointmentDTO> appointments) {
+    public TrainerScheduleNotificationDTO(List<AppointmentDTO> appointments) {
         this.date = LocalDate.now().plusDays(1);
         this.appointments = appointments;
     }

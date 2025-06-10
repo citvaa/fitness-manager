@@ -1,9 +1,10 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
-import com.example.demo.dto.notification.ClientNotificationDTO;
-import com.example.demo.dto.notification.TrainerNotificationDTO;
-import com.example.demo.dto.notification.TrainingReminderDTO;
+import com.example.demo.dto.notification.TrainerAssignmentNotificationDTO;
+import com.example.demo.dto.notification.ClientAppointmentReminderNotificationDTO;
+import com.example.demo.dto.notification.TrainerScheduleNotificationDTO;
+import com.example.demo.dto.notification.ClientUpcomingAppointmentNotificationDTO;
 import com.example.demo.model.Client;
 import com.example.demo.model.Trainer;
 import com.example.demo.model.User;
@@ -26,15 +27,14 @@ public class NotificationServiceImpl implements NotificationService {
     private final EmailService emailService;
     private final UserRepository userRepository;
 
-    public void sendTrainerNotification(Integer trainerId, AppointmentDTO appointmentDTO) {
-        String jsonPayload = JsonUtil.convertToJson(appointmentDTO);
+    public void sendTrainerAssignmentNotification(Integer trainerId, AppointmentDTO appointmentDTO) {
+        String jsonPayload = JsonUtil.convertToJson(new TrainerAssignmentNotificationDTO(appointmentDTO));
 
         messagingTemplate.convertAndSend("/topic/trainer" + trainerId, jsonPayload);
     }
 
-    public void sendTrainerNotification(@NotNull Trainer trainer, List<AppointmentDTO> appointments) {
-        TrainerNotificationDTO notificationDTO = new TrainerNotificationDTO(appointments);
-        String jsonPayload = JsonUtil.convertToJson(notificationDTO);
+    public void sendTrainerScheduleNotification(@NotNull Trainer trainer, List<AppointmentDTO> appointments) {
+        String jsonPayload = JsonUtil.convertToJson(new TrainerScheduleNotificationDTO(appointments));
 
         User user = userRepository.findById(trainer.getUser().getId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -56,25 +56,24 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
-    public void sendClientNotification(@NotNull Client client, AppointmentDTO appointment) {
-        ClientNotificationDTO notificationDTO = new ClientNotificationDTO(appointment);
-        String jsonPayload = JsonUtil.convertToJson(notificationDTO);
+    public void sendClientAppointmentReminderNotification(@NotNull Client client, AppointmentDTO appointment) {
+        String jsonPayload = JsonUtil.convertToJson(new ClientAppointmentReminderNotificationDTO(appointment));
 
         User user = userRepository.findById(client.getUser().getId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         switch (user.getNotificationPreference()) {
             case BOTH -> {
-                emailService.sendClientNotificationEmail(client.getUser().getEmail(), appointment);
+                emailService.sendClientAppointmentReminderEmail(client.getUser().getEmail(), appointment);
                 messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
             }
-            case EMAIL -> emailService.sendClientNotificationEmail(client.getUser().getEmail(), appointment);
+            case EMAIL -> emailService.sendClientAppointmentReminderEmail(client.getUser().getEmail(), appointment);
             case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
         }
     }
 
-    public void sendClientNotificationTrainingReminder(@NotNull Client client, AppointmentDTO appointment) {
-        String jsonPayload = JsonUtil.convertToJson(new TrainingReminderDTO(appointment));
+    public void sendClientUpcomingAppointmentNotification(@NotNull Client client, AppointmentDTO appointment) {
+        String jsonPayload = JsonUtil.convertToJson(new ClientUpcomingAppointmentNotificationDTO(appointment));
         messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
     }
 }

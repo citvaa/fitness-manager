@@ -64,7 +64,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
         if (trainer != null) {
-            notificationService.sendTrainerNotification(trainer.getId(), appointmentDTO);
+            notificationService.sendTrainerAssignmentNotification(trainer.getId(), appointmentDTO);
         }
 
         return appointmentDTO;

@@ -40,7 +40,7 @@ public class EmailServiceImpl implements EmailService {
         asyncEmailService.sendHtmlEmail(recipient, "Zaboravljena lozinka", emailContent);
     }
 
-    public void sendClientNotificationEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
+    public void sendClientAppointmentReminderEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
         String subject = "Training Reminder";
         String body = "Hello, you have a training session scheduled tomorrow at " + appointment.getStartTime();
         asyncEmailService.sendEmail(clientEmail, subject, body);

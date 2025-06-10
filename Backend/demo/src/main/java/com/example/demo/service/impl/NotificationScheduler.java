@@ -40,7 +40,7 @@ public class NotificationScheduler {
         List<Trainer> trainers = trainerMapper.toEntity(trainerService.getAll());
         for (Trainer trainer : trainers) {
             List<AppointmentDTO> appointments = appointmentService.getAppointmentsForTrainer(trainer.getId(), LocalDate.now().plusDays(1));
-            notificationService.sendTrainerNotification(trainer, appointments);
+            notificationService.sendTrainerScheduleNotification(trainer, appointments);
         }
 
         System.out.println("✅ Trainer notifications sent!");
@@ -53,14 +53,14 @@ public class NotificationScheduler {
         List<Client> clients = clientMapper.toEntity(clientService.getAll());
         for (Client client : clients) {
             Optional<AppointmentDTO> appointments = appointmentService.getAppointmentForClient(client.getId(), LocalDate.now().plusDays(1));
-            appointments.ifPresent(appointmentDTO -> notificationService.sendClientNotification(client, appointmentDTO));
+            appointments.ifPresent(appointmentDTO -> notificationService.sendClientAppointmentReminderNotification(client, appointmentDTO));
         }
 
         System.out.println("✅ Client notifications sent!");
     }
 
     @Scheduled(cron = "0 0 * * * ?")
-    public void sendUpcomingTrainingNotifications() {
+    public void sendUpcomingAppointmentNotifications() {
         System.out.println("🔥 Sending upcoming training notifications...");
 
         LocalDateTime now = LocalDateTime.now();
@@ -74,7 +74,7 @@ public class NotificationScheduler {
                     .forEach(clientAppointment -> {
                         if (clientAppointment.getClient() != null) {
                             Client client = clientAppointment.getClient();
-                            notificationService.sendClientNotificationTrainingReminder(client, appointmentMapper.toDto(appointment));
+                            notificationService.sendClientUpcomingAppointmentNotification(client, appointmentMapper.toDto(appointment));
                             System.out.println("✅ Sent reminder to client: " + client.getId());
                         } else {
                             System.err.println("❌ Client is null for appointment ID: " + appointment.getId());

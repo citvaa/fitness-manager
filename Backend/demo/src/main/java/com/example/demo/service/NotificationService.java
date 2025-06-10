@@ -9,11 +9,11 @@ import java.util.List;
 
 public interface NotificationService {
 
-    void sendTrainerNotification(Integer trainerId, AppointmentDTO appointmentDTO) throws JsonProcessingException;
+    void sendTrainerAssignmentNotification(Integer trainerId, AppointmentDTO appointmentDTO) throws JsonProcessingException;
 
-    void sendTrainerNotification(Trainer trainer, List<AppointmentDTO> appointments);
+    void sendTrainerScheduleNotification(Trainer trainer, List<AppointmentDTO> appointments);
 
-    void sendClientNotification(Client client, AppointmentDTO appointment);
+    void sendClientAppointmentReminderNotification(Client client, AppointmentDTO appointment);
 
-    void sendClientNotificationTrainingReminder(Client client, AppointmentDTO appointment);
+    void sendClientUpcomingAppointmentNotification(Client client, AppointmentDTO appointment);
 }
