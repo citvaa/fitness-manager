@@ -37,6 +37,12 @@ spring:
           starttls:
             enable: true
 
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: DEBUG
+
 server:
   port: 8088
   servlet:
