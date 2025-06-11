@@ -1,13 +1,14 @@
 spring:
-  profiles:
-    active: dev
+  config:
+    activate:
+      on-profile: dev
 
   application:
     name: fitness-manager
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/dev-data
 
   datasource:
     url: jdbc:postgresql://localhost:8877/fm
