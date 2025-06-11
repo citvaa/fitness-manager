@@ -12,6 +12,7 @@ import com.example.demo.service.user.ClientService;
 import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.user.TrainerService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -37,7 +39,7 @@ public class NotificationScheduler {
 
     @Scheduled(cron = "0 0 20 * * ?")
     public void sendDailyTrainerNotifications() {
-        System.out.println("🔥 Sending daily trainer notifications...");
+        log.info("🔥 Sending daily trainer notifications...");
 
         List<Trainer> trainers = trainerMapper.toEntity(trainerService.getAll());
         for (Trainer trainer : trainers) {
@@ -45,12 +47,12 @@ public class NotificationScheduler {
             notificationService.sendTrainerScheduleNotification(trainer, appointments);
         }
 
-        System.out.println("✅ Trainer notifications sent!");
+        log.info("✅ Trainer notifications sent!");
     }
 
     @Scheduled(cron = "0 0 20 * * ?")
     public void sendDailyClientNotifications() {
-        System.out.println("🔥 Sending daily client notifications...");
+        log.info("🔥 Sending daily client notifications...");
 
         List<Client> clients = clientMapper.toEntity(clientService.getAll());
         for (Client client : clients) {
@@ -58,12 +60,12 @@ public class NotificationScheduler {
             appointments.ifPresent(appointmentDTO -> notificationService.sendClientAppointmentReminderNotification(client, appointmentDTO));
         }
 
-        System.out.println("✅ Client notifications sent!");
+        log.info("✅ Client notifications sent!");
     }
 
     @Scheduled(cron = "0 0 * * * ?")
     public void sendUpcomingAppointmentNotifications() {
-        System.out.println("🔥 Sending upcoming training notifications...");
+        log.info("🔥 Sending upcoming training notifications...");
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime oneHourLater = now.plusHours(1);
@@ -77,9 +79,9 @@ public class NotificationScheduler {
                         if (clientAppointment.getClient() != null) {
                             Client client = clientAppointment.getClient();
                             notificationService.sendClientUpcomingAppointmentNotification(client, appointmentMapper.toDto(appointment));
-                            System.out.println("✅ Sent reminder to client: " + client.getId());
+                            log.info("✅ Sent reminder to client: {}", client.getId());
                         } else {
-                            System.err.println("❌ Client is null for appointment ID: " + appointment.getId());
+                            log.error("❌ Client is null for appointment ID: {}", appointment.getId());
                         }
                     });
         });

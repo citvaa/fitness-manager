@@ -13,6 +13,7 @@ import com.example.demo.service.notification.email.EmailService;
 import com.example.demo.service.notification.NotificationService;
 import com.example.demo.util.JsonUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 @Transactional(readOnly = true)
@@ -45,15 +47,15 @@ public class NotificationServiceImpl implements NotificationService {
             case BOTH -> {
                 emailService.sendTrainerScheduleEmail(trainer.getUser().getEmail(), appointments);
                 messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), jsonPayload);
-                System.out.println("✅ Email & WebSocket notification sent!");
+                log.info("✅ Email & WebSocket notification sent!");
             }
             case EMAIL -> {
                 emailService.sendTrainerScheduleEmail(trainer.getUser().getEmail(), appointments);
-                System.out.println("✅ Email notification sent!");
+                log.info("✅ Email notification sent!");
             }
             case PUSH -> {
                 messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), jsonPayload);
-                System.out.println("✅ WebSocket notification sent!");
+                log.info("✅ WebSocket notification sent!");
             }
         }
     }

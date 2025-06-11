@@ -42,6 +42,7 @@ logging:
     org:
       hibernate:
         SQL: DEBUG
+  config: classpath:logback-spring.xml
 
 server:
   port: 8088
