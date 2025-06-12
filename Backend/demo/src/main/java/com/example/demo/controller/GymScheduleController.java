@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.GymScheduleDTO;
-import com.example.demo.service.GymScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateGymScheduleRequest;
+import com.example.demo.dto.schedule.GymScheduleDTO;
+import com.example.demo.service.schedule.GymScheduleService;
+import com.example.demo.service.params.request.schedule.CreateGymScheduleRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

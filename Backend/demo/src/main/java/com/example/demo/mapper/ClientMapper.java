@@ -1,14 +1,15 @@
 package com.example.demo.mapper;
 
-import com.example.demo.dto.ClientDTO;
-import com.example.demo.dto.ClientSummaryDTO;
-import com.example.demo.model.Client;
-import com.example.demo.model.ClientAppointment;
+import com.example.demo.dto.user.ClientDTO;
+import com.example.demo.dto.summary.ClientSummaryDTO;
+import com.example.demo.model.user.Client;
+import com.example.demo.model.user.ClientAppointment;
 import org.jetbrains.annotations.NotNull;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,4 +31,7 @@ public interface ClientMapper {
                 .collect(Collectors.toSet());
     }
 
+    List<Client> toEntity(List<ClientDTO> dtos);
+
+    List<ClientDTO> toDto(List<Client> clients);
 }

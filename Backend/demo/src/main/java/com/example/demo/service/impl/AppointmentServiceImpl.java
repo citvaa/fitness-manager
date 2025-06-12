@@ -1,35 +1,49 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
-import com.example.demo.dto.TrainerNotificationDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.*;
+import com.example.demo.model.schedule.GymSchedule;
+import com.example.demo.model.schedule.TrainerSchedule;
+import com.example.demo.model.user.Client;
+import com.example.demo.model.user.ClientAppointment;
+import com.example.demo.model.user.ClientSessionTracking;
+import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.*;
+import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.schedule.TrainerScheduleRepository;
+import com.example.demo.repository.user.ClientAppointmentRepository;
+import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.repository.user.ClientSessionTrackingRepository;
+import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.AppointmentService;
-import com.example.demo.service.params.request.Appointment.CreateAppointmentRequest;
+import com.example.demo.service.notification.NotificationService;
+import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.data.util.Pair;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AppointmentServiceImpl implements AppointmentService {
 
     private final SessionRepository sessionRepository;
@@ -40,10 +54,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
+    private final ClientAppointmentRepository clientAppointmentRepository;
 
     @Transactional
-    public AppointmentDTO create(@NotNull CreateAppointmentRequest request) {
+    public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
         validateAppointment(request);
 
         Session session = fetchSession(request.getSessionId());
@@ -62,8 +77,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
         if (trainer != null) {
-            messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(),
-                    TrainerNotificationDTO.builder().appointment(appointmentDTO).build());
+            notificationService.sendTrainerAssignmentNotification(trainer.getId(), appointmentDTO);
         }
 
         return appointmentDTO;
@@ -190,6 +204,26 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
 
+    public List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date) {
+        return appointmentRepository.findByTrainerIdAndDate(trainerId, date)
+                .stream()
+                .map(appointmentMapper::toDto)
+                .toList();
+    }
+
+    public Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date) {
+        return clientAppointmentRepository.findByClientIdAndAppointmentDate(clientId, date)
+                .stream()
+                .findFirst()
+                .map(clientAppointment -> appointmentMapper.toDto(clientAppointment.getAppointment()));
+    }
+
+    public List<Appointment> findAppointmentsStartingBetween(LocalTime start, LocalTime end, LocalDate date) {
+        return appointmentRepository.findByStartTimeBetweenAndDate(start, end, date);
+    }
+
+
+
 
 
 
@@ -208,7 +242,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new IllegalArgumentException("Start time must be before end time!");
         }
 
-        if (date.isBefore(LocalDate.now()) || date.equals(LocalDate.now())) {
+        if (date.isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("Appointment date must be in the future!");
         }
     }

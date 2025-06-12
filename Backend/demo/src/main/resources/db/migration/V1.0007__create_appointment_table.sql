@@ -21,6 +21,6 @@ CREATE SEQUENCE client_appointment_s
 
 CREATE TABLE client_appointment (
     id INT DEFAULT nextval('client_appointment_s') PRIMARY KEY,
-    client_id INT NOT NULL,
-    appointment_id INT NOT NULL
+    client_id INT NOT NULL REFERENCES client(id),
+    appointment_id INT NOT NULL REFERENCES appointment(id)
 );

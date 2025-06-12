@@ -1,5 +1,7 @@
 package com.example.demo.model;
 
+import com.example.demo.model.user.ClientAppointment;
+import com.example.demo.model.user.Trainer;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,6 +41,6 @@ public class Appointment {
     @JoinColumn(name = "trainer_id", referencedColumnName = "id")
     private Trainer trainer;
 
-    @OneToMany(mappedBy = "appointment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "appointment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<ClientAppointment> clientAppointments;
 }

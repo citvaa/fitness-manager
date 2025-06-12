@@ -3,7 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.PaymentDTO;
 import com.example.demo.service.PaymentService;
-import com.example.demo.service.params.request.Client.CreatePaymentRequest;
+import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

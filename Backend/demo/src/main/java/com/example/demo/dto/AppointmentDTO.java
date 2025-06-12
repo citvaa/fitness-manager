@@ -1,5 +1,7 @@
 package com.example.demo.dto;
 
+import com.example.demo.dto.summary.ClientSummaryDTO;
+import com.example.demo.dto.summary.TrainerSummaryDTO;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

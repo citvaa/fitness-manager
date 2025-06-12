@@ -1,10 +1,10 @@
 package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
-import com.example.demo.dto.TrainerScheduleDTO;
-import com.example.demo.service.TrainerScheduleService;
-import com.example.demo.service.params.request.Schedule.CreateTrainerScheduleRequest;
-import com.example.demo.service.params.request.Schedule.CreateTrainerUnavailabilityRequest;
+import com.example.demo.dto.schedule.TrainerScheduleDTO;
+import com.example.demo.service.schedule.TrainerScheduleService;
+import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
+import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
