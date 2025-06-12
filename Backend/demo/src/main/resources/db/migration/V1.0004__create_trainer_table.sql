@@ -9,5 +9,10 @@ CREATE TABLE trainer (
     user_id INT REFERENCES "user"(id) UNIQUE NOT NULL,
     employment_date DATE NOT NULL,
     birth_year INT NOT NULL,
-    status VARCHAR NOT NULL
+    status VARCHAR NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );

@@ -1,5 +1,6 @@
 package com.example.demo.model.schedule;
 
+import com.example.demo.model.BaseEntity;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +15,7 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "gym_schedule")
 @Builder
-public class GymSchedule {
+public class GymSchedule extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

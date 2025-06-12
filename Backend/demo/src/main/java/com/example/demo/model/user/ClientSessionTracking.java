@@ -1,5 +1,6 @@
 package com.example.demo.model.user;
 
+import com.example.demo.model.BaseEntity;
 import com.example.demo.model.Session;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,7 +12,7 @@ import lombok.*;
 @Setter
 @Table(name = "client_session_tracking")
 @Builder
-public class ClientSessionTracking {
+public class ClientSessionTracking extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

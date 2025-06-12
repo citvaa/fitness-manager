@@ -1,6 +1,7 @@
 package com.example.demo.model.user;
 
 import com.example.demo.model.Appointment;
+import com.example.demo.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -11,7 +12,7 @@ import lombok.*;
 @Setter
 @Table(name = "client_appointment")
 @Builder
-public class ClientAppointment {
+public class ClientAppointment extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

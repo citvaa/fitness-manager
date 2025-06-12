@@ -10,5 +10,10 @@ CREATE TABLE client_session_tracking (
     session_id INT NOT NULL REFERENCES session(id),
     remaining_appointments INT NOT NULL,
     reserved_appointments INT NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL,
     CONSTRAINT unique_client_session UNIQUE (client_id, session_id)
 )

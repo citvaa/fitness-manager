@@ -1,6 +1,7 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.NotificationPreference;
+import com.example.demo.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,7 +15,7 @@ import java.util.Set;
 @Setter
 @Table(name = "\"user\"")
 @Builder
-public class User {
+public class User extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)
@@ -49,8 +50,4 @@ public class User {
 
     @Column(name = "reset_key_validity")
     private LocalDateTime resetKeyValidity;
-
-    @Version
-    @Column(name = "version")
-    private Integer version;
 }

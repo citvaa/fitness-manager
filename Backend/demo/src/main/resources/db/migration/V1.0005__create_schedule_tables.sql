@@ -8,7 +8,12 @@ CREATE TABLE gym_schedule (
     id INT DEFAULT nextval('gym_schedule_s') PRIMARY KEY,
     day VARCHAR(10) UNIQUE NOT NULL,
     opening_time TIME NOT NULL,
-    closing_time TIME NOT NULL
+    closing_time TIME NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255) NULL,
+    updated_by VARCHAR(255) NULL
 );
 
 CREATE SEQUENCE holiday_s
@@ -20,7 +25,12 @@ CREATE SEQUENCE holiday_s
 CREATE TABLE holiday (
     id INT DEFAULT nextval('holiday_s') PRIMARY KEY,
     date DATE UNIQUE NOT NULL,
-    description VARCHAR NOT NULL
+    description VARCHAR NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );
 
 CREATE SEQUENCE trainer_schedule_s
@@ -35,5 +45,10 @@ CREATE TABLE trainer_schedule (
     date DATE NOT NULL,
     start_time TIME NULL,
     end_time TIME NULL,
-    status VARCHAR NOT NULL
+    status VARCHAR NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );

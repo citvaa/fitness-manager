@@ -1,6 +1,7 @@
 package com.example.demo.model.schedule;
 
 import com.example.demo.enums.WorkStatus;
+import com.example.demo.model.BaseEntity;
 import com.example.demo.model.user.Trainer;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
@@ -16,7 +17,7 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "trainer_schedule")
 @Builder
-public class TrainerSchedule {
+public class TrainerSchedule extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

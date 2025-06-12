@@ -1,6 +1,7 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.EmploymentStatus;
+import com.example.demo.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,7 +14,7 @@ import java.time.LocalDate;
 @Setter
 @Table(name = "trainer")
 @Builder
-public class Trainer {
+public class Trainer extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

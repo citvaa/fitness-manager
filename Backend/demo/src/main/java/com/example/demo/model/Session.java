@@ -13,7 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Table(name = "session")
-public class Session {
+public class Session extends BaseEntity  {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

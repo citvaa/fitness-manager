@@ -9,8 +9,13 @@ CREATE TABLE appointment (
     date DATE NOT NULL,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
-    session_id INT NOT NULL,
-    trainer_id INT NULL
+    session_id INT NOT NULL REFERENCES session(id),
+    trainer_id INT NULL REFERENCES trainer(id),
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );
 
 CREATE SEQUENCE client_appointment_s
@@ -22,5 +27,10 @@ CREATE SEQUENCE client_appointment_s
 CREATE TABLE client_appointment (
     id INT DEFAULT nextval('client_appointment_s') PRIMARY KEY,
     client_id INT NOT NULL REFERENCES client(id),
-    appointment_id INT NOT NULL REFERENCES appointment(id)
+    appointment_id INT NOT NULL REFERENCES appointment(id),
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );

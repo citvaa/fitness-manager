@@ -1,5 +1,6 @@
 package com.example.demo.model.user;
 
+import com.example.demo.model.BaseEntity;
 import com.example.demo.model.Payment;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +15,7 @@ import java.util.Set;
 @Entity
 @Table(name = "client")
 @Builder
-public class Client {
+public class Client extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

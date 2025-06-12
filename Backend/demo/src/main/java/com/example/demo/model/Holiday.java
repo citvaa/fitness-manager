@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "holiday")
-public class Holiday {
+public class Holiday extends BaseEntity  {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

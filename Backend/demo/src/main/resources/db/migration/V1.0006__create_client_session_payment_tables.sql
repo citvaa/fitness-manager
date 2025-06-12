@@ -6,7 +6,12 @@ CREATE SEQUENCE client_s
 
 CREATE TABLE client (
     id INT DEFAULT nextval('client_s') PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES "user"(id)
+    user_id INT NOT NULL REFERENCES "user"(id),
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255) NULL,
+    updated_by VARCHAR(255) NULL
 );
 
 CREATE SEQUENCE session_s
@@ -19,6 +24,11 @@ CREATE TABLE session (
     id INT DEFAULT nextval('session_s') PRIMARY KEY,
     type VARCHAR NOT NULL,
     max_participants INT NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL,
     CHECK (type <> 'INDIVIDUAL' OR max_participants = 1),
     CONSTRAINT unique_group_participants UNIQUE (type, max_participants)
 );
@@ -40,5 +50,10 @@ CREATE TABLE payment (
     client_id INT NOT NULL REFERENCES client(id),
     session_id INT NOT NULL REFERENCES session(id),
     paid_appointments INT NOT NULL,
-    payment_date DATE NOT NULL
+    payment_date DATE NOT NULL,
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );

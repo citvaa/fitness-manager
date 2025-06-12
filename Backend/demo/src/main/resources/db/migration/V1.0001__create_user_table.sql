@@ -14,5 +14,9 @@ CREATE TABLE "user" (
     is_activated BOOLEAN NOT NULL,
     reset_key VARCHAR NULL,
     reset_key_validity TIMESTAMP NULL,
-    version INT NOT NULL
+    version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INT NULL
 );

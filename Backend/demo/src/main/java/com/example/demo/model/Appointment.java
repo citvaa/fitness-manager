@@ -16,7 +16,7 @@ import java.util.Set;
 @Setter
 @Table(name = "appointment")
 @Builder
-public class Appointment {
+public class Appointment extends BaseEntity  {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

@@ -1,6 +1,7 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.Role;
+import com.example.demo.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -13,7 +14,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserRole {
+public class UserRole extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)
