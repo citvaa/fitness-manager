@@ -1,7 +1,7 @@
 package com.example.demo.service.impl.schedule;
 
 import com.example.demo.dto.schedule.GymScheduleDTO;
-import com.example.demo.mapper.GymScheduleMapper;
+import com.example.demo.mapper.schedule.GymScheduleMapper;
 import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.service.schedule.GymScheduleService;

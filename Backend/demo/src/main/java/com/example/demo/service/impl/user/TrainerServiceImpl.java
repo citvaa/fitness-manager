@@ -2,7 +2,7 @@ package com.example.demo.service.impl.user;
 
 import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.enums.Role;
-import com.example.demo.mapper.TrainerMapper;
+import com.example.demo.mapper.user.TrainerMapper;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.model.user.User;
 import com.example.demo.repository.user.TrainerRepository;

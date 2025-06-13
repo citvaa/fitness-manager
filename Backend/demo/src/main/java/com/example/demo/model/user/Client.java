@@ -1,9 +1,10 @@
 package com.example.demo.model.user;
 
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import com.example.demo.model.Payment;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.util.List;
 import java.util.Set;
@@ -15,6 +16,7 @@ import java.util.Set;
 @Entity
 @Table(name = "client")
 @Builder
+@Audited
 public class Client extends BaseEntity {
 
     @Id

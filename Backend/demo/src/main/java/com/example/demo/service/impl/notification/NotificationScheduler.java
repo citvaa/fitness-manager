@@ -2,8 +2,8 @@ package com.example.demo.service.impl.notification;
 
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.mapper.AppointmentMapper;
-import com.example.demo.mapper.ClientMapper;
-import com.example.demo.mapper.TrainerMapper;
+import com.example.demo.mapper.user.ClientMapper;
+import com.example.demo.mapper.user.TrainerMapper;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.Trainer;

@@ -1,4 +1,4 @@
-package com.example.demo.service.impl;
+package com.example.demo.config.audit;
 
 import org.jetbrains.annotations.NotNull;
 import org.springframework.security.core.Authentication;

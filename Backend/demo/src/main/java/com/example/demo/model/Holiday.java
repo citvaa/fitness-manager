@@ -1,10 +1,12 @@
 package com.example.demo.model;
 
+import com.example.demo.model.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDate;
 
@@ -14,7 +16,8 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "holiday")
-public class Holiday extends BaseEntity  {
+@Audited
+public class Holiday extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

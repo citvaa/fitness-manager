@@ -1,4 +1,4 @@
-package com.example.demo.config;
+package com.example.demo.config.web;
 
 import org.jetbrains.annotations.NotNull;
 import org.springframework.context.annotation.Configuration;

@@ -11,9 +11,9 @@ CREATE TABLE gym_schedule (
     closing_time TIME NOT NULL,
     version INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(255) NULL,
-    updated_by VARCHAR(255) NULL
+    updated_by INT NULL
 );
 
 CREATE SEQUENCE holiday_s

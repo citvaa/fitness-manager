@@ -2,7 +2,7 @@ package com.example.demo.service.impl.schedule;
 
 import com.example.demo.dto.schedule.TrainerScheduleDTO;
 import com.example.demo.enums.WorkStatus;
-import com.example.demo.mapper.TrainerScheduleMapper;
+import com.example.demo.mapper.schedule.TrainerScheduleMapper;
 import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.model.schedule.TrainerSchedule;

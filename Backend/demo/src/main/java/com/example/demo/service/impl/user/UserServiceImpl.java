@@ -1,10 +1,10 @@
 package com.example.demo.service.impl.user;
 
-import com.example.demo.config.AppConfig;
+import com.example.demo.config.core.AppConfig;
 import com.example.demo.dto.user.UserDTO;
 import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
-import com.example.demo.mapper.UserMapper;
+import com.example.demo.mapper.user.UserMapper;
 import com.example.demo.model.user.User;
 import com.example.demo.model.user.UserRole;
 import com.example.demo.repository.user.ClientRepository;

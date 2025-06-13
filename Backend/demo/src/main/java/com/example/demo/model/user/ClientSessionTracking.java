@@ -1,9 +1,10 @@
 package com.example.demo.model.user;
 
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import com.example.demo.model.Session;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 @Entity
 @AllArgsConstructor
@@ -12,6 +13,7 @@ import lombok.*;
 @Setter
 @Table(name = "client_session_tracking")
 @Builder
+@Audited
 public class ClientSessionTracking extends BaseEntity {
 
     @Id

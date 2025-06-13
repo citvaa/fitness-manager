@@ -1,12 +1,13 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.Role;
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.envers.Audited;
 
 @Entity
 @Table(name = "user_role")
@@ -14,6 +15,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Audited
 public class UserRole extends BaseEntity {
 
     @Id

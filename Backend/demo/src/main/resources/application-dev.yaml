@@ -17,13 +17,17 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     show-sql: true
     properties:
-      hibernate:
-        envers:
-          default_schema: public
-          audit_table_suffix: _AUD
+      org:
+        hibernate:
+          envers:
+            default_schema: public
+            audit_table_suffix: _AUD
+            revision_field_name: REV
+            revision_type_field_name: REVTYPE
+    open-in-view: false
 
   data:
     redis:

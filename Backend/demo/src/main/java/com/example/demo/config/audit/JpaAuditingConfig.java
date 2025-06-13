@@ -1,6 +1,5 @@
-package com.example.demo.config;
+package com.example.demo.config.audit;
 
-import com.example.demo.service.impl.AuditorAwareImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;

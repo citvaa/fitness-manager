@@ -1,11 +1,12 @@
 package com.example.demo.model.schedule;
 
 import com.example.demo.enums.WorkStatus;
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import com.example.demo.model.user.Trainer;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -17,6 +18,7 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "trainer_schedule")
 @Builder
+@Audited
 public class TrainerSchedule extends BaseEntity {
 
     @Id

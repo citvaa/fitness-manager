@@ -1,8 +1,10 @@
 package com.example.demo.model;
 
+import com.example.demo.model.common.BaseEntity;
 import com.example.demo.model.user.Client;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDate;
 
@@ -13,7 +15,8 @@ import java.time.LocalDate;
 @Setter
 @Table(name = "payment")
 @Builder
-public class Payment extends BaseEntity  {
+@Audited
+public class Payment extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

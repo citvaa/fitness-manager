@@ -1,4 +1,4 @@
-package com.example.demo.mapper;
+package com.example.demo.mapper.schedule;
 
 import com.example.demo.dto.schedule.GymScheduleDTO;
 import com.example.demo.model.schedule.GymSchedule;

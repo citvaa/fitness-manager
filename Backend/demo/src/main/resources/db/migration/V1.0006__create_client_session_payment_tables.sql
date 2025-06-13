@@ -9,9 +9,9 @@ CREATE TABLE client (
     user_id INT NOT NULL REFERENCES "user"(id),
     version INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(255) NULL,
-    updated_by VARCHAR(255) NULL
+    updated_by INT NULL
 );
 
 CREATE SEQUENCE session_s

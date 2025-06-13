@@ -1,4 +1,4 @@
-package com.example.demo.controller;
+package com.example.demo.controller.calendar;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.HolidayDTO;

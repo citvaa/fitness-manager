@@ -1,4 +1,4 @@
-package com.example.demo.controller;
+package com.example.demo.controller.calendar;
 
 import com.example.demo.dto.schedule.DailyScheduleDTO;
 import com.example.demo.service.schedule.CalendarService;

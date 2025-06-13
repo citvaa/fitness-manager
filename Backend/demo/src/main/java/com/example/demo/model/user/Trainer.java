@@ -1,9 +1,10 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.EmploymentStatus;
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDate;
 
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 @Setter
 @Table(name = "trainer")
 @Builder
+@Audited
 public class Trainer extends BaseEntity {
 
     @Id

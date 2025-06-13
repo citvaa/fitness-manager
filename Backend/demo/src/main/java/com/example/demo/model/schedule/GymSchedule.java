@@ -1,9 +1,10 @@
 package com.example.demo.model.schedule;
 
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
@@ -15,6 +16,7 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "gym_schedule")
 @Builder
+@Audited
 public class GymSchedule extends BaseEntity {
 
     @Id

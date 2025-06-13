@@ -1,4 +1,4 @@
-package com.example.demo.mapper;
+package com.example.demo.mapper.user;
 
 import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.dto.summary.TrainerSummaryDTO;

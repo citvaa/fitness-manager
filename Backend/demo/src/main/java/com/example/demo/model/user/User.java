@@ -1,9 +1,10 @@
 package com.example.demo.model.user;
 
 import com.example.demo.enums.NotificationPreference;
-import com.example.demo.model.BaseEntity;
+import com.example.demo.model.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -15,6 +16,7 @@ import java.util.Set;
 @Setter
 @Table(name = "\"user\"")
 @Builder
+@Audited
 public class User extends BaseEntity {
 
     @Id

@@ -1,7 +1,8 @@
-package com.example.demo.mapper;
+package com.example.demo.mapper.user;
 
 import com.example.demo.dto.user.ClientDTO;
 import com.example.demo.dto.summary.ClientSummaryDTO;
+import com.example.demo.mapper.SessionMapper;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientAppointment;
 import org.jetbrains.annotations.NotNull;

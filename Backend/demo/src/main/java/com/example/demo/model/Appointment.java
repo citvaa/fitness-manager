@@ -1,9 +1,11 @@
 package com.example.demo.model;
 
+import com.example.demo.model.common.BaseEntity;
 import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.Trainer;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.envers.Audited;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -16,7 +18,8 @@ import java.util.Set;
 @Setter
 @Table(name = "appointment")
 @Builder
-public class Appointment extends BaseEntity  {
+@Audited
+public class Appointment extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)

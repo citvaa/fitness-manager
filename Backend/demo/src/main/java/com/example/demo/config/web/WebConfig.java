@@ -1,4 +1,4 @@
-package com.example.demo.config;
+package com.example.demo.config.web;
 
 import com.example.demo.interceptor.JwtInterceptor;
 import com.example.demo.interceptor.RoleInterceptor;

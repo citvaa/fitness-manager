@@ -1,11 +1,13 @@
 package com.example.demo.model;
 
 import com.example.demo.enums.SessionType;
+import com.example.demo.model.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.envers.Audited;
 
 @Entity
 @AllArgsConstructor
@@ -13,7 +15,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Table(name = "session")
-public class Session extends BaseEntity  {
+@Audited
+public class Session extends BaseEntity {
 
     @Id
     @Column(name = "id", unique = true, nullable = false)
