@@ -1,10 +1,10 @@
 <configuration>
-    <property name="LOG_PATH" value="Backend/demo/logs"/>
+    <property name="LOG_PATH" value="logs"/>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>Backend/demo/logs/app-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <fileNamePattern>logs/app-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
 
             <maxHistory>7</maxHistory>
 
