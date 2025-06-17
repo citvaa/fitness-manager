@@ -217,11 +217,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User findOrCreateUser(@NotNull CreateUserRequest request) {
         return userRepository.findByEmail(request.getEmail())
-                .orElseGet(() -> {
-                    CreateUserRequest createUserRequest = new CreateUserRequest(request.getEmail());
-                    UserDTO newUserDto = create(createUserRequest);
-                    return userMapper.toEntity(newUserDto);
-                });
+                .orElseGet(() -> userMapper.toEntity(create(request)));
     }
 
     @Transactional

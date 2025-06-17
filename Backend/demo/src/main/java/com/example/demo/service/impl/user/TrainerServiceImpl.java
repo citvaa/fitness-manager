@@ -11,6 +11,7 @@ import com.example.demo.service.user.TrainerService;
 import com.example.demo.service.user.UserService;
 import com.example.demo.service.params.request.user.trainer.CreateTrainerRequest;
 import com.example.demo.service.params.request.user.CreateUserRequest;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -31,12 +32,14 @@ public class TrainerServiceImpl implements TrainerService {
     private final TrainerRepository trainerRepository;
     private final TrainerMapper trainerMapper;
     private final TrainerScheduleRepository trainerScheduleRepository;
+    private final EntityManager entityManager;
 
     @Transactional
     @CachePut(value = "TRAINER_CACHE", key = "#result.id")
     public TrainerDTO create(@NotNull CreateTrainerRequest request) {
         CreateUserRequest createUserRequest = new CreateUserRequest(request.getEmail());
         User user = userService.findOrCreateUser(createUserRequest);
+        user = entityManager.merge(user);
 
         userService.addRole(user.getId(), Role.TRAINER);
 

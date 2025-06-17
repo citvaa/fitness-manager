@@ -24,7 +24,7 @@ public class Trainer extends BaseEntity {
     @SequenceGenerator(name = "trainer_generator", sequenceName = "trainer_s", allocationSize = 1)
     private Integer id;
 
-    @OneToOne(cascade = CascadeType.REMOVE, fetch = FetchType.EAGER)
+    @OneToOne(cascade = CascadeType.MERGE, fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private User user;
 
