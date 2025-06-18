@@ -5,7 +5,7 @@ import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
 import com.example.demo.model.user.User;
 import com.example.demo.service.params.request.user.*;
-import com.example.demo.service.params.response.user.LoginResponse;
+import com.example.demo.service.params.response.user.AuthResponse;
 import org.springframework.data.domain.Page;
 
 import java.util.Optional;
@@ -22,7 +22,9 @@ public interface UserService {
 
     void register(RegisterUserRequest request);
 
-    LoginResponse login(LoginUserRequest request);
+    AuthResponse login(LoginUserRequest request);
+
+    AuthResponse login(String refreshToken);
 
     void requestPasswordReset(String email);
 

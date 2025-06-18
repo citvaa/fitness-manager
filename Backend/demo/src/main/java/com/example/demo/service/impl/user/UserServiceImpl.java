@@ -16,10 +16,11 @@ import com.example.demo.service.params.request.email.ActivationEmailData;
 import com.example.demo.service.params.request.email.ForgetPasswordEmailData;
 import com.example.demo.repository.*;
 import com.example.demo.service.params.request.user.*;
-import com.example.demo.service.params.response.user.LoginResponse;
+import com.example.demo.service.params.response.user.AuthResponse;
 import com.example.demo.service.user.UserService;
 import com.example.demo.util.DateTimeUtil;
 import com.example.demo.util.JwtUtil;
+import io.jsonwebtoken.Claims;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -131,7 +132,7 @@ public class UserServiceImpl implements UserService {
                 });
     }
 
-    public LoginResponse login(@NotNull LoginUserRequest request) {
+    public AuthResponse login(@NotNull LoginUserRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -139,10 +140,30 @@ public class UserServiceImpl implements UserService {
             throw new BadCredentialsException("Wrong password");
         }
 
-        String token = jwtUtil.generateToken(user);
-        LocalDateTime expiresAt = jwtUtil.getExpirationTime(token);
+        String accessToken = jwtUtil.generateAccessToken(user);
+        LocalDateTime accessTokenExpirationTime = jwtUtil.getTokenExpirationTime(accessToken);
+        String refreshToken = jwtUtil.generateRefreshToken(user);
+        LocalDateTime refreshTokenExpirationTime = jwtUtil.getTokenExpirationTime(refreshToken);
 
-        return new LoginResponse(token, expiresAt);
+        return new AuthResponse(accessToken, accessTokenExpirationTime, refreshToken, refreshTokenExpirationTime);
+    }
+
+    public AuthResponse login(String refreshToken) {
+        LocalDateTime refreshTokenExpirationTime = jwtUtil.getTokenExpirationTime(refreshToken);
+
+        if (refreshTokenExpirationTime.isBefore(LocalDateTime.now())) {
+            throw new BadCredentialsException("Refresh token expired, please log in again");
+        }
+
+        Claims claims = jwtUtil.parseToken(refreshToken);
+        String userId = claims.getSubject();
+        User user = userRepository.findById(Integer.parseInt(userId))
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        String accessToken = jwtUtil.generateAccessToken(user);
+        LocalDateTime accessTokenExpirationTime = jwtUtil.getTokenExpirationTime(accessToken);
+
+        return new AuthResponse(accessToken, accessTokenExpirationTime, refreshToken, refreshTokenExpirationTime);
     }
 
     @Transactional

@@ -6,7 +6,7 @@ import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
 import com.example.demo.service.user.UserService;
 import com.example.demo.service.params.request.user.*;
-import com.example.demo.service.params.response.user.LoginResponse;
+import com.example.demo.service.params.response.user.AuthResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -61,8 +61,13 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginUserRequest request) {
+    public ResponseEntity<AuthResponse> login(@RequestBody LoginUserRequest request) {
         return ResponseEntity.ok(userService.login(request));
+    }
+
+    @PostMapping("/login-refresh")
+    public ResponseEntity<AuthResponse> login(@RequestParam String refreshToken) {
+        return ResponseEntity.ok(userService.login(refreshToken));
     }
 
     @PostMapping("/forgot-password")

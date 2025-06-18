@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Getter
 @Setter
-public class LoginResponse {
-    private String token;
-    private LocalDateTime expires;
+public class AuthResponse {
+    private String accessToken;
+    private LocalDateTime accessTokenExpirationTime;
+    private String refreshToken;
+    private LocalDateTime refreshTokenExpirationTime;
 }
