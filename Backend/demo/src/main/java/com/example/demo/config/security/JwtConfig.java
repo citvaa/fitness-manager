@@ -18,7 +18,8 @@ import java.nio.charset.StandardCharsets;
 @ConfigurationProperties(prefix = "app.jwt")
 public class JwtConfig {
     private String secret;
-    private Integer expiration;
+    private Integer accessTokenExpiration;
+    private Integer refreshTokenExpiration;
 
     @Bean
     public JwtDecoder jwtDecoder() {

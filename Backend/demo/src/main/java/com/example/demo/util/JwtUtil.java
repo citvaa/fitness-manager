@@ -24,7 +24,8 @@ import java.util.stream.Collectors;
 public class JwtUtil {
 
     private final Key key;
-    private final Integer tokenLifetime;
+    private final Integer accessTokenExpiration;
+    private final Integer refreshTokenExpiration;
 
     public JwtUtil(JwtConfig jwtConfig) {
         byte[] keyBytes = jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8);
@@ -34,21 +35,39 @@ public class JwtUtil {
         }
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
-        this.tokenLifetime = jwtConfig.getExpiration() * 1000;
+        this.accessTokenExpiration = jwtConfig.getAccessTokenExpiration();
+        this.refreshTokenExpiration = jwtConfig.getRefreshTokenExpiration();
     }
 
-    public String generateToken(@NotNull User user) {
+    public String generateAccessToken(@NotNull User user) {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
                 .claim("roles", new HashSet<>(user.getUserRoles().stream().map(UserRole::getRole).collect(Collectors.toSet())))
-                .expiration(new Date(System.currentTimeMillis() + tokenLifetime))
+                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
                 .signWith(key)
                 .compact();
     }
 
-    public LocalDateTime getExpirationTime(String token) {
-        Claims claims = Jwts.parser().verifyWith((SecretKey) getKey()).build().parseSignedClaims(token).getPayload();
+    public String generateRefreshToken(@NotNull User user) {
+        return Jwts.builder()
+                .subject(user.getId().toString())
+                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
+                .signWith(key)
+                .compact();
+    }
+
+
+    public LocalDateTime getTokenExpirationTime(String token) {
+        Claims claims = parseToken(token);
         return claims.getExpiration().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    public Claims parseToken(String token) {
+        return Jwts.parser()
+                .verifyWith((SecretKey) getKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }

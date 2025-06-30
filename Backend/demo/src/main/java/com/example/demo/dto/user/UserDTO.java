@@ -1,5 +1,6 @@
 package com.example.demo.dto.user;
 
+import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -18,10 +19,10 @@ public class UserDTO {
     private String email;
     private String password;
     private List<Role> roles;
+    private NotificationPreference notificationPreference;
     private Boolean isActivated;
     private String registrationKey;
     private LocalDateTime registrationKeyValidity;
     private String resetKey;
     private LocalDateTime resetKeyValidity;
-    private Integer version;
 }

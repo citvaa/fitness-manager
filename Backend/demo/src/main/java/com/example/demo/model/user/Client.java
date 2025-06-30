@@ -25,7 +25,7 @@ public class Client extends BaseEntity {
     @SequenceGenerator(name = "client_generator", sequenceName = "client_s", allocationSize = 1)
     private Integer id;
 
-    @OneToOne(cascade = CascadeType.REMOVE, fetch = FetchType.EAGER)
+    @OneToOne(cascade = CascadeType.MERGE, fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private User user;
 

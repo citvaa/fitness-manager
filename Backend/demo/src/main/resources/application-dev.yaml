@@ -17,7 +17,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       org:
@@ -71,5 +71,6 @@ app:
     reset-password-template: email/reset-password-email.html
 
   jwt:
-    expiration: 3600
     secret: ThisIsAVeryStrongSecretKeyWithEnoughLength
+    accessTokenExpiration: 900000
+    refreshTokenExpiration: 7200000

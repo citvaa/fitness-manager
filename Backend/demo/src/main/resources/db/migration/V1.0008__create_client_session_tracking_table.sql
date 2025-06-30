@@ -16,4 +16,4 @@ CREATE TABLE client_session_tracking (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by INT NULL,
     CONSTRAINT unique_client_session UNIQUE (client_id, session_id)
-)
+);
