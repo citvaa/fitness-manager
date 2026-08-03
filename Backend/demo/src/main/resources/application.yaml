@@ -40,8 +40,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: cedajuric@gmail.com
-    password: ccio ttnh rmdz leif
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -65,11 +65,16 @@ app:
   registration-key-validity-minutes: 10
   reset-key-validity-minutes: 10
 
+  # Frontend origin(s) allowed to call this API with credentials (see
+  # config.web.CorsConfig). Change to the real frontend domain in production.
+  cors:
+    allowed-origins: http://localhost:5173
+
   email:
     activation-template: email/activation-email.html
     reset-password-template: email/reset-password-email.html
 
   jwt:
-    secret: ThisIsAVeryStrongSecretKeyWithEnoughLength
+    secret: ${JWT_SECRET}
     accessTokenExpiration: 900000
     refreshTokenExpiration: 7200000

@@ -1,6 +1,9 @@
 services:
     db:
-        image: postgres:latest
+        # Pinned (not "latest"): Postgres 18 changed its data-directory
+        # layout and refuses to start against an existing 17-and-earlier
+        # volume; a floating tag would silently break this on a future pull.
+        image: postgres:16
         container_name: postgres_db
         environment:
             POSTGRES_USER: fm_dbuser
@@ -8,12 +11,17 @@ services:
             POSTGRES_DB: fm
         ports:
             - "8877:5432"
-        # volumes:
-        #     - ./postgres_data:/var/lib/postgresql/data
+        volumes:
+            # Subdirectory, not the mount point itself - initdb refuses to
+            # initialize a data directory that already contains a dotfile
+            # (e.g. the .gitkeep placeholder that keeps this folder in git).
+            - ./postgres_data/pgdata:/var/lib/postgresql/data
     redis:
-        image: redis:latest
+        image: redis:7
         container_name: redis-server
         ports:
             - "6379:6379"
-        environment:
-            - REDIS_PASSWORD=password
+        # The official redis image does not read REDIS_PASSWORD - it must be
+        # passed as a --requirepass startup arg to actually enforce auth,
+        # matching spring.data.redis.password in application.yaml.
+        command: redis-server --requirepass password

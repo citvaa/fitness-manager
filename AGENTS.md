@@ -1,0 +1,252 @@
+# AGENTS.md
+
+## Purpose of this repository
+
+`fitness-manager` is a Spring Boot backend for managing a gym: clients, trainers,
+appointments/schedules, payments, and notifications. It is the foundation of a
+Master's thesis (diplomski rad). There is currently no frontend (the
+`Frontend/` folder is an empty placeholder).
+
+**This exact state of the repository (tagged `baseline-v1`) is the fixed
+starting point for a comparison study.** Two separate AI-upgrade sessions will
+branch off from this tag independently: one driven by Claude Code, one by
+Codex CLI. They must start from identical context. Concretely, that means:
+
+- This file is read by **both** tools (Codex CLI reads `AGENTS.md` natively;
+  `CLAUDE.md` in this repo is a symlink to this file so Claude Code picks up
+  the same content). Do not fork the content between two files.
+- Everything below must be tool-neutral. Do not add Claude Code-specific
+  constructs (skills, subagents, `.claude/` settings, hooks) to convey
+  architecture or conventions - Codex has no equivalent, and doing so would
+  bias the comparison. Plain instructions in this file are the only channel
+  that is fair to both tools.
+- **Update this file whenever you discover something new about the
+  architecture, make an architectural decision, or change a convention - in
+  every session, not just this one. Don't wait to be asked.** Stale docs are
+  worse than no docs for a comparison study where both sides read the same
+  source of truth.
+
+## Tech stack
+
+- Java 21, Spring Boot 3.4.5, Maven (`Backend/demo/pom.xml`)
+- PostgreSQL (JPA/Hibernate + Flyway migrations, `ddl-auto: none` - schema is
+  migration-driven only)
+- Redis (Spring Cache abstraction, `spring-boot-starter-data-redis`)
+- Spring Security + a custom JWT/refresh-token layer (`io.jsonwebtoken:jjwt`)
+- Hibernate Envers for entity audit history
+- Spring Mail (Gmail SMTP) + Thymeleaf for HTML email templates
+- WebSocket/STOMP for real-time notifications
+- MapStruct for entity<->DTO mapping, Lombok, springdoc-openapi (Swagger UI)
+
+## Running locally
+
+1. Copy `.env.example` to `.env` and fill in `MAIL_USERNAME`, `MAIL_PASSWORD`
+   (a Gmail **App Password**, not the account password), and `JWT_SECRET`
+   (>= 32 characters - the app fails to start otherwise). Spring Boot does
+   not load `.env` files itself; export these as real environment variables
+   before starting the app (IDE run-configuration env vars, or
+   `set -a; source .env; set +a` in bash / equivalent in PowerShell).
+2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
+   - Postgres on host port `8877` (mapped to container `5432`), db `fm`,
+     user `fm_dbuser` / password `password`
+   - Redis on `6379`, password `password` (enforced via `--requirepass`)
+   - Postgres data persists in `Docker/postgres_data/` (git-ignored except
+     `.gitkeep`) via a bind-mounted volume.
+3. Run the app from `Backend/demo/`: `./mvnw spring-boot:run` (Windows:
+   `mvnw.cmd spring-boot:run`). Default active profile is `dev`
+   (`spring.profiles.active: dev` in `application.yaml`), which additionally
+   loads `db/dev-data` Flyway migrations (seed trainer/client test accounts,
+   see `V1.0009__insert_test_data.sql`).
+4. App listens on port `8088`. Swagger UI: `http://localhost:8088/swagger-ui/index.html`.
+   OpenAPI JSON: `http://localhost:8088/v3/api-docs`.
+
+There is no containerized app service in `docker-compose.yaml` - only
+Postgres and Redis. The Spring Boot app itself always runs locally
+(IDE/`mvnw`) against those two containers.
+
+## Domain model
+
+All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
+`createdAt`/`createdBy`, `updatedAt`/`updatedBy` via Spring Data JPA auditing.
+Every entity is also `@Audited` (Hibernate Envers).
+
+- **User** (`model/user/User.java`) - email, password (null until account
+  activation), `isActivated`, `notificationPreference` (`EMAIL`/`PUSH`/`BOTH`),
+  registration/reset keys with validity timestamps, `Set<UserRole>`.
+- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT`.
+  A single `User` can hold multiple roles.
+- **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus`
+  (`FULL_TIME` / `CONTRACT` / `FORMER_EMPLOYEE`).
+- **Client** - 1:1 with `User`; owns `Payment`s, `ClientSessionTracking`s,
+  `ClientAppointment`s.
+- **Session** - a session *type* (`INDIVIDUAL` / `GROUP`) with `maxParticipants`.
+  Seeded rows only (INDIVIDUAL/1, GROUP/3, GROUP/10) - not created via the API.
+- **Appointment** - date/start/end time, belongs to a `Session` type, optionally
+  a `Trainer` (nullable - can exist unassigned), and a set of `ClientAppointment`s.
+- **ClientSessionTracking** - per (client, session type) remaining/reserved
+  appointment counters, driven by `Payment`s.
+- **GymSchedule** - opening/closing time per `DayOfWeek`.
+- **TrainerSchedule** - a trainer's status (`WORKING`/`HOLIDAY`/`SICK_LEAVE`/
+  `VACATION`) for a given date and time range.
+- **Holiday** - a gym-wide non-working date.
+
+## Auth flow (read this before touching security-adjacent code)
+
+- Login (`UserServiceImpl.login(LoginUserRequest)`) verifies bcrypt password,
+  issues an access token (15 min, `app.jwt.accessTokenExpiration`) and a
+  refresh token (2h, `app.jwt.refreshTokenExpiration`), both HS256-signed with
+  `app.jwt.secret` (`util/JwtUtil.java`).
+- Refresh tokens are **stateless** - there is no server-side store/revocation
+  list, and refreshing does not rotate the refresh token (the same one is
+  echoed back). A leaked refresh token stays valid until its own natural
+  expiry.
+- **Actual route protection is implemented by two custom
+  `HandlerInterceptor`s, not by Spring Security's filter chain**:
+  - `interceptor/JwtInterceptor` (order 1) - validates the `Authorization:
+    Bearer <token>` signature, 401s if missing/invalid.
+  - `interceptor/RoleInterceptor` (order 2) - reads the `@RoleRequired`
+    annotation on the handler method and checks the JWT's `roles` claim,
+    403s if none match. **A handler with no `@RoleRequired` is reachable by
+    any authenticated user regardless of role** (e.g. `CalendarController`).
+  - Both are registered in `config/web/WebConfig` with an identical
+    exclude-list (register/login/swagger). Note that `forgot-password` and
+    `reset-password` are *not* in that exclude list, which looks like a bug
+    (a user who forgot their password by definition has no valid JWT to
+    present) - flagged here rather than silently fixed, since fixing it
+    changes runtime auth behavior and this session is hygiene-only.
+- `SecurityConfig`'s `SecurityFilterChain` permits `/api/**` (and
+  swagger/websocket paths) via `authorizeHttpRequests(...).permitAll()` and
+  otherwise requires authentication via its own `oauth2ResourceServer` JWT
+  decoder. Because the app's actual `/api/**` routes are already covered by
+  that `permitAll`, Spring Security is **not** the layer doing authorization
+  for the REST API today - the interceptors above are. Spring Security's
+  `anyRequest().authenticated()` still matters as a defense-in-depth fallback
+  for any path that is *not* under the permitted prefixes. Do not assume
+  `@PreAuthorize`/`hasRole` do anything here - they are not used; role checks
+  are exclusively via `@RoleRequired` + `RoleInterceptor`.
+- CORS is configured in `config/web/CorsConfig` (a `CorsConfigurationSource`
+  bean wired into `SecurityConfig` via `.cors(...)`), driven by
+  `app.cors.allowed-origins` in `application.yaml` (defaults to
+  `http://localhost:5173` for local frontend dev). **Change this to the real
+  frontend domain in production - never `*`, since credentials are allowed.**
+
+## Notifications
+
+- Email (`service/impl/notification/email/`): activation and password-reset
+  emails use Thymeleaf templates; appointment-reminder and trainer-schedule
+  emails are built as inline strings (inconsistent with the templated ones,
+  not yet unified).
+- WebSocket/STOMP (`config/web/WebSocketConfig`, endpoint `/ws`, simple broker
+  on `/topic`): `NotificationServiceImpl` pushes to per-user topics and
+  additionally sends email based on `User.notificationPreference`.
+- `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
+  digests at 20:00, and an hourly sweep for appointments starting within the
+  next hour.
+- `websocket/StompWebSocketClient` is a manual `public static void main` test
+  harness left in `src/main/java` (not part of runtime wiring, not test code)
+  - known clutter, not removed in this session to keep the diff hygiene-only
+  and avoid touching anything outside the explicitly scoped cleanup items.
+
+## Audit (Hibernate Envers)
+
+Every entity is `@Audited`. Audit tables (`*_aud`, `revinfo`) are **hand-written
+Flyway migrations**, not Envers-generated at runtime (`ddl-auto: none`).
+**Adding or changing an `@Audited` entity's columns requires manually writing
+the matching migration** - Envers will not create it for you, and nothing
+will fail loudly if you forget; it will just silently not persist history for
+the new column.
+
+Known gap: `AuditorAwareImpl` reads the current user from
+`SecurityContextHolder`, but nothing in the request pipeline populates the
+`SecurityContext` (auth is interceptor-based, see above) - so `createdBy`/
+`updatedBy` are always `null` in practice. Not fixed in this session (it's a
+behavior change, not a pure hygiene fix); noted here so it isn't mistaken for
+an intentional design choice.
+
+## Caching
+
+Redis via Spring Cache, one global `RedisCacheConfiguration` (10 min TTL,
+JSON serialization) in `config/cache/RedisConfig`. Currently only
+`TrainerServiceImpl` actually uses caching (`TRAINER_CACHE`); no other
+service caches anything.
+
+## Conventions
+
+- Layered packages: `controller` (thin, `@RoleRequired`-gated) -> `service`
+  interface + `service.impl` -> `repository` (Spring Data JPA) -> `model`
+  (JPA entities). Config classes are grouped by concern under
+  `config/{audit,cache,core,security,web}`.
+- Every entity has a matching DTO (`dto/**`) and a MapStruct
+  `@Mapper(componentModel = "spring")` interface (`mapper/**`).
+- Write-side request/response objects live under `service/params/request/**`
+  and `service/params/response/**`, separate from the read-side `dto/**` -
+  this is a deliberate three-way split (persistence model / read DTO / write
+  request-response), keep new endpoints consistent with it.
+- Lombok `@Builder` on entities that are constructed programmatically in
+  service code; plain constructors on the rarely-constructed ones.
+- `@Slf4j` logging throughout; scheduler/notification logs use an
+  emoji-prefixed style (`🔥`/`✅`/`❌`) as an established (if unusual)
+  convention - match it in that area rather than "fixing" it to plain text.
+- No global `@ControllerAdvice`/exception handler exists; unhandled service
+  exceptions currently fall through to Spring Boot's default error response.
+- **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*`)
+  - their checksums are locked once applied. If schema changes are needed,
+  add a new `V1.00XX__*.sql` file. Dev-only seed data lives in the separate
+  `db/dev-data/` location, only loaded on the `dev` profile.
+
+## Known issues (intentionally not fixed in the baseline-hygiene session)
+
+These were found during the repo-hygiene pass that produced `baseline-v1`.
+They are documented here rather than fixed because fixing them changes
+runtime behavior, and the goal of that session was a stable, unchanged-behavior
+baseline - not new features or behavior changes. They are fair game for
+either upgrade session to pick up:
+
+- `forgot-password`/`reset-password` endpoints are not excluded from
+  `JwtInterceptor`/`RoleInterceptor`, effectively making them unreachable
+  without an existing valid JWT.
+- `POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`,
+  so refreshing requires a currently-valid access token - unusual for a
+  refresh endpoint, whose point is normally to work *after* expiry.
+- Refresh tokens have no rotation and no server-side revocation.
+- `AuditorAwareImpl` always returns empty (see Audit section above) -
+  `createdBy`/`updatedBy` are effectively dead columns.
+- `TrainerSchedule.date` is annotated `unique = true` at the entity level
+  (`model/schedule/TrainerSchedule.java`), which would incorrectly allow only
+  one trainer total to have a schedule row on any given date - it should
+  almost certainly be a composite `(trainer_id, date)` constraint. No DB-level
+  unique constraint actually exists in the migrations, so entity and schema
+  disagree; this has had no observed effect yet but is worth fixing carefully
+  (with a new migration) before relying on it.
+- `UserController`'s `reset-password` mapping is missing a leading `/`
+  (`"reset-password"` instead of `"/reset-password"`) - verify the resolved
+  path before assuming it works as intended.
+- `CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
+  authenticated user (any role) can call it.
+- No global exception handler - error responses aren't a consistent JSON
+  shape yet.
+- `pom.xml` sets `maven.test.skip=true`; combined with there being effectively
+  only one trivial `contextLoads()` test, there is no real test coverage and
+  tests don't run by default even if written.
+- `application.yaml` and `application-dev.yaml` duplicate almost every
+  property instead of the dev file overriding only what differs (currently
+  just `flyway.locations`) - keep both in sync manually until this is
+  restructured.
+- The Gmail account used for `MAIL_USERNAME` had its app password committed
+  in git history (now moved to an env var, but the old value is still
+  recoverable from history) - **the app password must be rotated in the
+  Gmail account**, this repo change alone does not invalidate it.
+
+## Session log
+
+- 2026-08-03: Repo-hygiene baseline pass (`chore/repo-hygiene` -> `main`,
+  tagged `baseline-v1`). Merged the already-diverged `feature/notification`
+  work into `main` (it turned out `origin/main` already had it via a merged
+  PR; only the local `main` ref was stale). Moved Gmail/JWT secrets to env
+  vars (`.env.example`), added CORS config (`app.cors.allowed-origins`,
+  default `http://localhost:5173`), removed the dead-code `"/**"` permitAll
+  entry from `SecurityConfig` and documented the real (interceptor-based)
+  authorization model above, enabled Postgres volume persistence in
+  `docker-compose.yaml` and fixed Redis auth (`--requirepass`, since the
+  official image ignores `REDIS_PASSWORD`), added root `.gitignore` and this
+  file. No functional/behavioral changes beyond those explicitly listed here.
