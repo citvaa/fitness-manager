@@ -216,14 +216,18 @@ WebSocket wiring, LLM calls, or frontend code are part of this phase.
   scheduling can reasonably create an unassigned appointment, just as trainer
   assignment is currently optional. A later service layer may enforce room
   assignment for selected workflows without making this migration breaking.
-  `AppointmentDTO` and `AppointmentMapper` intentionally do not expose the new
-  relation yet because this phase must not change the existing API contract.
+  `AppointmentDTO` exposes only a lightweight `RoomSummaryDTO` (id, name, type,
+  capacity), not the complete room geometry/configuration, because appointment
+  lists are frequent and do not need the heavier floor-plan representation.
 - **Manual occupancy has an explicit event entity.** Current planned occupancy
   combines appointments in progress (derived from existing appointment/client
   data) with optional `RoomCheckIn` rows. Keeping check-in/check-out timestamps
   preserves attendance history for later analytics instead of storing only a
   mutable current-room state. A null `checkedOutAt` denotes an active check-in;
-  partial indexes support active occupancy and active-client lookups.
+  partial indexes support active occupancy and active-client lookups. A unique
+  partial index on `client_id WHERE checked_out_at IS NULL` enforces the domain
+  rule that a client can physically occupy only one room at a time across the
+  entire gym, rather than one active check-in per room.
 - **Body measurements use fixed numeric columns.** Weight, body-fat percentage,
   waist, chest, hip, thigh, and arm measurements cover the expected thesis
   scope and remain directly queryable/chartable. This follows the project's
@@ -305,3 +309,7 @@ either upgrade session to pick up:
   repositories, DTOs, MapStruct mappers, an optional `Appointment.room` link,
   and Flyway migrations `V1.0011`-`V1.0014`, including matching Envers tables.
   No service, controller, WebSocket, LLM, or frontend code was added.
+- 2026-08-04: Clarified shared requirements after Phase 1: the database now
+  enforces one active room check-in per client globally (`V1.0015`), and
+  appointments expose a lightweight `RoomSummaryDTO` instead of full room
+  geometry. These are product requirements for subsequent phases.

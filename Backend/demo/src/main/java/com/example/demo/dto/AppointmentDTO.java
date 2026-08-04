@@ -1,6 +1,7 @@
 package com.example.demo.dto;
 
 import com.example.demo.dto.summary.ClientSummaryDTO;
+import com.example.demo.dto.summary.RoomSummaryDTO;
 import com.example.demo.dto.summary.TrainerSummaryDTO;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,5 +23,6 @@ public class AppointmentDTO {
     private LocalTime endTime;
     private SessionDTO session;
     private TrainerSummaryDTO trainer;
+    private RoomSummaryDTO room;
     private Set<ClientSummaryDTO> clients;
 }
