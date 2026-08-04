@@ -89,6 +89,24 @@ Every entity is also `@Audited` (Hibernate Envers).
 - **TrainerSchedule** - a trainer's status (`WORKING`/`HOLIDAY`/`SICK_LEAVE`/
   `VACATION`) for a given date and time range.
 - **Holiday** - a gym-wide non-working date.
+- **Gym** (`model/gym/Gym.java`) - single-installation config (name, address,
+  contact info, logo/brand color, timezone). Real table, not a code-level
+  singleton, even though exactly one row is expected in practice - see
+  "Upgrade: schema decisions" below.
+- **Room** (`model/gym/Room.java`) - belongs to a `Gym`; name, `RoomType`,
+  capacity, and rectangle geometry (`posX`/`posY`/`width`/`height`/
+  `rotationDegrees`) for the 2D floor-plan editor/live view. `Appointment`
+  optionally references a `Room` (nullable).
+- **RoomCheckIn** (`model/gym/RoomCheckIn.java`) - a manual check-in/check-out
+  event of a `Client` into a `Room`; `checkedOutAt == null` means currently
+  inside. Occupancy computed from in-progress `Appointment`s does not use
+  this table - see "Upgrade: schema decisions" below.
+- **ClientProgressEntry** (`model/progress/ClientProgressEntry.java`) - a
+  dated body-measurement snapshot for a `Client` (weight, body fat %, waist/
+  chest/hip/thigh/arm circumference, notes).
+- **ClientPersonalRecord** (`model/progress/ClientPersonalRecord.java`) - a
+  `Client`'s best result for a free-text exercise name (value + `RecordUnit`
+  + date).
 
 ## Auth flow (read this before touching security-adjacent code)
 
@@ -194,6 +212,104 @@ service caches anything.
   add a new `V1.00XX__*.sql` file. Dev-only seed data lives in the separate
   `db/dev-data/` location, only loaded on the `dev` profile.
 
+## Upgrade: schema decisions
+
+Phase 1 of the upgrade (data layer only - Flyway migrations `V1.0011`-
+`V1.0014`, entities, repositories, DTOs, MapStruct mappers; no services,
+controllers, WebSocket, or LLM calls yet) added the tables behind three
+planned features: the live gym floor plan, AI manager insights, and visual
+client progress tracking. This section documents every non-obvious design
+choice made and why, since it is intended as comparison material for the
+thesis, not just an internal note.
+
+- **Single-installation model, real tables anyway.** The product is deployed
+  once per gym (no multi-tenant row-level isolation anywhere), so `Gym` is
+  expected to have exactly one row. It is still a normal `@Entity`/table
+  (not a `@ConfigurationProperties` bean or a hardcoded constant) so it goes
+  through the same audit/versioning/DTO machinery as everything else and can
+  be edited through a future settings endpoint without a schema change.
+- **Room geometry: rectangle, not polygon.** `Room` stores `posX`/`posY`/
+  `width`/`height`/`rotationDegrees` (all `double precision`) instead of an
+  arbitrary polygon (point list / PostGIS geometry / GeoJSON column).
+  Reasoning: (1) real gym floor plans are overwhelmingly rectangular rooms;
+  (2) `react-konva` (the planned frontend canvas library) has first-class
+  `Rect` support with rotation, so this maps directly to a shape prop, no
+  polygon-fill/rendering logic needed; (3) it keeps validation and any future
+  overlap/collision checks simple (axis-aligned rectangle math vs.
+  point-in-polygon); (4) it avoids pulling in PostGIS or a JSON polygon
+  column + a geometry library on both backend and frontend for a feature
+  that doesn't need arbitrary shapes. If a future gym genuinely needs an
+  L-shaped or curved room, the fix is additive: a separate
+  `room_shape_point` table (ordered vertices per room) behind the same
+  `Room.id`, without touching the rectangle columns non-polygon rooms keep
+  using.
+- **Appointment-Room link is optional (nullable FK).** Mirrors the existing
+  nullable `Appointment.trainer` - an appointment can be unassigned to a
+  room. This also matters for backward compatibility: all appointments
+  created before this phase have no room, and nothing forces one to be
+  chosen going forward until a later phase adds that validation at the
+  service layer.
+- **Explicit `RoomCheckIn` entity, not derived-only occupancy.** Two
+  occupancy signals are planned per the vision: (1) computed occupancy from
+  appointments currently in progress in a room (derived at query time from
+  `Appointment`/`ClientAppointment` - no new entity needed, since that data
+  already exists), and (2) optional manual check-in. For (2), a real entity
+  was added (`RoomCheckIn`, `checkedInAt`/`checkedOutAt`) instead of e.g. a
+  single "current occupants" join table, specifically so check-in *history*
+  survives past checkout (attendance patterns/analytics for the AI-insights
+  feature) rather than only ever reflecting the current instant. A row with
+  `checkedOutAt IS NULL` is the "currently inside" signal; both partial
+  indexes (`idx_room_check_in_open`, `idx_room_check_in_client_open`) are
+  built specifically for that `WHERE checked_out_at IS NULL` query shape.
+- **Body measurements: fixed columns, not JSON/EAV.** `ClientProgressEntry`
+  has explicit nullable columns (`weightKg`, `bodyFatPercent`, `waistCm`,
+  `chestCm`, `hipCm`, `thighCm`, `armCm`) rather than a flexible JSONB/
+  key-value map. Reasoning: (1) nothing else in this codebase uses a JSON
+  column or an EAV pattern - staying consistent with existing conventions
+  mattered more than maximal flexibility; (2) typed numeric columns are
+  directly chartable by Recharts on the frontend without a JSON-parsing/
+  pivoting step; (3) MapStruct mapping and query/sorting stay trivial. The
+  trade-off, made deliberately: adding a new measurement type later (e.g.
+  calf circumference) needs a new migration + column + DTO field, not just a
+  new JSON key. Given the small, well-known set of measurements a trainer
+  actually tracks, that trade-off favors simplicity here.
+- **Exercise as free text, not a catalog entity.** `ClientPersonalRecord.
+  exerciseName` is a plain `varchar`, not a foreign key into an `Exercise`
+  catalog table. A catalog would enable things like standardized units per
+  exercise or cross-client leaderboards, but neither is in scope for the
+  three planned features, and building a catalog (entity, seed data, and
+  eventually an admin UI to manage it) is a project of its own relative to
+  what a diplomski-scale system needs. Free text keeps this phase's surface
+  area small; if a catalog is ever justified, the migration path is
+  additive - add an `Exercise` table and an optional `exercise_id` FK
+  alongside the existing text column, backfill by name match, without a
+  breaking change.
+- **`RecordUnit` as a fixed enum (`KG`/`LB`/`REPS`/`SECONDS`/`MINUTES`/
+  `METERS`/`KM`)**, matching the existing convention of Java enums + a DB
+  `CHECK` constraint (see `SessionType`, `WorkStatus`, etc.) rather than a
+  free-text unit string, so a strength record ("100 KG") and a cardio/
+  endurance record ("5 KM" or "90 SECONDS") are both representable without
+  drifting into ad-hoc unit strings.
+- **Existing `AppointmentDTO`/`AppointmentMapper` intentionally left
+  untouched.** `Appointment.room` was added to the entity (and its Flyway/
+  Envers migrations), but the read-side DTO was not updated to expose it.
+  This phase is data-layer-only by design ("entiteti/repozitorijumi mogu se
+  koristiti, ali ništa nije povezano u API") - wiring the room into the
+  existing appointment API is left to whichever future phase actually builds
+  the room-aware appointment endpoints, so as not to speculatively shape an
+  API contract before its consumer exists.
+- **New audit tables follow the existing hand-written pattern exactly**
+  (`V1.0014__create_gym_upgrade_audit_tables.sql`): only entity-declared
+  columns are mirrored into `*_aud` (no `version`/`created_at`/etc., matching
+  every existing `*_aud` table), and the pre-existing `appointment_aud` table
+  got an `ALTER TABLE ... ADD COLUMN room_id` in the same migration, per the
+  "Audit" section's existing warning that Envers won't create this for you.
+- Verified end-to-end on this branch: `mvn compile` succeeds, and a full
+  `docker compose up` + `mvnw spring-boot:run` against a **fresh** Postgres
+  volume applies all 14 migrations cleanly (`V1.0001`-`V1.0014`) and the app
+  starts normally on port 8088 with Envers registering all new `@Audited`
+  entities without error.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -250,3 +366,14 @@ either upgrade session to pick up:
   `docker-compose.yaml` and fixed Redis auth (`--requirepass`, since the
   official image ignores `REDIS_PASSWORD`), added root `.gitignore` and this
   file. No functional/behavioral changes beyond those explicitly listed here.
+- 2026-08-04: Upgrade Phase 1, data layer only (`upgrade/claude-code` branch).
+  Added `Gym`, `Room`, `RoomCheckIn`, `ClientProgressEntry`,
+  `ClientPersonalRecord` entities + repositories + DTOs + MapStruct mappers,
+  an optional `Appointment.room` link, and Flyway migrations `V1.0011`-
+  `V1.0014` (new tables + matching Envers audit tables). No services,
+  controllers, WebSocket wiring, or LLM calls added - see "Upgrade: schema
+  decisions" above for every design choice and its rationale. Verified with a
+  full migration run against a fresh Postgres volume and a normal app
+  startup; no existing files' behavior changed.
+
+## Imported Claude Cowork project instructions

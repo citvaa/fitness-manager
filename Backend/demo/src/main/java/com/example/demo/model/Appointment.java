@@ -1,6 +1,7 @@
 package com.example.demo.model;
 
 import com.example.demo.model.common.BaseEntity;
+import com.example.demo.model.gym.Room;
 import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.Trainer;
 import jakarta.persistence.*;
@@ -43,6 +44,13 @@ public class Appointment extends BaseEntity {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "trainer_id", referencedColumnName = "id")
     private Trainer trainer;
+
+    // Optional: an appointment can exist unassigned to a room (mirrors the existing nullable
+    // trainer field above), and existing appointments predate the Room concept entirely - see
+    // AGENTS.md ("Upgrade: schema decisions").
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "room_id", referencedColumnName = "id")
+    private Room room;
 
     @OneToMany(mappedBy = "appointment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<ClientAppointment> clientAppointments;
