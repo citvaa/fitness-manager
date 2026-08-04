@@ -258,9 +258,25 @@ thesis, not just an internal note.
   single "current occupants" join table, specifically so check-in *history*
   survives past checkout (attendance patterns/analytics for the AI-insights
   feature) rather than only ever reflecting the current instant. A row with
-  `checkedOutAt IS NULL` is the "currently inside" signal; both partial
-  indexes (`idx_room_check_in_open`, `idx_room_check_in_client_open`) are
-  built specifically for that `WHERE checked_out_at IS NULL` query shape.
+  `checkedOutAt IS NULL` is the "currently inside" signal; the partial index
+  `idx_room_check_in_open` is built specifically for that
+  `WHERE checked_out_at IS NULL` query shape.
+- **At most one active check-in per client, enforced globally, not
+  per-room** (`V1.0015__enforce_single_active_check_in_per_client.sql`).
+  A client is physically in exactly one place at a time, so "active" (i.e.
+  `checkedOutAt IS NULL`) `RoomCheckIn` rows must be unique per `client_id`
+  across the whole table, not per `(room_id, client_id)`. This is enforced
+  with a `UNIQUE` partial index
+  (`uq_room_check_in_one_active_per_client ON room_check_in (client_id)
+  WHERE checked_out_at IS NULL`) rather than only at the service layer in a
+  later phase, so the invariant holds even against a service bug or a
+  concurrent double check-in race - the database rejects the second insert
+  outright instead of silently allowing a client to appear "in" two rooms at
+  once. `V1.0015` also drops the old non-unique
+  `idx_room_check_in_client_open` index from `V1.0012` (added for the same
+  "does this client have an open check-in" lookup) since the new unique
+  index already serves that lookup and enforces the constraint besides -
+  keeping both would have been redundant, not just extra-safe.
 - **Body measurements: fixed columns, not JSON/EAV.** `ClientProgressEntry`
   has explicit nullable columns (`weightKg`, `bodyFatPercent`, `waistCm`,
   `chestCm`, `hipCm`, `thighCm`, `armCm`) rather than a flexible JSONB/
@@ -306,7 +322,7 @@ thesis, not just an internal note.
   "Audit" section's existing warning that Envers won't create this for you.
 - Verified end-to-end on this branch: `mvn compile` succeeds, and a full
   `docker compose up` + `mvnw spring-boot:run` against a **fresh** Postgres
-  volume applies all 14 migrations cleanly (`V1.0001`-`V1.0014`) and the app
+  volume applies all 15 migrations cleanly (`V1.0001`-`V1.0015`) and the app
   starts normally on port 8088 with Envers registering all new `@Audited`
   entities without error.
 
