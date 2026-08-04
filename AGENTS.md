@@ -194,6 +194,56 @@ service caches anything.
   add a new `V1.00XX__*.sql` file. Dev-only seed data lives in the separate
   `db/dev-data/` location, only loaded on the `dev` profile.
 
+## Upgrade: schema decisions
+
+Phase 1 of the upgrade is deliberately limited to Flyway migrations, JPA
+entities, repositories, DTOs, and MapStruct mappers. No services, controllers,
+WebSocket wiring, LLM calls, or frontend code are part of this phase.
+
+- **Gym remains a real table in a single-installation product.** One row is
+  expected per deployed installation, but a normal audited entity preserves
+  versioning and enables a future settings endpoint. Besides name/address it
+  stores contact details, logo URL, hex brand color, and IANA timezone. The
+  timezone belongs to the installation because appointment and insight logic
+  must not depend on the server's local timezone.
+- **Room geometry uses rotated rectangles.** `posX`, `posY`, `width`, `height`,
+  and `rotationDegrees` map directly to a `react-konva` rectangle and keep
+  validation, editing, and future overlap calculations simple. Polygons would
+  require ordered point persistence and substantially more frontend/backend
+  geometry logic without a current requirement for irregular room shapes. A
+  future polygon table can be added alongside these columns if needed.
+- **Appointment-to-Room is optional.** Existing appointments have no room and
+  scheduling can reasonably create an unassigned appointment, just as trainer
+  assignment is currently optional. A later service layer may enforce room
+  assignment for selected workflows without making this migration breaking.
+  `AppointmentDTO` and `AppointmentMapper` intentionally do not expose the new
+  relation yet because this phase must not change the existing API contract.
+- **Manual occupancy has an explicit event entity.** Current planned occupancy
+  combines appointments in progress (derived from existing appointment/client
+  data) with optional `RoomCheckIn` rows. Keeping check-in/check-out timestamps
+  preserves attendance history for later analytics instead of storing only a
+  mutable current-room state. A null `checkedOutAt` denotes an active check-in;
+  partial indexes support active occupancy and active-client lookups.
+- **Body measurements use fixed numeric columns.** Weight, body-fat percentage,
+  waist, chest, hip, thigh, and arm measurements cover the expected thesis
+  scope and remain directly queryable/chartable. This follows the project's
+  typed relational model and MapStruct conventions. JSON/EAV would be more
+  flexible but would weaken validation and complicate aggregation; adding a
+  future measurement requires an additive migration by design.
+- **Exercises are free text, not a catalog.** A catalog would require its own
+  lifecycle, seed data, normalization rules, and administration UI, none of
+  which is needed for per-client progress tracking. `exerciseName` therefore
+  stays free text and can later be supplemented by an optional catalog foreign
+  key without removing historical names.
+- **Record units are a fixed enum.** `KG`, `LB`, `REPS`, `SECONDS`, `MINUTES`,
+  `METERS`, and `KM` cover strength and endurance records while preventing
+  inconsistent unit strings. The database mirrors the Java enum with a check
+  constraint, following existing enum conventions.
+- **All new audited schema is explicit.** Migrations `V1.0011`-`V1.0014` create
+  the gym/room/check-in and progress tables, add nullable `appointment.room_id`,
+  and create matching Envers audit tables. `appointment_aud.room_id` is added
+  in the same additive audit migration because `ddl-auto` is disabled.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -250,3 +300,8 @@ either upgrade session to pick up:
   `docker-compose.yaml` and fixed Redis auth (`--requirepass`, since the
   official image ignores `REDIS_PASSWORD`), added root `.gitignore` and this
   file. No functional/behavioral changes beyond those explicitly listed here.
+- 2026-08-04: Upgrade Phase 1 data layer (`upgrade/codex`). Added `Gym`, `Room`,
+  `RoomCheckIn`, `ClientProgressEntry`, and `ClientPersonalRecord` entities with
+  repositories, DTOs, MapStruct mappers, an optional `Appointment.room` link,
+  and Flyway migrations `V1.0011`-`V1.0014`, including matching Envers tables.
+  No service, controller, WebSocket, LLM, or frontend code was added.
