@@ -18,4 +18,5 @@ public interface ClientRepository extends JpaRepository<Client, Integer> {
     void deleteByUser(@Param("user") User user);
 
     Optional<Client> findByUserEmail(String userMail);
+    Optional<Client> findByUserId(Integer userId);
 }

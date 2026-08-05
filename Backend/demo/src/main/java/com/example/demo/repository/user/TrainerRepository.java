@@ -18,4 +18,5 @@ public interface TrainerRepository extends JpaRepository<Trainer, Integer> {
     void deleteByUser(@Param("user") User user);
 
     Optional<Trainer> findByUserEmail(String email);
+    Optional<Trainer> findByUserId(Integer userId);
 }

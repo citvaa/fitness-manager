@@ -10,6 +10,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.serializer.*;
 
@@ -32,6 +33,13 @@ public class RedisConfig {
                 .entryTtl(Duration.ofMinutes(10))
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer(objectMapper)));
+    }
+
+    @Bean
+    public RedisCacheManagerBuilderCustomizer insightCacheCustomizer(RedisCacheConfiguration cacheConfiguration) {
+        return builder -> builder
+                .withCacheConfiguration("managerInsights", cacheConfiguration.entryTtl(Duration.ofHours(6)))
+                .withCacheConfiguration("clientProgressInsights", cacheConfiguration.entryTtl(Duration.ofHours(1)));
     }
 
 }

@@ -248,6 +248,71 @@ WebSocket wiring, LLM calls, or frontend code are part of this phase.
   and create matching Envers audit tables. `appointment_aud.room_id` is added
   in the same additive audit migration because `ddl-auto` is disabled.
 
+## Upgrade: service layer decisions
+
+Phase 2 exposes the Phase 1 data model through REST services and the existing
+STOMP broker. No schema migration was needed for this phase.
+
+- **Floor-plan writes are manager-only; reads are authenticated.** `MANAGER`
+  owns Gym/Room create, update, and delete operations. `MANAGER`, `TRAINER`,
+  and `CLIENT` can read the gym and rooms because the floor plan is normal
+  operational information. The API preserves the single-installation rule by
+  rejecting a second Gym row, and refuses to delete a Gym until its rooms are
+  removed. Room geometry and positive capacity/dimension validation are
+  performed before persistence so callers get a useful 4xx response instead
+  of only a database constraint error.
+- **Manual check-in is a staff operation.** `MANAGER` and `TRAINER` can check a
+  client in or out; all three roles can read current occupancy. Clients cannot
+  create their own attendance history. The service checks for an existing
+  active check-in and also translates a race against the database's global
+  unique partial index into HTTP 409 with an explicit message.
+- **Occupancy is a source-labelled sum.** Each room payload contains
+  `manualCheckIns`, `scheduledParticipants`, and `totalOccupancy`. Scheduled
+  participants are client-appointment links for appointments whose
+  `[startTime,endTime)` contains the current time. The total intentionally adds
+  both sources rather than attempting identity de-duplication: a manual
+  check-in is independent attendance evidence and current appointment rows do
+  not declare that check-in is their attendance record. Consumers can display
+  the two source counts if this conservative sum exceeds capacity. All current
+  time calculations use the Gym's IANA timezone.
+- **Live occupancy reuses the existing broker.** Snapshots are sent to
+  `/topic/gym/occupancy` after check-in/check-out and every 60 seconds so
+  appointment boundary changes appear without a write event. The message is
+  the same `OccupancySnapshotResponse` returned by REST: `generatedAt` plus an
+  ordered list of per-room source counts, capacity, and total. Sharing one
+  representation keeps polling and STOMP clients consistent.
+- **Claude calls use a pinned fast model.** Both insight features call the
+  Anthropic Messages API directly with `ANTHROPIC_API_KEY` and pinned model ID
+  `claude-haiku-4-5-20251001`. Anthropic's current model documentation describes
+  Haiku 4.5 as its fastest current model and the least expensive current tier,
+  which fits short narrative summaries. Pinning avoids silent behavior changes
+  from an alias. The app may start without a key for non-AI development, but AI
+  endpoints return HTTP 503; they never return mocked text.
+- **AI caches have workload-specific TTLs.** Manager insights use Redis cache
+  `managerInsights` with a six-hour TTL because they aggregate a 30-day window
+  and are relatively expensive; `force=true` bypasses and replaces the entry.
+  Client narratives use `clientProgressInsights` with a one-hour TTL per client
+  and are evicted on every progress-entry or personal-record create/update/delete.
+  These explicit regions override the existing global ten-minute TTL without
+  changing `TRAINER_CACHE` behavior.
+- **Manager revenue insight is currently a documented proxy.** `Payment` stores
+  the number of paid appointments but no price, currency, or monetary amount.
+  The prompt therefore supplies payment count and paid appointment units and
+  explicitly forbids Claude from inventing monetary revenue. True revenue
+  analytics requires a future additive payment-price schema decision.
+- **Progress ownership uses existing appointment relationships.** There is no
+  trainer-client assignment table. A trainer may CRUD and summarize progress
+  only when at least one existing appointment links that trainer to that client.
+  Clients have read-only access to their own entries, records, and cached AI
+  summary. This avoids granting every trainer access to every client's health-
+  adjacent data while preserving the current data model.
+- **Phase 2 introduces consistent feature error responses.** `ApiException` and
+  `ApiExceptionHandler` return timestamp/status/error/message JSON for explicit
+  API failures, including not-found, invalid geometry, ownership violations,
+  duplicate check-ins, missing AI configuration, and upstream Claude errors.
+  A database-integrity fallback returns HTTP 409. Existing unclassified runtime
+  exceptions still use Spring Boot's default response.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -277,8 +342,9 @@ either upgrade session to pick up:
   path before assuming it works as intended.
 - `CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
   authenticated user (any role) can call it.
-- No global exception handler - error responses aren't a consistent JSON
-  shape yet.
+- Only Phase 2's explicit `ApiException` and database-integrity failures have a
+  consistent JSON error shape; older unclassified exceptions still fall
+  through to Spring Boot's default response.
 - `pom.xml` sets `maven.test.skip=true`; combined with there being effectively
   only one trivial `contextLoads()` test, there is no real test coverage and
   tests don't run by default even if written.
@@ -313,3 +379,8 @@ either upgrade session to pick up:
   enforces one active room check-in per client globally (`V1.0015`), and
   appointments expose a lightweight `RoomSummaryDTO` instead of full room
   geometry. These are product requirements for subsequent phases.
+- 2026-08-05: Upgrade Phase 2 service/API layer (`upgrade/codex`). Added
+  manager-controlled Gym/Room CRUD, staff check-in/check-out, timezone-aware
+  combined occupancy REST/STOMP snapshots, cached Anthropic-backed manager and
+  client-progress narratives, and trainer-owned/client-self progress APIs.
+  Added no frontend or schema migrations.

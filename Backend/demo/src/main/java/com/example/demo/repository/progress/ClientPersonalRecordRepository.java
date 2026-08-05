@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ClientPersonalRecordRepository extends JpaRepository<ClientPersonalRecord, Integer> {
     List<ClientPersonalRecord> findByClientIdOrderByRecordDateDesc(Integer clientId);
+    boolean existsByIdAndClientId(Integer id, Integer clientId);
 }

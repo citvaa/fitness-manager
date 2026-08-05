@@ -26,4 +26,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
             "session"
     })
     List<Appointment> findByDate(LocalDate date);
+
+    List<Appointment> findByRoomIsNotNullAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThan(
+            LocalDate date, LocalTime nowInclusive, LocalTime nowExclusive);
+
+    boolean existsByTrainerIdAndClientAppointmentsClientId(Integer trainerId, Integer clientId);
 }

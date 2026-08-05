@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ClientProgressEntryRepository extends JpaRepository<ClientProgressEntry, Integer> {
     List<ClientProgressEntry> findByClientIdOrderByEntryDateAsc(Integer clientId);
+    boolean existsByIdAndClientId(Integer id, Integer clientId);
 }

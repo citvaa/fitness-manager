@@ -9,4 +9,7 @@ import java.util.List;
 @Repository
 public interface RoomRepository extends JpaRepository<Room, Integer> {
     List<Room> findByGymId(Integer gymId);
+    List<Room> findByGymIdOrderByNameAsc(Integer gymId);
+    boolean existsByGymIdAndNameIgnoreCase(Integer gymId, String name);
+    boolean existsByGymIdAndNameIgnoreCaseAndIdNot(Integer gymId, String name, Integer id);
 }
