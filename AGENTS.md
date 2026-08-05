@@ -476,15 +476,23 @@ internal note.
   the room, confirmed `GET /api/gym/occupancy` reflected it, confirmed a
   second check-in for the same client returns `409` with a message,
   checked the client back out, confirmed occupancy returned to zero, and
-  created a `ClientProgressEntry` and a `ClientPersonalRecord`. **Not
-  verified**: an actual Claude API response. `ANTHROPIC_API_KEY` was not set
-  in the session this branch was developed in, so
-  `GET /api/insights/manager` was only confirmed to fail with the intended,
-  explicit `IllegalStateException` ("ANTHROPIC_API_KEY is not set...") - not
-  to fail silently, not mocked - rather than to actually call Claude; the
-  request/response wiring against the Anthropic SDK could not be exercised
-  live. Whoever has a real key configured should do that one check before
-  relying on this phase's AI features in anger.
+  created a `ClientProgressEntry` and a `ClientPersonalRecord`. The AI
+  endpoints were also verified with a **real** Claude API call once
+  `ANTHROPIC_API_KEY` was available: `GET /api/insights/manager`,
+  `POST /api/insights/manager/refresh`, and `GET /api/progress/insight/
+  client/{id}` all returned `200` with genuinely model-generated prose
+  grounded in the actual aggregated numbers (e.g. the progress narrative
+  correctly cited the exact weight/body-fat/bench-press figures just
+  entered) - not a mock or placeholder - and `claude-haiku-4-5` was accepted
+  by the API with no invalid-model error, confirming it's a currently valid
+  model id. The first verification attempt failed with the intended,
+  explicit `IllegalStateException` ("ANTHROPIC_API_KEY is not set...")
+  rather than silently mocking or crashing the app - the root cause turned
+  out to be that the terminal session running the app had `.env` sourced
+  only partially (`MAIL_*`/`JWT_SECRET` exported manually, not `.env`
+  itself), so `ANTHROPIC_API_KEY` was simply never in that process's
+  environment; re-running with `.env` actually `source`d fixed it
+  immediately, no code change needed.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -560,10 +568,11 @@ either upgrade session to pick up:
   Added the `anthropic-java` SDK dependency and `AnthropicConfig`. No new
   migrations needed. Verified end-to-end over HTTP against a fresh Postgres/
   Redis volume (gym/room CRUD, check-in/check-out including the 409 conflict
-  path, occupancy computation, progress entry/record creation); the AI
-  endpoints' Claude API call itself was not exercised live -
-  `ANTHROPIC_API_KEY` was unset in the development session, so only the
-  intended explicit failure path was confirmed (see "Upgrade: service layer
-  decisions" for detail). No existing files' behavior changed.
+  path, occupancy computation, progress entry/record creation), and, once
+  `ANTHROPIC_API_KEY` was supplied, with real Claude API calls against all
+  three AI endpoints returning genuine model-generated text grounded in the
+  actual data - `claude-haiku-4-5` confirmed as a currently valid model id
+  in the process (see "Upgrade: service layer decisions" for detail). No
+  existing files' behavior changed.
 
 ## Imported Claude Cowork project instructions
