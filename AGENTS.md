@@ -470,6 +470,57 @@ internal note.
   `ClientRepository.findByUserEmail`) rather than introducing a new shared
   abstraction - kept consistent with how `AppointmentServiceImpl` already
   does this, duplication and all, per the existing convention.
+- **A TRAINER can only view/record progress data for a client they have
+  actually trained - not any client by id.** This was missed in the initial
+  Phase 2 implementation: `@RoleRequired({"MANAGER", "TRAINER"})` alone only
+  checks the caller's *role*, not their relationship to the specific
+  `clientId` in the request, so any trainer could read or write any
+  client's `ClientProgressEntry`/`ClientPersonalRecord`/AI narrative via
+  the `/client/{clientId}` endpoints - a real authorization gap, not a
+  style nitpick. Fixed with a new `TrainerClientAccessGuard`
+  (`com.example.demo.security`), called from `ClientProgressEntryServiceImpl
+  .create`/`.getForClient`, `ClientPersonalRecordServiceImpl.create`/
+  `.getForClient`, and `ClientProgressInsightServiceImpl.getSummary` (the
+  AI narrative endpoint has the exact same gap and was fixed alongside the
+  two CRUD services, even though only those two were flagged - the check is
+  identical regardless of what's being read/written for the client).
+  MANAGER is exempt (checked via the `roles` JWT claim) and can access any
+  client, matching every other MANAGER-vs-TRAINER split in this codebase.
+  - **"Has trained" is derived from `Appointment`/`ClientAppointment`
+    history** (`ClientAppointmentRepository
+    .existsByClientIdAndAppointmentTrainerId`) - a client is "the trainer's"
+    if they've shared at least one appointment where that trainer was
+    assigned, exactly how a trainer is already linked to a client
+    everywhere else in this codebase (there is no separate, explicit
+    trainer-client assignment table, and adding one would be a schema
+    change and a bigger behavior change than this fix warrants). This is
+    permanent, not "currently scheduled" - once a trainer has trained a
+    client, they keep access to that client's progress history, which
+    matches how coaching relationships and historical record-keeping
+    actually work (a trainer who worked with a client last month should
+    still be able to see the progress they recorded).
+  - **A `@Component`, not a service interface + impl.** `TrainerClientAccessGuard`
+    is cross-cutting infrastructure (an authorization check reused by three
+    otherwise-unrelated services), not a business-domain service - it
+    follows the existing `JwtUtil`/`JsonUtil` pattern of a concrete,
+    directly-injected helper class rather than forcing an interface split
+    that has no second implementation.
+  - **Not applied inside the `getMine()`/`getMySummary()` CLIENT-facing
+    methods**, which resolve "the current client" from the JWT and read the
+    repository/cache directly instead of delegating to the guarded
+    `getForClient(clientId)`/`getSummary(clientId)` methods - calling
+    through the guard there would misread a CLIENT caller as a TRAINER (no
+    `Trainer` row for that email) and incorrectly reject their own data.
+    This meant duplicating the one-line repository call in each service
+    instead of reusing the "public" method - a small, deliberate trade
+    for correctness over avoiding duplication, consistent with this
+    codebase's existing tolerance for that kind of duplication (see the
+    JWT-extraction duplication note above).
+  - **Verified with a real login/token per role**: a trainer with a shared
+    appointment with the client succeeds (`200`); a second trainer with no
+    such history is rejected (`403`) on the entry, record, and insight
+    endpoints alike; a manager succeeds regardless; the client's own
+    `/me` endpoints are unaffected.
 - **Verified end-to-end on this branch**, against a fresh Postgres/Redis
   volume: `mvn compile` succeeds; the app starts cleanly; a full flow was
   exercised over HTTP - created a `Gym` and a `Room`, checked a client into
@@ -574,5 +625,16 @@ either upgrade session to pick up:
   actual data - `claude-haiku-4-5` confirmed as a currently valid model id
   in the process (see "Upgrade: service layer decisions" for detail). No
   existing files' behavior changed.
+- 2026-08-05: Fixed a real authorization gap in Phase 2's client
+  progress-tracking endpoints (`upgrade/claude-code` branch): a TRAINER
+  could read/write any client's progress data by `clientId`, since
+  `@RoleRequired` only checked role, not trainer-client ownership. Added
+  `TrainerClientAccessGuard` (derives "has this trainer trained this
+  client" from `Appointment`/`ClientAppointment` history) and wired it into
+  `ClientProgressEntryServiceImpl`, `ClientPersonalRecordServiceImpl`, and
+  `ClientProgressInsightServiceImpl` - see "Upgrade: service layer
+  decisions" for the full rationale. Verified with real logins across
+  MANAGER, a trainer who has trained the client, and a trainer who hasn't
+  (`403`). No migrations, no behavior change for MANAGER or CLIENT callers.
 
 ## Imported Claude Cowork project instructions

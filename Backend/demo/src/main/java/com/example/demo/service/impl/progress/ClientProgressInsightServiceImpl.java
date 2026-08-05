@@ -8,6 +8,7 @@ import com.example.demo.model.user.Client;
 import com.example.demo.repository.progress.ClientPersonalRecordRepository;
 import com.example.demo.repository.progress.ClientProgressEntryRepository;
 import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.security.TrainerClientAccessGuard;
 import com.example.demo.service.ai.ClaudeInsightService;
 import com.example.demo.service.progress.ClientProgressInsightService;
 import jakarta.persistence.EntityNotFoundException;
@@ -27,12 +28,15 @@ import java.util.List;
 
 /**
  * Generates a short narrative summary + recommendation from a client's progress-entry and
- * personal-record history via Claude. Cached manually (rather than via {@code @Cacheable}) so
- * {@link #getMySummary()} can reuse the same cache-lookup/generate/cache-put path as
- * {@link #getSummary(Integer)} with a plain method call, instead of routing back through the
- * Spring AOP proxy (self-invocation would otherwise silently bypass caching). Cache invalidation
- * on new entries is explicit, via {@code ClientProgressEntryServiceImpl}'s {@code @CacheEvict} -
- * see AGENTS.md ("Upgrade: service layer decisions").
+ * personal-record history via Claude. Cached manually (rather than via {@code @Cacheable}) via
+ * the shared {@link #getOrGenerateSummary(Integer)} helper, which both {@link #getSummary(Integer)}
+ * (TRAINER/MANAGER, ownership-checked) and {@link #getMySummary()} (CLIENT, no ownership check
+ * needed - it resolves the client from the caller's own JWT) call directly as a plain Java
+ * method - avoiding both a Spring AOP self-invocation caching bug (calling an {@code @Cacheable}
+ * method from within the same bean silently bypasses the annotation) and, separately,
+ * misapplying the TRAINER-ownership check to a CLIENT caller. Cache invalidation on new entries
+ * is explicit, via {@code ClientProgressEntryServiceImpl}'s {@code @CacheEvict} - see AGENTS.md
+ * ("Upgrade: service layer decisions").
  */
 @Service
 @RequiredArgsConstructor
@@ -52,9 +56,26 @@ public class ClientProgressInsightServiceImpl implements ClientProgressInsightSe
     private final ClientPersonalRecordRepository clientPersonalRecordRepository;
     private final ClaudeInsightService claudeInsightService;
     private final CacheManager cacheManager;
+    private final TrainerClientAccessGuard trainerClientAccessGuard;
 
     @Override
     public ClientProgressInsightDTO getSummary(Integer clientId) {
+        // A trainer may only view the narrative for a client they have actually trained - see
+        // AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER. Not applied to
+        // getMySummary() below, which resolves the client from the caller's own JWT and shares
+        // the cache-lookup/generate/put logic directly rather than calling this method - a
+        // CLIENT caller here would otherwise be misread as a TRAINER and rejected.
+        trainerClientAccessGuard.assertCanAccessClient(clientId);
+        return getOrGenerateSummary(clientId);
+    }
+
+    @Override
+    public ClientProgressInsightDTO getMySummary() {
+        Client client = getAuthenticatedClient();
+        return getOrGenerateSummary(client.getId());
+    }
+
+    private ClientProgressInsightDTO getOrGenerateSummary(Integer clientId) {
         Cache cache = cacheManager.getCache(RedisConfig.CLIENT_PROGRESS_INSIGHT_CACHE);
         if (cache != null) {
             ClientProgressInsightDTO cached = cache.get(clientId, ClientProgressInsightDTO.class);
@@ -68,12 +89,6 @@ public class ClientProgressInsightServiceImpl implements ClientProgressInsightSe
             cache.put(clientId, fresh);
         }
         return fresh;
-    }
-
-    @Override
-    public ClientProgressInsightDTO getMySummary() {
-        Client client = getAuthenticatedClient();
-        return getSummary(client.getId());
     }
 
     private ClientProgressInsightDTO generateSummary(Integer clientId) {

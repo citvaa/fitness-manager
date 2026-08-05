@@ -6,6 +6,7 @@ import com.example.demo.model.progress.ClientPersonalRecord;
 import com.example.demo.model.user.Client;
 import com.example.demo.repository.progress.ClientPersonalRecordRepository;
 import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.security.TrainerClientAccessGuard;
 import com.example.demo.service.params.request.progress.CreatePersonalRecordRequest;
 import com.example.demo.service.progress.ClientPersonalRecordService;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,10 +29,15 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
     private final ClientPersonalRecordRepository clientPersonalRecordRepository;
     private final ClientRepository clientRepository;
     private final ClientPersonalRecordMapper clientPersonalRecordMapper;
+    private final TrainerClientAccessGuard trainerClientAccessGuard;
 
     @Override
     @Transactional
     public ClientPersonalRecordDTO create(CreatePersonalRecordRequest request) {
+        // A trainer may only record a personal record for a client they have actually trained -
+        // see AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER.
+        trainerClientAccessGuard.assertCanAccessClient(request.getClientId());
+
         Client client = clientRepository.findById(request.getClientId())
                 .orElseThrow(() -> new EntityNotFoundException("Client not found"));
 
@@ -49,13 +55,19 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
 
     @Override
     public List<ClientPersonalRecordDTO> getForClient(Integer clientId) {
+        // A trainer may only view records for a client they have actually trained - see
+        // AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER. Not applied to
+        // getMine() below, which resolves the client from the caller's own JWT and reads the
+        // repository directly - a CLIENT caller here would otherwise be misread as a TRAINER
+        // and rejected for "never trained this client".
+        trainerClientAccessGuard.assertCanAccessClient(clientId);
         return clientPersonalRecordMapper.toDto(clientPersonalRecordRepository.findByClientIdOrderByRecordDateDesc(clientId));
     }
 
     @Override
     public List<ClientPersonalRecordDTO> getMine() {
         Client client = getAuthenticatedClient();
-        return getForClient(client.getId());
+        return clientPersonalRecordMapper.toDto(clientPersonalRecordRepository.findByClientIdOrderByRecordDateDesc(client.getId()));
     }
 
     private @NotNull Client getAuthenticatedClient() {

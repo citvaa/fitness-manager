@@ -7,6 +7,7 @@ import com.example.demo.model.progress.ClientProgressEntry;
 import com.example.demo.model.user.Client;
 import com.example.demo.repository.progress.ClientProgressEntryRepository;
 import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.security.TrainerClientAccessGuard;
 import com.example.demo.service.params.request.progress.CreateProgressEntryRequest;
 import com.example.demo.service.progress.ClientProgressEntryService;
 import jakarta.persistence.EntityNotFoundException;
@@ -30,6 +31,7 @@ public class ClientProgressEntryServiceImpl implements ClientProgressEntryServic
     private final ClientProgressEntryRepository clientProgressEntryRepository;
     private final ClientRepository clientRepository;
     private final ClientProgressEntryMapper clientProgressEntryMapper;
+    private final TrainerClientAccessGuard trainerClientAccessGuard;
 
     @Override
     @Transactional
@@ -37,6 +39,10 @@ public class ClientProgressEntryServiceImpl implements ClientProgressEntryServic
     // measurement history that just changed. See AGENTS.md ("Upgrade: service layer decisions").
     @CacheEvict(value = RedisConfig.CLIENT_PROGRESS_INSIGHT_CACHE, key = "#request.clientId")
     public ClientProgressEntryDTO create(CreateProgressEntryRequest request) {
+        // A trainer may only record progress for a client they have actually trained - see
+        // AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER.
+        trainerClientAccessGuard.assertCanAccessClient(request.getClientId());
+
         Client client = clientRepository.findById(request.getClientId())
                 .orElseThrow(() -> new EntityNotFoundException("Client not found"));
 
@@ -58,13 +64,19 @@ public class ClientProgressEntryServiceImpl implements ClientProgressEntryServic
 
     @Override
     public List<ClientProgressEntryDTO> getForClient(Integer clientId) {
+        // A trainer may only view progress for a client they have actually trained - see
+        // AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER. Not applied to
+        // getMine() below, which resolves the client from the caller's own JWT and reads the
+        // repository directly - a CLIENT caller here would otherwise be misread as a TRAINER
+        // and rejected for "never trained this client".
+        trainerClientAccessGuard.assertCanAccessClient(clientId);
         return clientProgressEntryMapper.toDto(clientProgressEntryRepository.findByClientIdOrderByEntryDateAsc(clientId));
     }
 
     @Override
     public List<ClientProgressEntryDTO> getMine() {
         Client client = getAuthenticatedClient();
-        return getForClient(client.getId());
+        return clientProgressEntryMapper.toDto(clientProgressEntryRepository.findByClientIdOrderByEntryDateAsc(client.getId()));
     }
 
     private @NotNull Client getAuthenticatedClient() {
