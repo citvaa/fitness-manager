@@ -4,6 +4,7 @@ import com.example.demo.model.gym.RoomCheckIn;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -14,4 +15,7 @@ public interface RoomCheckInRepository extends JpaRepository<RoomCheckIn, Intege
 
     /** The client's currently-open check-in, if any (a client should only be in one room at a time). */
     List<RoomCheckIn> findByClientIdAndCheckedOutAtIsNull(Integer clientId);
+
+    /** All check-ins (open or closed) since a point in time - used for the AI manager-insights aggregation. */
+    List<RoomCheckIn> findByCheckedInAtAfter(LocalDateTime since);
 }

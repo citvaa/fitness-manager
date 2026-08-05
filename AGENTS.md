@@ -326,6 +326,166 @@ thesis, not just an internal note.
   starts normally on port 8088 with Envers registering all new `@Audited`
   entities without error.
 
+## Upgrade: service layer decisions
+
+Phase 2 of the upgrade (`upgrade/claude-code` branch) wired the Phase 1 data
+layer into services, controllers, and WebSocket - gym/room CRUD, room check-
+in/occupancy, AI manager insights, and client progress-tracking CRUD +
+narrative. No new migrations were needed (Phase 1's tables were sufficient).
+This section documents the non-obvious decisions, since - like the schema
+decisions above - it is comparison material for the thesis, not just an
+internal note.
+
+- **Gym/Room CRUD authorization: MANAGER writes, any authenticated role
+  reads.** Only `MANAGER` can create/update the `Gym` config or
+  create/update/delete `Room`s (`GymController`, `RoomController`) - editing
+  the floor plan is a management action. Reads (`GET /api/gym`,
+  `GET /api/gym/room`, `GET /api/gym/room/{id}`) are open to `MANAGER`,
+  `TRAINER`, and `CLIENT` alike, matching the existing `@RoleRequired`
+  pattern used elsewhere (e.g. `AppointmentController.getAvailable`) for
+  data every role needs to see (trainers/clients need room names for
+  check-in and the live floor-plan view).
+- **`Gym` is upserted, not created via a normal POST.** Consistent with the
+  Phase 1 decision that exactly one `Gym` row is expected in practice: there
+  is a single `PUT /api/gym` that creates the row on the first call and
+  updates it on every later call (`GymServiceImpl.upsertGym`), rather than a
+  `POST`+`PUT{id}` pair that would require the frontend to already know
+  whether a row exists. A future multi-location redesign would need a real
+  per-row endpoint, but that is out of scope here.
+- **Room check-in/check-out is a staff operation, not client self-service.**
+  `POST /api/gym/room/{roomId}/check-in?clientId=...` and
+  `POST /api/gym/check-in/{id}/check-out` are `MANAGER`/`TRAINER`-only, with
+  the client passed explicitly as a parameter - modeled as a front-desk
+  action (a staff member checks a client in), not a kiosk/self-service flow.
+  The task brief didn't specify the actor; this was the more conservative
+  reading given there's no existing self-service pattern (e.g. no client
+  self-cancel-without-staff analog) to extend, and clients can still read
+  their own room's occupancy per the read policy above.
+- **The "one active check-in per client" violation is caught in two places,
+  by design, and surfaces as a real error - not a silent 500.** The service
+  pre-checks via `RoomCheckInRepository.findByClientIdAndCheckedOutAtIsNull`
+  before inserting (the common, non-racing case), and separately catches
+  `DataIntegrityViolationException` around the save (the Phase 1
+  `uq_room_check_in_one_active_per_client` unique partial index rejecting a
+  genuinely concurrent second check-in) - both paths throw the same
+  `IllegalStateException`. Because this codebase has no global exception
+  handler (see "Known issues"), that exception alone would fall through to a
+  bare `{"status":500}` with no message - so `RoomCheckInController` locally
+  catches `IllegalStateException` on check-in/check-out and returns
+  `409 Conflict` with the message, the one place in this phase a controller
+  does its own error translation, specifically because the task called for
+  "a meaningful error" here. Every other new endpoint follows the existing
+  codebase convention of letting service exceptions fall through unhandled.
+- **Computed room occupancy combines two signals additively, without
+  deduplication.** `RoomCheckInServiceImpl.toOccupancyDto` sums currently-
+  active manual check-ins (`checkedOutAt IS NULL`) with clients on
+  appointments currently in progress in that room (a new
+  `AppointmentRepository` query: room + today's date + start/end time
+  bracketing "now"). A client both manually checked in *and* on an
+  in-progress appointment in the same room is counted twice - there is no
+  entity linking a `RoomCheckIn` to an `Appointment`/`ClientAppointment` to
+  de-duplicate against, and the task explicitly asked for "a combination" of
+  the two signals rather than a deduplicated headcount. Revenue/attendance-
+  grade exactness was judged less important here than keeping the two
+  occupancy sources structurally independent (each can be reasoned about and
+  tested on its own).
+- **One WebSocket topic, `/topic/gym/occupancy`, carrying the full room list
+  every time - not per-room topics, not deltas.** Chosen for the same reason
+  the manager-insights/progress-narrative prompts avoid inventing structure
+  the caller has to reverse-engineer: a floor-plan UI showing every room at
+  once wants "the current state of the world," and a single full-snapshot
+  message is trivial for a frontend store to apply wholesale (replace) with
+  no merge logic, at the cost of a slightly larger payload than a per-room
+  delta would be - a reasonable trade at gym-scale room counts. The message
+  body is `List<RoomOccupancyDTO>`, the exact same shape returned by
+  `GET /api/gym/occupancy`, so the initial-load HTTP call and every
+  subsequent WebSocket update deserialize identically on the frontend.
+- **Occupancy is broadcast two ways: event-driven and periodic, both to the
+  same topic.** `RoomCheckInServiceImpl` pushes an update immediately after
+  every check-in/check-out (so the staff action feels instant), and a new
+  `OccupancyScheduler` (`@Scheduled(cron = "0 * * * * ?")`, modeled directly
+  on the existing `NotificationScheduler` pattern) additionally broadcasts
+  once a minute. The periodic sweep exists specifically for occupancy
+  changes that aren't check-in/check-out-driven at all - an appointment
+  starting or ending changes `appointmentOccupantCount` with no application
+  event to hang a push off of, so without the sweep the live view would only
+  update on the next unrelated check-in/check-out in that room, potentially
+  hours later.
+- **AI model choice: `claude-haiku-4-5`, not the platform-wide "always use
+  the flagship model" default.** Both AI features (manager insights, client
+  progress narrative) are single-turn, already-aggregated-data-in /
+  short-text-out calls - closer to summarization/classification than to
+  open-ended reasoning or agentic work - and are gated only by a cache TTL
+  rather than by user action, meaning they can be called relatively often.
+  That combination (low task complexity, moderate call frequency, cost-
+  sensitive) is exactly the profile the cheapest current Claude model fits;
+  see `ClaudeInsightServiceImpl` for the up-to-date model-selection
+  reasoning (verified against current Anthropic documentation rather than
+  assumed from training data, since model names/availability change).
+- **Two Redis cache regions beyond the existing global `TRAINER_CACHE`
+  default, each with a different invalidation strategy - not one shared AI
+  cache.** `RedisConfig` adds `MANAGER_INSIGHTS_CACHE` (30 min TTL, longer
+  than the 10 min global default: it summarizes slow-changing historical
+  data - room check-in history, payments - and every miss is a paid Claude
+  call, so a longer TTL directly cuts cost) and
+  `CLIENT_PROGRESS_INSIGHT_CACHE` (kept at the 10 min global default, but
+  invalidated explicitly - `ClientProgressEntryServiceImpl.create` evicts
+  the cache entry for that client's id whenever a new progress entry is
+  recorded, since a stale narrative that ignores a just-entered measurement
+  is a worse failure mode than a few extra Claude calls). Manager insights
+  has an additional `POST /api/insights/manager/refresh` that regenerates
+  and re-populates the cache immediately (for "I just want to see the latest
+  now" on the manager dashboard); the progress narrative relies on its
+  automatic per-entry eviction instead; a fresh call after eviction
+  naturally repopulates it.
+- **`ManagerInsightsServiceImpl`/`ClientProgressInsightServiceImpl` avoid
+  Spring AOP self-invocation caching bugs with two different, deliberate
+  patterns** - worth documenting because getting this wrong silently breaks
+  caching with no compile or runtime error. Manager insights uses
+  `@Cacheable` on the public `getInsights()` method (always called through
+  the Spring proxy from the controller) and a *separate* `refreshInsights()`
+  method that evicts+regenerates+re-populates via an injected `CacheManager`
+  directly, calling the same private `generateInsights()` helper as
+  `getInsights()` - neither cached method ever calls the other internally.
+  Client progress insight instead does the cache lookup/populate manually
+  with `CacheManager` inside a single method (no `@Cacheable` annotation at
+  all), specifically so `getMySummary()` can delegate to `getSummary(id)` as
+  a plain Java call and still get caching, instead of needing to go back
+  through the proxy (self-invocation on an annotated method silently skips
+  the annotation - a well-known Spring AOP pitfall that produces no error,
+  just a cache that never hits).
+- **Manager-insights "revenue" is a paid-appointment-count proxy, not
+  currency.** The schema has no per-session price field anywhere
+  (`Session`/`Payment` have no `amount`/`price` column - see `Payment`/
+  `Session` entities), so `ManagerInsightsServiceImpl` aggregates paid
+  appointments purchased per `SessionType` from `Payment` and labels it
+  explicitly as a proxy in both the code comment and the prompt sent to
+  Claude ("proxy for revenue - the schema has no per-session price"), so the
+  model doesn't fabricate a currency figure it was never given. Adding real
+  pricing is a schema change and out of scope for this phase.
+- **Client progress-tracking CRUD follows the existing trainer-writes/
+  client-reads-own-data split**, mirroring `AppointmentController`'s
+  `reserve`/`cancel` pattern for resolving "the current client" from the JWT
+  (`SecurityContextHolder` + `Jwt.getClaim("email")` +
+  `ClientRepository.findByUserEmail`) rather than introducing a new shared
+  abstraction - kept consistent with how `AppointmentServiceImpl` already
+  does this, duplication and all, per the existing convention.
+- **Verified end-to-end on this branch**, against a fresh Postgres/Redis
+  volume: `mvn compile` succeeds; the app starts cleanly; a full flow was
+  exercised over HTTP - created a `Gym` and a `Room`, checked a client into
+  the room, confirmed `GET /api/gym/occupancy` reflected it, confirmed a
+  second check-in for the same client returns `409` with a message,
+  checked the client back out, confirmed occupancy returned to zero, and
+  created a `ClientProgressEntry` and a `ClientPersonalRecord`. **Not
+  verified**: an actual Claude API response. `ANTHROPIC_API_KEY` was not set
+  in the session this branch was developed in, so
+  `GET /api/insights/manager` was only confirmed to fail with the intended,
+  explicit `IllegalStateException` ("ANTHROPIC_API_KEY is not set...") - not
+  to fail silently, not mocked - rather than to actually call Claude; the
+  request/response wiring against the Anthropic SDK could not be exercised
+  live. Whoever has a real key configured should do that one check before
+  relying on this phase's AI features in anger.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -391,5 +551,19 @@ either upgrade session to pick up:
   decisions" above for every design choice and its rationale. Verified with a
   full migration run against a fresh Postgres volume and a normal app
   startup; no existing files' behavior changed.
+- 2026-08-05: Upgrade Phase 2, service layer + API (`upgrade/claude-code`
+  branch). Wired Phase 1's tables into gym/room CRUD, room check-in/
+  occupancy (with WebSocket broadcast on `/topic/gym/occupancy`, both event-
+  driven and via a new `OccupancyScheduler`), AI manager insights, and
+  client progress-tracking CRUD + AI narrative summary - see "Upgrade:
+  service layer decisions" above for every design choice and its rationale.
+  Added the `anthropic-java` SDK dependency and `AnthropicConfig`. No new
+  migrations needed. Verified end-to-end over HTTP against a fresh Postgres/
+  Redis volume (gym/room CRUD, check-in/check-out including the 409 conflict
+  path, occupancy computation, progress entry/record creation); the AI
+  endpoints' Claude API call itself was not exercised live -
+  `ANTHROPIC_API_KEY` was unset in the development session, so only the
+  intended explicit failure path was confirmed (see "Upgrade: service layer
+  decisions" for detail). No existing files' behavior changed.
 
 ## Imported Claude Cowork project instructions

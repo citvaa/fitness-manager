@@ -1,6 +1,7 @@
 package com.example.demo.service.impl.notification;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.gym.RoomOccupancyDTO;
 import com.example.demo.dto.notification.TrainerAssignmentNotificationDTO;
 import com.example.demo.dto.notification.ClientAppointmentReminderNotificationDTO;
 import com.example.demo.dto.notification.TrainerScheduleNotificationDTO;
@@ -79,5 +80,10 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendClientUpcomingAppointmentNotification(@NotNull Client client, AppointmentDTO appointment) {
         String jsonPayload = JsonUtil.convertToJson(new ClientUpcomingAppointmentNotificationDTO(appointment));
         messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+    }
+
+    public void sendGymOccupancyUpdate(List<RoomOccupancyDTO> occupancies) {
+        String jsonPayload = JsonUtil.convertToJson(occupancies);
+        messagingTemplate.convertAndSend("/topic/gym/occupancy", jsonPayload);
     }
 }

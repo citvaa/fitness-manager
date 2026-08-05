@@ -20,6 +20,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
 
     List<Appointment> findByStartTimeBetweenAndDate(LocalTime startTime, LocalTime startTime2, LocalDate date);
 
+    /** Appointments in a room that are currently in progress (used for computed room occupancy). */
+    List<Appointment> findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(Integer roomId, LocalDate date, LocalTime now1, LocalTime now2);
+
     @EntityGraph(attributePaths = {
             "trainer",
             "clientAppointments.client.user.userRoles",

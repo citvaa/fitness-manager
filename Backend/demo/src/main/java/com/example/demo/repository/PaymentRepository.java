@@ -8,10 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.util.List;
+
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Modifying
     @Query("DELETE FROM Payment p WHERE p.client.user = :user")
     void deleteByUser(@Param("user") User user);
+
+    /** Payments since a date - used for the AI manager-insights revenue-proxy aggregation. */
+    List<Payment> findByPaymentDateAfter(LocalDate since);
 }
