@@ -556,9 +556,17 @@ either upgrade session to pick up:
 - `forgot-password`/`reset-password` endpoints are not excluded from
   `JwtInterceptor`/`RoleInterceptor`, effectively making them unreachable
   without an existing valid JWT.
-- `POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`,
-  so refreshing requires a currently-valid access token - unusual for a
-  refresh endpoint, whose point is normally to work *after* expiry.
+- ~~`POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`~~
+  **Fixed 2026-08-06** (`upgrade/claude-code` branch, frontend-upgrade
+  session): added `/api/user/login-refresh` to the `excludePathPatterns` list
+  for both `JwtInterceptor` and `RoleInterceptor` in `WebConfig`, same
+  pattern as `/api/user/login`. This endpoint's entire purpose is to work
+  *after* the access token has expired, so requiring a currently-valid
+  access token to reach it was self-defeating - the frontend's silent-
+  refresh flow depends on this working. Verified with `curl`: logged in,
+  then called `login-refresh` with only the refresh token (no
+  `Authorization` header at all) and got `200` with a fresh access token,
+  where it would previously have 401'd.
 - Refresh tokens have no rotation and no server-side revocation.
 - `AuditorAwareImpl` always returns empty (see Audit section above) -
   `createdBy`/`updatedBy` are effectively dead columns.
