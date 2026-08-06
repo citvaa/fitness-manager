@@ -735,6 +735,145 @@ above - comparison material for the thesis, not just an internal note.
   `password123`) returned `200` from `POST /api/user/login` immediately
   after, with no manual database step in between.
 
+Phase 4 of the upgrade (`upgrade/claude-code` branch) filled in the two
+placeholder role areas and added the MANAGER AI-insights screen: manager AI
+insights (new screen), trainer progress-tracking (replacing
+`TrainerPlaceholderPage`), and read-only client progress-tracking (replacing
+`ClientPlaceholderPage`). Same spirit as the sections above - documenting the
+non-obvious decisions as comparison material.
+
+- **One backend change, scoped exactly as the task brief allowed: `GET
+  /api/trainer/me/clients`.** No "my clients" endpoint existed anywhere
+  (checked `TrainerController`/`ClientController`/`AppointmentController`
+  before adding anything). Added `TrainerService.getMyClients()` +
+  `ClientAppointmentRepository.findDistinctClientsByAppointmentTrainerId`,
+  reusing the exact trainer-from-JWT-email pattern already used by
+  `AppointmentServiceImpl`/`TrainerClientAccessGuard`, and returning the
+  existing lightweight `ClientSummaryDTO` (`{id, email}`) rather than the
+  heavier `ClientDTO` - the trainer progress screen only needs an id to pass
+  to the existing `/client/{clientId}` progress endpoints and a label to
+  show in the sidebar list, so the heavier DTO (payments, session trackings,
+  appointments) would have been unused payload. `@RoleRequired("TRAINER")`
+  only (not `MANAGER` too) - a manager isn't "a trainer" and has no
+  equivalent "my clients" concept; the manager area has no analogous list
+  screen in this phase.
+  - **Hit and fixed a real PostgreSQL-specific bug while verifying this
+    endpoint, not just a Java compile error.** The first version of the
+    query (`select distinct ca.client from ClientAppointment ca ... order by
+    ca.client.id`) compiled fine and passed `mvn compile`, but failed at
+    runtime with `ERROR: for SELECT DISTINCT, ORDER BY expressions must
+    appear in select list` - Hibernate translated `ca.client.id` to the
+    `client_appointment.client_id` join column, which isn't part of the
+    projected column list when the select list is the joined `Client`
+    entity's own columns (PostgreSQL requires exact expression identity
+    between `SELECT DISTINCT` and `ORDER BY`, even when the two columns hold
+    provably identical values). Fixed by selecting `Client` as the root
+    (`select distinct c from Client c join c.clientAppointments ca where
+    ca.appointment.trainer.id = :trainerId order by c.id`) so the order-by
+    expression is unambiguously the same column as the projection. Caught
+    only because this session actually ran the endpoint against Postgres
+    during manual QA rather than stopping at a clean compile - worth calling
+    out since it's exactly the kind of bug `mvn compile`/unit tests without
+    a real database would never surface.
+- **AI insights screen renders the narrative as plain paragraphs split on
+  newlines, not as parsed Markdown.** `ManagerInsightsDTO.insightText` (and
+  `ClientProgressInsightDTO.narrative`, reused by the same rendering
+  approach on both progress screens) is a Claude-generated prose string with
+  no guaranteed Markdown syntax - the system prompts (see
+  `ClaudeInsightServiceImpl`/`ManagerInsightsServiceImpl`) ask for plain
+  readable text, not Markdown. Splitting on blank lines into `<p>` tags is
+  therefore both simpler and more correct than pulling in a Markdown
+  renderer dependency (`react-markdown` or similar) for a format the
+  backend was never asked to produce.
+- **"Regeneriši"/"Osveži" behave differently on the two AI screens, and this
+  is a deliberate consequence of the Phase 2 caching design, not an
+  inconsistency to fix.** The manager insights screen's "Regeneriši" button
+  calls the real force-refresh endpoint (`POST /api/insights/manager/
+  refresh`, `MANAGER_INSIGHTS_CACHE`'s manual evict+repopulate path) and is
+  guaranteed to show newly generated text. The progress-narrative panel's
+  "Osveži" button (shared by both the trainer and client progress screens)
+  has no equivalent backend endpoint to call - per the Phase 2 design,
+  `CLIENT_PROGRESS_INSIGHT_CACHE` is invalidated only as a side effect of
+  `ClientProgressEntryServiceImpl.create` (a new measurement), not on
+  personal-record creation and not on demand - so "Osveži" there just
+  re-fetches `GET /api/progress/insight/...`, which can legitimately return
+  the same cached text if nothing has evicted it yet. Verified this exact
+  behavior during manual QA: adding a progress entry for a client produced a
+  freshly generated narrative that referenced the new measurements; adding a
+  personal record immediately afterward and clicking "Osveži" correctly
+  still showed the pre-record narrative (10-minute TTL not yet expired,
+  record creation doesn't evict) - this is the documented Phase 2 trade-off
+  surfacing in the UI, not a bug in this phase's frontend work. Adding a
+  force-refresh endpoint for progress insights (mirroring the manager one)
+  would be a reasonable follow-up but is a backend behavior change beyond
+  what this phase's task brief scoped as "the existing endpoint."
+- **Trainer and client progress screens share every display component
+  (`ProgressCharts`, `PersonalRecordsList`, `InsightPanel`) and only the
+  page-level component differs** (`TrainerProgressPage` adds the client
+  picker sidebar and the two input forms; `ClientProgressPage` is read-only
+  and resolves "which client" from the JWT via the existing `/me` endpoints
+  instead of a `clientId` prop) - same reasoning as the Phase 2 backend's
+  read-DTO/write-request split: keep the read-side rendering identical
+  regardless of who's looking, and isolate the role difference to
+  presence/absence of the write forms, rather than forking the chart/list
+  components per role.
+- **Two Recharts `LineChart`s per client, not one.** `weightKg`/
+  `bodyFatPercent` (roughly 0-100 in magnitude) and the five circumference
+  measurements (roughly 20-120 cm) share plausible Y-axis ranges with each
+  other but would visually flatten out a single combined chart's scale
+  differences less usefully than two purpose-grouped charts ("Telesna masa i
+  procenat masti" / "Obimi tela"); this also keeps the legend for each chart
+  short enough to read at a glance. `connectNulls` is set on every line
+  since any of the seven `ClientProgressEntryDTO` measurement fields can be
+  `null` per entry (see the Phase 1 schema decision to keep them nullable
+  columns) - without it, a single missing measurement on one date would
+  break the line into disconnected segments either side of that point.
+- **Personal records: a flat exercise-name list, not grouped/charted per
+  exercise.** `ClientPersonalRecordDTO.exerciseName` is free text (see the
+  Phase 1 schema decision), so there's no fixed vocabulary to group or chart
+  against - a client doing "Bench press" once and "5km run" once would
+  produce two incomparable single-point series if charted. A simple
+  reverse-chronological list (exercise, value+unit, date, notes) was judged
+  more honest to the data shape than a chart implying trend data that isn't
+  there yet for most exercises.
+- **Dev-data migration `V1.0018__insert_dev_client_trainer_appointment.sql`**
+  adds one `Appointment` + `ClientAppointment` row linking the seeded `ogi`
+  (TRAINER) and `citva` (CLIENT) accounts, guarded with `WHERE NOT EXISTS`
+  per the `V1.0016` precedent. Without this, a freshly cloned dev database
+  has trainer `ogi` with zero clients in "Moji klijenti" until a real
+  appointment/reservation flow is exercised by hand first - this migration
+  makes the trainer progress screen immediately testable after a fresh
+  clone, the same motivation as `V1.0016` did for the floor plan. Looked up
+  by email (`WHERE u.email = 'ogi'`/`'citva'`) rather than hardcoding ids 1/1
+  so it stays correct even if row insertion order ever changes.
+  During this phase's own manual QA, the link was first created with an
+  ad-hoc direct `INSERT` against the running dev database (to unblock
+  testing immediately) and then replaced with this proper guarded migration
+  in the same session, the same "shortcut now, fix immediately after"
+  pattern the Phase 3 password fix used - verified that re-running the app
+  against the now-populated database applied `V1.0018` as a clean no-op
+  (Flyway log: "Successfully applied 1 migration ... now at version
+  v1.0018"), i.e. the guard correctly detected the existing row and skipped
+  the insert.
+- **Verified end-to-end in this phase**: `mvn compile` clean; `tsc -b` clean
+  with zero errors; backend restarted against the existing dev Postgres/
+  Redis volume with `ANTHROPIC_API_KEY` exported from `.env`. Manual QA over
+  the real running app (screenshots in `docs/browser-qa/phase4-*.jpg`):
+  logged in as `admin` (MANAGER), opened the new "AI uvid" screen, confirmed
+  it rendered a genuinely Claude-generated narrative grounded in real
+  check-in/payment data with a real `generatedAt` timestamp, then clicked
+  "Regeneriši" and confirmed (via `read_network_requests`) a real `POST
+  /api/insights/manager/refresh` fired and returned a new timestamp and
+  freshly generated text. Logged in as `ogi` (TRAINER), confirmed "Moji
+  klijenti" listed `citva` (after adding/fixing the dev-data migration
+  above), entered a real progress measurement and a real personal record
+  through the form, and confirmed both immediately appeared in the charts/
+  list without a page reload. Logged in as `citva` (CLIENT), confirmed the
+  read-only screen showed the exact same measurement/record/AI-narrative
+  data the trainer had just entered, with no input forms present. No
+  existing files' runtime behavior changed other than the new
+  `/api/trainer/me/clients` endpoint.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -869,5 +1008,25 @@ either upgrade session to pick up:
   run, and all three accounts logged in successfully immediately after with
   no manual database step. See "Upgrade: frontend decisions" above for the
   full rationale.
+- 2026-08-06: Upgrade Phase 4 (`upgrade/claude-code` branch) - filled in the
+  two remaining placeholder role areas and added the MANAGER AI-insights
+  screen: a new `GET /api/insights/manager`-backed "AI uvid" page with a
+  working "Regeneriši" force-refresh button; a real trainer progress-
+  tracking screen (`TrainerProgressPage`, replacing `TrainerPlaceholderPage`)
+  with a client list, new-measurement/new-personal-record forms, Recharts
+  progress charts, a records list, and the AI narrative summary; and a
+  read-only client progress-tracking screen (`ClientProgressPage`, replacing
+  `ClientPlaceholderPage`) showing the same data via the `/me` endpoints. One
+  scoped backend addition: `GET /api/trainer/me/clients` (plus the dev-data
+  migration `V1.0018` seeding one trainer-client appointment link so the
+  screen has data immediately on a fresh clone) - see "Upgrade: frontend
+  decisions" above for every design choice, the PostgreSQL `SELECT DISTINCT`/
+  `ORDER BY` bug hit and fixed while verifying the new endpoint, and the full
+  manual QA record (`docs/browser-qa/phase4-*.jpg`). Added `recharts` as a
+  new frontend dependency. `mvn compile` and `tsc -b` both clean; verified
+  end-to-end against the existing dev Postgres/Redis volume with a real
+  `ANTHROPIC_API_KEY`-backed Claude call for both AI screens (manager
+  insights force-refresh and the trainer/client progress narrative). No
+  existing files' runtime behavior changed other than the new endpoint.
 
 ## Imported Claude Cowork project instructions
