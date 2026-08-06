@@ -873,6 +873,21 @@ non-obvious decisions as comparison material.
   data the trainer had just entered, with no input forms present. No
   existing files' runtime behavior changed other than the new
   `/api/trainer/me/clients` endpoint.
+- **Follow-up fix: both AI prompts now explicitly ask Claude to respond in
+  Serbian.** Neither `ManagerInsightsServiceImpl.SYSTEM_PROMPT` nor
+  `ClientProgressInsightServiceImpl.SYSTEM_PROMPT` said anything about
+  output language, and Claude defaulted to English - jarring next to a UI
+  that's entirely Serbian. Added one line to each prompt ("Respond in
+  Serbian (srpski jezik) - the rest of the application's UI is in Serbian,
+  so the summary must be too") rather than post-processing/translating the
+  response client-side or server-side, since the model can write natural
+  Serbian directly and translating a second time would be both slower and
+  lossier. Verified with real regenerate calls on both endpoints after the
+  prompt change - `POST /api/insights/manager/refresh` and a cache-expired
+  `GET /api/progress/insight/client/{id}` both returned genuinely Serbian
+  prose (screenshots `docs/browser-qa/phase4-05-*`/`phase4-06-*`). No DTO or
+  frontend change needed - `insightText`/`narrative` were always
+  freeform strings.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -1028,5 +1043,12 @@ either upgrade session to pick up:
   `ANTHROPIC_API_KEY`-backed Claude call for both AI screens (manager
   insights force-refresh and the trainer/client progress narrative). No
   existing files' runtime behavior changed other than the new endpoint.
+- 2026-08-06: Follow-up to Phase 4 (`upgrade/claude-code` branch) - both AI
+  prompts (`ManagerInsightsServiceImpl`, `ClientProgressInsightServiceImpl`)
+  were generating English text despite the rest of the UI being Serbian.
+  Added an explicit "respond in Serbian" instruction to each system prompt -
+  see "Upgrade: frontend decisions" above. Verified with real regenerate
+  calls on both endpoints; screenshots in `docs/browser-qa/phase4-05-*`/
+  `phase4-06-*`. No DTO/frontend changes needed.
 
 ## Imported Claude Cowork project instructions

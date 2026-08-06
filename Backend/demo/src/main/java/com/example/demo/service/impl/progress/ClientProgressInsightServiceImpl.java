@@ -49,6 +49,8 @@ public class ClientProgressInsightServiceImpl implements ClientProgressInsightSe
             (3-5 sentence) narrative summary of their progress and one concrete, encouraging
             recommendation for what to focus on next. Do not invent numbers beyond what is given.
             No markdown, plain prose only.
+            Respond in Serbian (srpski jezik) - the rest of the application's UI is in Serbian,
+            so the summary must be too.
             """;
 
     private final ClientRepository clientRepository;

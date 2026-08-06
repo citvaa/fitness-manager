@@ -43,6 +43,8 @@ public class ManagerInsightsServiceImpl implements ManagerInsightsService {
             over the last %d days. Write a short (4-6 sentence) plain-text summary highlighting
             the most notable pattern(s) and one concrete, actionable recommendation. Do not
             invent numbers beyond what is given. No markdown, no headings, plain prose only.
+            Respond in Serbian (srpski jezik) - the rest of the application's UI is in Serbian,
+            so the summary must be too.
             """.formatted(PERIOD_DAYS);
 
     private final RoomRepository roomRepository;
