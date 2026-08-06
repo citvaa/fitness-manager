@@ -27,6 +27,18 @@ export const ROOM_TYPE_LABEL: Record<RoomType, string> = {
   OTHER: 'Ostalo',
 }
 
+// Used on the live floor-plan tiles (LiveFloorPlanPage) next to the room
+// name - plain emoji, not an icon-font/SVG set, to keep this dependency-free.
+export const ROOM_TYPE_ICON: Record<RoomType, string> = {
+  WORKOUT_FLOOR: '🏋️',
+  STUDIO: '🧘',
+  POOL: '🏊',
+  LOCKER_ROOM: '🧺',
+  RECEPTION: '🛎️',
+  OFFICE: '💼',
+  OTHER: '📍',
+}
+
 export interface GymSummary {
   id: number
   name: string

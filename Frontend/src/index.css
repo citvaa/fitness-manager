@@ -28,3 +28,27 @@ body {
   color: #e6e9f0;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
+
+/*
+ * Breathing glow for room tiles at/near capacity on the live floor plan
+ * (LiveFloorPlanPage). A custom keyframe rather than Tailwind's
+ * `animate-pulse` because that one fades the whole tile's opacity, which
+ * makes the occupancy text harder to read while it's exactly the number
+ * you most want visible - this only breathes the box-shadow intensity.
+ * `--glow-color` is set per-tile via inline style (occupancy ring color).
+ */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--glow-color) 45%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 30px color-mix(in srgb, var(--glow-color) 75%, transparent),
+      0 0 12px color-mix(in srgb, var(--glow-color) 95%, transparent);
+  }
+}
+
+.glow-pulse {
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}

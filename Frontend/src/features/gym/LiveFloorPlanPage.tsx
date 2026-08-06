@@ -2,10 +2,16 @@ import { useEffect, useState } from 'react'
 import { listRooms } from './api'
 import { useOccupancySocket } from './useOccupancySocket'
 import type { RoomDTO, RoomOccupancyDTO } from './types'
-import { ROOM_TYPE_LABEL } from './types'
+import { ROOM_TYPE_ICON, ROOM_TYPE_LABEL } from './types'
+import { useAnimatedNumber } from '../../lib/useAnimatedNumber'
 import clsx from 'clsx'
 
 const PX_PER_UNIT = 20
+
+// A tile glows/breathes once it's this close to capacity, not only once it
+// hits 100% - "blizu punog kapaciteta" from the design brief, not just
+// "puno".
+const NEAR_CAPACITY_PERCENT = 85
 
 function occupancyColor(percent: number, atCapacity: boolean) {
   if (atCapacity || percent >= 100) return { bg: 'rgba(239,68,68,0.35)', ring: '#ef4444' }
@@ -17,40 +23,63 @@ function occupancyColor(percent: number, atCapacity: boolean) {
 function RoomTile({ room, occ }: { room: RoomDTO; occ: RoomOccupancyDTO | undefined }) {
   const percent = occ?.occupancyPercent ?? 0
   const atCapacity = occ?.atCapacity ?? false
+  const isNearCapacity = atCapacity || percent >= NEAR_CAPACITY_PERCENT
   const { bg, ring } = occupancyColor(percent, atCapacity)
   const count = occ?.totalOccupancy ?? 0
+
+  // Tween both the headcount and the percent so they visibly count up/down
+  // on every WebSocket update instead of snapping straight to the new value.
+  const animatedCount = useAnimatedNumber(count)
+  const animatedPercent = useAnimatedNumber(percent)
+  const barWidth = Math.min(Math.max(animatedPercent, 0), 100)
 
   return (
     <div
       className={clsx(
-        'absolute flex flex-col justify-between rounded-xl border-2 p-3 shadow-lg backdrop-blur-sm transition-all duration-700 ease-out',
-        atCapacity && 'animate-pulse',
+        'absolute flex flex-col justify-between rounded-xl border-2 p-3 shadow-lg backdrop-blur-sm transition-colors transition-shadow duration-700 ease-out',
+        isNearCapacity && 'glow-pulse',
       )}
-      style={{
-        left: room.posX * PX_PER_UNIT,
-        top: room.posY * PX_PER_UNIT,
-        width: room.width * PX_PER_UNIT,
-        height: room.height * PX_PER_UNIT,
-        transform: `rotate(${room.rotationDegrees}deg)`,
-        backgroundColor: bg,
-        borderColor: ring,
-        boxShadow: atCapacity ? `0 0 24px ${ring}66` : `0 0 0px transparent`,
-      }}
+      style={
+        {
+          left: room.posX * PX_PER_UNIT,
+          top: room.posY * PX_PER_UNIT,
+          width: room.width * PX_PER_UNIT,
+          height: room.height * PX_PER_UNIT,
+          transform: `rotate(${room.rotationDegrees}deg)`,
+          backgroundColor: bg,
+          borderColor: ring,
+          '--glow-color': ring,
+        } as React.CSSProperties
+      }
     >
       <div>
-        <p className="truncate text-sm font-semibold text-slate-100">{room.name}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-slate-100">
+          <span aria-hidden>{ROOM_TYPE_ICON[room.type]}</span>
+          <span className="truncate">{room.name}</span>
+        </p>
         <p className="text-[11px] uppercase tracking-wide text-slate-400">
           {ROOM_TYPE_LABEL[room.type]}
         </p>
       </div>
-      <div className="flex items-end justify-between">
-        <span
-          className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums text-white transition-colors duration-700"
-          style={{ backgroundColor: ring }}
-        >
-          {count}/{room.capacity}
-        </span>
-        <span className="text-xs text-slate-400">{Math.round(percent)}%</span>
+
+      <div>
+        <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
+          <div
+            className="h-full rounded-full transition-[width] duration-700 ease-out"
+            style={{ width: `${barWidth}%`, backgroundColor: ring }}
+          />
+        </div>
+        <div className="flex items-end justify-between">
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums text-white transition-colors duration-700"
+            style={{ backgroundColor: ring }}
+          >
+            {Math.round(animatedCount)}/{room.capacity}
+          </span>
+          <span className="text-xs tabular-nums text-slate-400">
+            {Math.round(animatedPercent)}%
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -77,7 +106,7 @@ export function LiveFloorPlanPage() {
         <div>
           <h1 className="text-lg font-semibold text-slate-100">Plan teretane — uživo</h1>
           <p className="text-sm text-slate-500">
-            Boja i broj ljudi po sali ažuriraju se u realnom vremenu.
+            Boja, traka i broj ljudi po sali ažuriraju se u realnom vremenu.
           </p>
         </div>
 
@@ -107,7 +136,7 @@ export function LiveFloorPlanPage() {
         <Legend color="#334155" label="Slobodno" />
         <Legend color="#22c55e" label="Nizak broj ljudi" />
         <Legend color="#f59e0b" label="Popunjeno &gt;60%" />
-        <Legend color="#ef4444" label="Pun kapacitet" />
+        <Legend color="#ef4444" label="Blizu/pun kapacitet" glow />
       </div>
 
       <div
@@ -127,10 +156,13 @@ export function LiveFloorPlanPage() {
   )
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({ color, label, glow }: { color: string; label: string; glow?: boolean }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+      <span
+        className={clsx('h-2.5 w-2.5 rounded-full', glow && 'glow-pulse')}
+        style={{ backgroundColor: color, '--glow-color': color } as React.CSSProperties}
+      />
       {label}
     </span>
   )
