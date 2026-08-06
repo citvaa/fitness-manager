@@ -338,6 +338,11 @@ deliberately deferred to the following phase.
   The accepted trade-off is exposure to successful XSS; the UI does not render
   untrusted HTML and a production hardening phase should prefer HttpOnly secure
   cookies if the backend auth contract is changed accordingly.
+- **Login treats the backend `email` field as an identifier string.** Existing
+  dev accounts include the username-like value `admin`, so the login control
+  uses `type="text"` with `inputMode="email"` instead of native `type="email"`;
+  otherwise browser constraint validation prevents the seeded manager login
+  before the request reaches the backend.
 - **Multi-role users choose an active area.** All roles from the JWT remain
   available in a role switcher; the last valid active role persists with the
   session. `MANAGER` enters the live plan, while `TRAINER` and `CLIENT` enter
@@ -355,6 +360,9 @@ deliberately deferred to the following phase.
   layout for another resolution. React-Konva provides editor transforms;
   ordinary positioned DOM elements render the live view because CSS transitions
   produce smoother occupancy color/count motion and keep room content accessible.
+  Konva `Layer` children are emitted through a single array expression because
+  literal JSX whitespace becomes an invalid text node in React-Konva and can
+  prevent the canvas from rendering under React 19.
 - **Live state is REST-first, then STOMP snapshots.** The page fetches
   `GET /api/gym/occupancy` for deterministic initial render, subscribes to
   `/topic/gym/occupancy`, and replaces its complete snapshot on each message.
@@ -449,3 +457,6 @@ either upgrade session to pick up:
 - 2026-08-06: Upgrade Phase 3 manager frontend (`upgrade/codex`). Added the
   React/Vite auth and multi-role shell, React-Konva room editor, animated
   REST/STOMP live occupancy plan, and dev-only Momentum Fitness floor-plan seed.
+- 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
+  browser runtime and changed the login identifier control so the seeded
+  `admin` manager account can submit through native browser validation.

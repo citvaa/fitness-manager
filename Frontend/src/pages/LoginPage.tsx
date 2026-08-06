@@ -36,7 +36,7 @@ export function LoginPage() {
       <form onSubmit={submit} className="login-form">
         <p className="eyebrow">Dobro došli nazad</p><h2>Prijavite se</h2>
         <p className="muted">Unesite podatke svog Fitness Manager naloga.</p>
-        <label>Email adresa<input autoFocus required type="email" value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="ime@teretana.rs" /></label>
+        <label>Email ili korisničko ime<input autoFocus required type="text" inputMode="email" autoComplete="username" value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="ime@teretana.rs" /></label>
         <label>Lozinka<input required type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="••••••••" /></label>
         {error && <div className="form-error" role="alert">{error}</div>}
         <button className="primary-button" disabled={loading}>{loading ? 'Prijavljivanje…' : 'Uđi u GymOS'}<span>→</span></button>
