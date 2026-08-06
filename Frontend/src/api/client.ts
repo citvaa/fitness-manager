@@ -8,7 +8,7 @@ export const api = axios.create({ baseURL: API_URL })
 const publicClient = axios.create({ baseURL: API_URL })
 let refreshPromise: Promise<string> | null = null
 
-async function refreshAccessToken(): Promise<string> {
+export async function refreshAccessToken(): Promise<string> {
   if (refreshPromise) return refreshPromise
   const refreshToken = currentSession()?.refreshToken
   if (!refreshToken) throw new Error('Nema aktivne sesije')

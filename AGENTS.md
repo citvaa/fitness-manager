@@ -330,6 +330,8 @@ deliberately deferred to the following phase.
   larger query-state abstraction for the handful of endpoints in this phase.
   Axios is the single REST client and centralizes bearer injection, pre-expiry
   refresh, one shared in-flight refresh request, and a single 401 retry.
+  A session timer also refreshes one minute before JWT expiry even while the
+  UI is idle; protected API requests perform the same check as a fallback.
 - **Tokens use browser local storage for this thesis-scale SPA.** It provides
   session persistence across refreshes and allows the frontend to use the
   backend's existing bearer-token contract without a backend cookie change.
@@ -347,6 +349,25 @@ deliberately deferred to the following phase.
   A small tokenized CSS system provides the dark botanical/lime GymOS identity,
   responsive shell, motion, and accessible focus/error states with less bundle
   and tighter control over the live-plan presentation.
+- **The plan uses a fixed 1000x620 logical coordinate system.** Both editor and
+  live view scale that surface to the available viewport while persisting only
+  logical coordinates, so dragging/resizing on one screen does not rewrite the
+  layout for another resolution. React-Konva provides editor transforms;
+  ordinary positioned DOM elements render the live view because CSS transitions
+  produce smoother occupancy color/count motion and keep room content accessible.
+- **Live state is REST-first, then STOMP snapshots.** The page fetches
+  `GET /api/gym/occupancy` for deterministic initial render, subscribes to
+  `/topic/gym/occupancy`, and replaces its complete snapshot on each message.
+  The STOMP client reconnects automatically; no parallel frontend polling is
+  added because the backend already broadcasts appointment-boundary changes
+  every minute.
+- **The dev profile seeds a complete demonstration floor plan.** Dev migration
+  `V1.0016__insert_demo_floor_plan.sql` creates one branded Gym and five rooms
+  only after the production schema migrations and only when no Gym row already
+  exists, so an established developer database is never given a second Gym.
+  Production receives no sample
+  location data, while a fresh local database opens immediately into a useful
+  defense-ready plan that remains fully editable through the manager UI.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -425,3 +446,6 @@ either upgrade session to pick up:
   `POST /api/user/login-refresh` a public auth endpoint in both custom
   interceptor registrations so silent refresh continues after access-token
   expiry.
+- 2026-08-06: Upgrade Phase 3 manager frontend (`upgrade/codex`). Added the
+  React/Vite auth and multi-role shell, React-Konva room editor, animated
+  REST/STOMP live occupancy plan, and dev-only Momentum Fitness floor-plan seed.
