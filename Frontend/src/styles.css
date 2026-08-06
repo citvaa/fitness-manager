@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root { font-family:'DM Sans',sans-serif; color:#18221c; background:#f1f4ef; font-synthesis:none; --ink:#101a14; --green:#baf252; --green-deep:#477d17; --line:#dfe5dc; }
+* { box-sizing:border-box }
+body { margin:0; min-width:320px; min-height:100vh }
+button,input,select { font:inherit }
+button { cursor:pointer }
+.eyebrow { margin:0 0 12px; color:#568c21; font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase }
+.muted { color:#78827b }
+.login-page { min-height:100vh; display:grid; grid-template-columns:1.1fr .9fr; background:#f7f8f5 }
+.login-story { position:relative; overflow:hidden; min-height:100vh; padding:44px 7vw; color:#f5f8f4; background:radial-gradient(circle at 75% 15%,#27532f 0,transparent 35%),linear-gradient(145deg,#0b1710,#142a1c 72%,#1c3c25) }
+.login-story:after { content:''; position:absolute; width:560px; height:560px; right:-180px; bottom:-240px; border:1px solid #baf25255; border-radius:50%; box-shadow:0 0 0 80px #baf2520b,0 0 0 160px #baf25208 }
+.brand-mark { display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.02em }
+.brand-mark span,.sidebar-brand>span { display:grid; place-items:center; width:42px; height:42px; color:#14200f; border-radius:13px; background:var(--green); font-size:13px }
+.story-copy { position:relative; z-index:1; max-width:670px; margin-top:23vh }
+.story-copy h1 { margin:0; font:700 clamp(48px,6vw,86px)/.98 'Manrope'; letter-spacing:-.055em }
+.story-copy h1 em { color:var(--green); font-style:normal }
+.story-copy>p:last-child { max-width:560px; margin-top:30px; color:#b8c6bc; font-size:18px; line-height:1.65 }
+.pulse-card { position:absolute; z-index:2; left:7vw; bottom:45px; display:flex; align-items:center; gap:15px; padding:14px 18px; border:1px solid #ffffff1f; border-radius:17px; background:#ffffff0d; backdrop-filter:blur(10px) }
+.pulse-dot { width:12px; height:12px; border-radius:50%; background:var(--green); box-shadow:0 0 0 7px #baf25219; animation:pulse 2s infinite }
+.pulse-card div { display:grid; gap:2px }.pulse-card small { color:#9cac9f }
+.login-panel { display:grid; place-items:center; padding:42px }
+.login-form { width:min(100%,430px) }.login-form h2 { margin:0; font:700 38px 'Manrope'; letter-spacing:-.04em }.login-form>.muted { margin:10px 0 34px }
+.login-form label { display:grid; gap:9px; margin:18px 0; color:#455049; font-size:13px; font-weight:700 }
+.login-form input { width:100%; padding:15px 16px; border:1px solid #d7ded7; border-radius:12px; outline:none; background:white; transition:.2s }
+.login-form input:focus { border-color:#83b83e; box-shadow:0 0 0 4px #baf2522b }
+.form-error { margin:14px 0; padding:12px 14px; color:#8a2828; background:#fff0ef; border-radius:10px; font-size:13px }
+.primary-button { width:100%; margin-top:12px; padding:16px 18px; display:flex; justify-content:center; gap:20px; border:0; border-radius:12px; color:#13200f; background:var(--green); font-weight:800; box-shadow:0 10px 25px #8abf3638; transition:.2s }
+.primary-button:hover { transform:translateY(-1px); background:#c7fb68 }.primary-button:disabled{opacity:.65;cursor:wait}.secure-note { display:block; margin-top:18px; text-align:center; color:#929b94 }
+.app-shell { display:grid; grid-template-columns:250px 1fr; min-height:100vh }
+.sidebar { position:fixed; inset:0 auto 0 0; width:250px; display:flex; flex-direction:column; padding:28px 20px 20px; color:#dce6df; background:#101c15 }
+.sidebar-brand { display:flex; align-items:center; gap:12px; padding:0 8px 30px; font:800 17px 'Manrope' }.sidebar-brand div{display:grid}.sidebar-brand small{color:#748279;font:600 10px 'DM Sans';text-transform:uppercase;letter-spacing:.16em}
+.sidebar nav p { margin:18px 12px 8px; color:#65746a; font-size:10px; font-weight:800; letter-spacing:.15em; text-transform:uppercase }
+.sidebar nav a { display:flex; align-items:center; gap:12px; margin:4px 0; padding:12px 14px; border-radius:10px; color:#9eada3; text-decoration:none; font-size:14px; font-weight:600; transition:.2s }
+.sidebar nav a i { width:22px; color:#75857a; font-style:normal; font-size:18px }.sidebar nav a:hover,.sidebar nav a.active{color:#ecf5ef;background:#203127}.sidebar nav a.active i{color:var(--green)}
+.sidebar-bottom { margin-top:auto }.sidebar-bottom>label{display:grid;gap:7px;margin:10px 8px 18px;color:#7f8e84;font-size:10px;text-transform:uppercase;letter-spacing:.1em}.sidebar select{padding:9px;border:1px solid #33463a;border-radius:8px;color:#e6eee8;background:#1b2a21}
+.profile-chip { display:grid; grid-template-columns:36px 1fr 28px; align-items:center; gap:9px; padding-top:17px; border-top:1px solid #27382e }.profile-chip>span{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;color:#203014;background:var(--green);font-size:11px;font-weight:800}.profile-chip div{display:grid;min-width:0}.profile-chip strong{font-size:12px}.profile-chip small{overflow:hidden;color:#77877c;font-size:10px;text-overflow:ellipsis}.profile-chip button{border:0;color:#88978d;background:none;font-size:18px}
+.main-column { grid-column:2; min-width:0 }.loading-page,.placeholder-page{min-height:100vh;display:grid;place-content:center;text-align:center}.placeholder-page{background:radial-gradient(circle at 50% 40%,#e7f4d3,#f2f5ef 40%)}.placeholder-page h1{margin:0;font:700 48px 'Manrope';letter-spacing:-.04em}.placeholder-page>p:last-child{max-width:470px;color:#6d786f}.placeholder-orbit{width:70px;height:70px;margin:0 auto 25px;display:grid;place-items:center;border-radius:24px;background:var(--green);font-size:30px;transform:rotate(-8deg)}
+@keyframes pulse { 50%{box-shadow:0 0 0 12px transparent} }
+@media(max-width:800px){.login-page{grid-template-columns:1fr}.login-story{display:none}.login-panel{min-height:100vh;padding:28px}.app-shell{display:block}.sidebar{position:static;width:100%;height:auto;padding:14px}.sidebar-brand{padding:0}.sidebar nav{display:flex;margin-top:12px}.sidebar nav p{display:none}.sidebar-bottom{margin-top:12px}.profile-chip{display:none}.main-column{grid-column:auto}}

@@ -313,6 +313,41 @@ STOMP broker. No schema migration was needed for this phase.
   A database-integrity fallback returns HTTP 409. Existing unclassified runtime
   exceptions still use Spring Boot's default response.
 
+## Upgrade: frontend decisions
+
+Phase 3 introduces the first frontend under `Frontend/`, focused on
+authentication and the manager floor-plan experience. AI-insights UI is
+deliberately deferred to the following phase.
+
+- **React 19 + TypeScript + Vite remain the frontend foundation.** The room
+  schema was explicitly designed around React canvas tooling, Vite's default
+  port `5173` already matches the backend CORS configuration, and a client-side
+  SPA is the simplest fit for a live operational dashboard backed entirely by
+  the existing Spring REST/STOMP API. No backend CORS change is required.
+- **State is split by lifetime, with no general-purpose global server cache.**
+  Zustand owns the small durable auth/session state; page-local React state
+  owns editor forms and fetched floor-plan data. This avoids introducing a
+  larger query-state abstraction for the handful of endpoints in this phase.
+  Axios is the single REST client and centralizes bearer injection, pre-expiry
+  refresh, one shared in-flight refresh request, and a single 401 retry.
+- **Tokens use browser local storage for this thesis-scale SPA.** It provides
+  session persistence across refreshes and allows the frontend to use the
+  backend's existing bearer-token contract without a backend cookie change.
+  The accepted trade-off is exposure to successful XSS; the UI does not render
+  untrusted HTML and a production hardening phase should prefer HttpOnly secure
+  cookies if the backend auth contract is changed accordingly.
+- **Multi-role users choose an active area.** All roles from the JWT remain
+  available in a role switcher; the last valid active role persists with the
+  session. `MANAGER` enters the live plan, while `TRAINER` and `CLIENT` enter
+  the Phase 4 placeholder. This is less surprising than silently imposing a
+  fixed role priority and preserves access to every area granted by the JWT.
+- **Visual styling is purpose-built CSS rather than a component kit.** The
+  defense's central artifact is a spatial canvas, so a generic dashboard kit
+  would contribute substantial unused surface and a recognizable stock look.
+  A small tokenized CSS system provides the dark botanical/lime GymOS identity,
+  responsive shell, motion, and accessible focus/error states with less bundle
+  and tighter control over the live-plan presentation.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
