@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { ComingSoonPage } from './pages/ComingSoonPage'
 import { LoginPage } from './pages/LoginPage'
 import { EditorPage } from './pages/EditorPage'
+import { LivePlanPage } from './pages/LivePlanPage'
 
 function ProtectedShell() {
   const session = useAuthStore((state)=>state.session)
@@ -22,7 +23,7 @@ export default function App() {
     <Route path="/app" element={<ProtectedShell />}>
       <Route index element={<RoleHome />} />
       <Route path="coming-soon" element={<ComingSoonPage />} />
-      <Route path="live" element={<div className="loading-page">Učitavanje plana uživo…</div>} />
+      <Route path="live" element={<LivePlanPage />} />
       <Route path="editor" element={<EditorPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/app" replace />} />
