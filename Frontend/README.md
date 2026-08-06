@@ -11,10 +11,15 @@ every other non-obvious choice was made.
 2. `npm install`
 3. `npm run dev` — dev server on `http://localhost:5173` (already allowed by
    the backend's CORS config).
-4. Log in with a dev-seeded account (see `db/dev-data/V1.0009__insert_test_data.sql`
-   for seeded roles; the `admin` MANAGER account's password is not
-   documented in plaintext anywhere in the repo — set one via the database
-   directly for local testing, e.g. a bcrypt hash of a known password).
+4. Log in with a dev-seeded account. **Dev-only credentials, never valid in
+   production** (see `db/dev-data/V1.0017__set_known_dev_test_passwords.sql`
+   - only applied on the `dev` Flyway profile):
+
+   | Email    | Password      | Role    |
+   |----------|---------------|---------|
+   | `admin`  | `password123` | MANAGER |
+   | `ogi`    | `password123` | TRAINER |
+   | `citva`  | `password123` | CLIENT  |
 
 ## Structure
 

@@ -72,10 +72,14 @@ cd Backend/demo
 curl -i http://localhost:8088/v3/api-docs
 
 # 4. End-to-end auth flow: login with a dev-seeded user, then call a
-#    protected endpoint with the returned access token
+#    protected endpoint with the returned access token. Dev-only credentials
+#    (never valid in production) - see
+#    db/dev-data/V1.0017__set_known_dev_test_passwords.sql:
+#    admin/password123 (MANAGER), ogi/password123 (TRAINER),
+#    citva/password123 (CLIENT).
 curl -X POST http://localhost:8088/api/user/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"<dev-seed-email>","password":"<dev-seed-password>"}'
+  -d '{"email":"admin","password":"password123"}'
 
 curl -H "Authorization: Bearer <accessToken from above>" \
   http://localhost:8088/api/calendar?date=2026-08-03

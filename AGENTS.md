@@ -710,11 +710,30 @@ above - comparison material for the thesis, not just an internal note.
   1 with no page reload, then checked out and watched it flip back, purely
   from the `/topic/gym/occupancy` WebSocket push (confirmed both an
   HTTP-loaded initial snapshot and a WebSocket-delivered live update render
-  identically, as intended). The `admin` dev user's password was reset to a
-  known bcrypt hash for this manual testing (dev-only DB row, not a
-  migration change) since no plaintext dev credentials were previously
-  documented anywhere in the repo - worth fixing properly (e.g. documenting
-  a dev login in the README) in a future session.
+  identically, as intended). The manual testing above initially used an
+  ad-hoc `UPDATE "user" SET password = ...` against the running dev database
+  to get a known password for the `admin` account, since V1.0002/V1.0009's
+  bcrypt hashes have no documented plaintext anywhere in the repo - flagged
+  in this file at the time as a shortcut needing a proper fix, and fixed
+  immediately after in the same session (see the next entry below) instead
+  of being left as a follow-up.
+- **Known dev test passwords, done properly as a migration** (`V1.0017__
+  set_known_dev_test_passwords.sql`), replacing the ad-hoc DB `UPDATE` above.
+  Sets the bcrypt hash of a single documented password (`password123`) for
+  all three V1.0009 seeded accounts (`admin`/MANAGER, `ogi`/TRAINER,
+  `citva`/CLIENT) so they're usable immediately after any reset, not just in
+  whatever database happened to have the manual `UPDATE` applied to it. A
+  new file rather than editing `V1.0002`/`V1.0009` directly, per the
+  "don't edit existing migrations" rule - Flyway checksums those as already
+  applied. Plaintext credentials are documented in `Frontend/README.md` and
+  the root `README.md`, both explicitly labeled dev-only/never-production.
+  **Verified against a genuinely fresh volume this time** (the gap called
+  out above): `docker compose down`, deleted `Docker/postgres_data/pgdata`,
+  `docker compose up -d`, started the backend - Flyway applied all 17
+  migrations from empty in one run (confirmed in the startup log, ending at
+  `v1.0017`) - and all three accounts (`admin`/`ogi`/`citva`, password
+  `password123`) returned `200` from `POST /api/user/login` immediately
+  after, with no manual database step in between.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -838,5 +857,17 @@ either upgrade session to pick up:
   with persistence confirmed across a reload, and confirmed a real
   check-in/check-out via `curl` updates the live floor-plan view instantly
   over the WebSocket with no page reload and no console errors.
+- 2026-08-06: Follow-up to Phase 3 (`upgrade/claude-code` branch) - replaced
+  the ad-hoc manual-DB-`UPDATE` password fix mentioned above with a proper
+  dev-data migration, `V1.0017__set_known_dev_test_passwords.sql`, setting
+  a documented known password (`password123`) for the three V1.0009 seeded
+  accounts (`admin`/MANAGER, `ogi`/TRAINER, `citva`/CLIENT). Documented in
+  `Frontend/README.md` and the root `README.md`, explicitly dev-only.
+  Verified against a genuinely fresh Postgres volume this time (`docker
+  compose down`, deleted `Docker/postgres_data/pgdata`, `docker compose up
+  -d`, started the backend): all 17 migrations applied from empty in one
+  run, and all three accounts logged in successfully immediately after with
+  no manual database step. See "Upgrade: frontend decisions" above for the
+  full rationale.
 
 ## Imported Claude Cowork project instructions
