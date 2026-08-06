@@ -1,10 +1,12 @@
 package com.example.demo.service.impl.user;
 
+import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.enums.Role;
 import com.example.demo.mapper.user.TrainerMapper;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.model.user.User;
+import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.service.user.TrainerService;
@@ -18,6 +20,10 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +38,7 @@ public class TrainerServiceImpl implements TrainerService {
     private final TrainerRepository trainerRepository;
     private final TrainerMapper trainerMapper;
     private final TrainerScheduleRepository trainerScheduleRepository;
+    private final ClientAppointmentRepository clientAppointmentRepository;
     private final EntityManager entityManager;
 
     @Transactional
@@ -89,6 +96,20 @@ public class TrainerServiceImpl implements TrainerService {
 
     public List<TrainerDTO> getAll() {
         return trainerMapper.toDto(trainerRepository.findAll());
+    }
+
+    public List<ClientSummaryDTO> getMyClients() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+        String email = jwt.getClaim("email");
+        Trainer trainer = trainerRepository.findByUserEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Trainer not found for the logged-in user!"));
+
+        return clientAppointmentRepository.findDistinctClientsByAppointmentTrainerId(trainer.getId()).stream()
+                .map(client -> new ClientSummaryDTO(client.getId(), client.getUser().getEmail()))
+                .toList();
     }
 
 }

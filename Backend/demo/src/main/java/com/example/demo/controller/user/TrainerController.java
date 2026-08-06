@@ -1,6 +1,7 @@
 package com.example.demo.controller.user;
 
 import com.example.demo.annotation.RoleRequired;
+import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.service.user.TrainerService;
 import com.example.demo.service.params.request.user.trainer.CreateTrainerRequest;
@@ -8,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -40,5 +43,15 @@ public class TrainerController {
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         trainerService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Clients the logged-in trainer has actually trained (shared appointment history) - backs
+     * the trainer progress-tracking client list. See AGENTS.md ("Upgrade: frontend decisions").
+     */
+    @RoleRequired("TRAINER")
+    @GetMapping("/me/clients")
+    public ResponseEntity<List<ClientSummaryDTO>> getMyClients() {
+        return ResponseEntity.ok(trainerService.getMyClients());
     }
 }

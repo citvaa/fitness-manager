@@ -1,5 +1,6 @@
 package com.example.demo.service.user;
 
+import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.service.params.request.user.trainer.CreateTrainerRequest;
 
@@ -15,4 +16,11 @@ public interface TrainerService {
     void delete(Integer id);
 
     List<TrainerDTO> getAll();
+
+    /**
+     * Clients the currently logged-in trainer (resolved from the JWT) has actually trained -
+     * derived from shared appointment history, same ownership notion as
+     * {@code TrainerClientAccessGuard}. Backs the trainer progress-tracking client list.
+     */
+    List<ClientSummaryDTO> getMyClients();
 }
