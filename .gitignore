@@ -11,3 +11,6 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Vuk's local planning doc - not part of either branch's deliverable
+docs/ai-upgrade-plan.md
