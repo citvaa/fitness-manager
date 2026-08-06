@@ -545,6 +545,177 @@ internal note.
   environment; re-running with `.env` actually `source`d fixed it
   immediately, no code change needed.
 
+## Upgrade: frontend decisions
+
+Phase 3 of the upgrade (`upgrade/claude-code` branch) built the actual
+`Frontend/` app from scratch against the Phase 2 API: auth, role-based
+routing/shell, the manager room editor, and the live gym floor plan. This
+section documents the non-obvious decisions, same spirit as the two sections
+above - comparison material for the thesis, not just an internal note.
+
+- **React + TypeScript + Vite, not another framework.** Chosen specifically
+  because the floor-plan editor (item 4/5 of this phase) needs a 2D
+  canvas-with-drag/resize/rotate library, and `react-konva` (a React
+  wrapper around Konva) has first-class support for exactly the rectangle-
+  with-rotation shape `RoomDTO` already models (see "Upgrade: schema
+  decisions" - the rectangle-not-polygon choice pays off directly here: no
+  polygon math needed on the frontend either). Vite over Create React App/
+  Next.js because this is a pure client-rendered SPA talking to an existing
+  REST+WebSocket backend - no server-side rendering or file-based routing
+  requirement that would justify Next.js's extra weight.
+- **Tailwind CSS v4 (`@tailwindcss/vite`), not MUI/shadcn/Chakra.** The live
+  floor-plan view (the "wow" screen) needs bespoke per-room tiles whose
+  color/glow/pulse are driven by live numeric data (occupancy percent,
+  at-capacity flag) - that's easier to hand-roll with utility classes and
+  inline computed styles than to fight a component library's theming API
+  for. A component library would have paid off more for form-heavy CRUD
+  screens (which this phase also has - the room settings sidebar), but one
+  consistent styling approach across the whole app was judged more valuable
+  than mixing Tailwind for the canvas screen with a component library
+  elsewhere.
+- **Zustand for auth state, not Redux/Context.** The only genuinely global,
+  cross-route client state in this phase is the auth session (tokens, decoded
+  user, active role) - a single small store (`auth/store.ts`) with no
+  reducers/actions boilerplate fits that better than Redux, and avoids the
+  re-render-the-whole-tree cost of a plain Context provider wrapping the
+  router (every token refresh would otherwise re-render every consumer).
+  Feature-local state (room list, selected room, occupancy snapshot) is
+  plain `useState`/`useEffect` in the owning component - no global store for
+  data that only one screen ever reads.
+- **JWT decoded client-side (`jwt-decode`), not fetched from a `/me`
+  endpoint.** The access token already carries `sub`/`email`/`roles` (see
+  `JwtUtil` in the Auth flow section above) - decoding it locally avoids an
+  extra round-trip on every login/refresh and matches how the backend
+  itself treats the token as the source of truth for identity/roles
+  (`RoleInterceptor` reads the same claim). No backend endpoint needed to be
+  added for this.
+- **Silent refresh: proactive timer + reactive 401 fallback, both wired to
+  the same `refreshAccessToken()` call, deduplicated with a single in-flight
+  promise.** `auth/RefreshScheduler.tsx` decodes the access token's `exp`
+  and schedules a refresh ~60s before it expires (access tokens live 15 min
+  - see the Auth flow section) so a live WebSocket-driven screen never
+  visibly hits a 401. `lib/http.ts`'s axios response interceptor is the
+  fallback for the case the proactive timer didn't fire yet (e.g. the tab
+  was suspended) - it retries the failed request once after a refresh. Both
+  paths call the same `refreshAccessToken()`, which caches its in-flight
+  promise so concurrent 401s from multiple simultaneous requests trigger
+  exactly one `POST /api/user/login-refresh` call, not one per failed
+  request.
+- **Multi-role handling: a role *switcher* in the sidebar, not simultaneous
+  merged views.** A `User` can hold multiple `UserRole`s (see the Domain
+  model section above). Rather than trying to merge MANAGER+TRAINER+CLIENT
+  content into one screen, the shell exposes one "active role" at a time
+  (`auth/store.ts` `activeRole`, persisted only for the session) with a
+  switcher shown only when `user.roles.length > 1`; routes are gated by
+  active role (`RequireActiveRole`), and each role's nav items and home
+  route are looked up from that single active role. Default active role on
+  login follows a fixed priority (MANAGER > TRAINER > CLIENT) - reasoning:
+  if someone holds the MANAGER role at all, the management screens are
+  almost certainly what they logged in to do; a manager who's also a
+  trainer isn't disadvantaged since they can switch instantly, and this
+  avoids either an extra "pick your role" screen on every login or an
+  arbitrary alphabetical default.
+- **`app.cors.allowed-origins` unchanged (`http://localhost:5173`).** Vite's
+  default dev port was used as-is, so no `application.yaml` edit was needed
+  this phase - noted here per the task brief in case a future phase changes
+  the frontend's dev port and needs to update that value too.
+- **Manager room editor: canvas units are treated as meters, rendered at a
+  fixed 20px/unit scale (`PX_PER_UNIT`).** `RoomDTO`'s `posX/posY/width/
+  height` are unitless `double precision` columns (see "Upgrade: schema
+  decisions") - the frontend imposes "meters" as the working unit purely for
+  human-readable labels in the editor sidebar (e.g. "Š: 6.0m"); nothing
+  backend-side enforces or assumes a unit, so this is a presentation-layer
+  convention only, easy to change without a migration if a future phase
+  wants a different scale or unit.
+- **Room editor persists on drag-end/transform-end, not on every mouse-move
+  frame, and optimistically updates local state before the API call
+  resolves.** Konva's `onDragEnd`/`onTransformEnd` fire once per gesture,
+  not per frame, so this is naturally debounced without extra code; the
+  local `rooms` state is updated synchronously in the same handler that
+  fires the `PUT /api/gym/room/{id}` call, so the shape doesn't visually
+  snap back while the request is in flight. No optimistic-rollback-on-error
+  handling was added (a failed save just leaves the UI ahead of the DB until
+  the next reload) - acceptable for a diplomski-scale internal tool talking
+  to a backend on the same machine/network, revisit if this ever needs to
+  tolerate a flaky connection.
+- **Live floor plan renders with plain positioned `<div>`s + CSS
+  transitions, not a second Konva canvas.** The editor needs Konva for
+  interactive drag/resize/rotate; the live view is read-only and specifically
+  wants smooth *color* transitions on occupancy change (the "wow" requirement
+  in the task brief) - CSS `transition-colors`/`box-shadow`/`animate-pulse`
+  on absolutely-positioned divs gets that essentially for free, whereas
+  animating a Konva `Rect`'s fill smoothly needs manual `Konva.Tween`s. Using
+  two different rendering approaches for two screens that share the same
+  `RoomDTO` geometry was a deliberate trade: simpler code per screen, at the
+  cost of not sharing a single "draw a room" component between them.
+- **Occupancy color thresholds are a frontend-only convention** (0% grey,
+  >0% green, ≥60% amber, `atCapacity`/100% red, matching the legend shown on
+  the live view) - `RoomOccupancyDTO` has no status enum (see "Upgrade:
+  service layer decisions" - it's plain counts/percent/boolean), so these
+  thresholds live in `LiveFloorPlanPage.tsx` only and can be retuned without
+  touching the backend.
+- **WebSocket client uses `@stomp/stompjs` with a raw `ws://` `brokerURL`,
+  no SockJS fallback.** `WebSocketConfig` registers `/ws` without
+  `.withSockJS()` (plain STOMP-over-WebSocket only), so the client connects
+  directly rather than going through the SockJS handshake/fallback protocol
+  - `sockjs-client` was installed anticipating this but turned out to be
+  unnecessary once the actual endpoint registration was checked; left as an
+  unused dependency rather than removed, low priority to clean up.
+- **Occupancy WebSocket payload is parsed with a single `JSON.parse`.**
+  `NotificationServiceImpl.sendGymOccupancyUpdate` sends
+  `JsonUtil.convertToJson(occupancies)` as the STOMP frame body - i.e. the
+  list is serialized to a JSON string once server-side and that string *is*
+  the frame body, not a double-encoded string - so the client does exactly
+  one `JSON.parse(message.body)` to get the `RoomOccupancyDTO[]` array.
+  Verified against a real check-in/check-out over the WebSocket during this
+  phase's manual testing (see below), not just inferred from the source.
+- **No client-side check-in/check-out UI built in this phase.** The task
+  brief explicitly scoped verification of the live view to "manually check
+  in via Swagger/curl while watching the frontend" - front-desk check-in is
+  a `MANAGER`/`TRAINER` action per the Phase 2 decision, but building that
+  screen wasn't asked for in Phase 3 and was left out to keep this phase
+  focused on the floor-plan editor and live view specifically.
+- **TRAINER and CLIENT areas are single placeholder screens
+  (`TrainerPlaceholderPage`/`ClientPlaceholderPage`)** - by explicit
+  instruction, all UI effort in this phase went into the MANAGER area
+  (editor + live view). Both placeholders are already wired into the
+  role-gated routing (`RequireActiveRole`) so the *routing* shape - what
+  role sees what area - is real and won't need rework when their actual
+  content is built in the client-progress-tracking phase; only the page
+  bodies are stubs.
+- **Dev-seed data (`db/dev-data/V1.0016__insert_dev_gym_and_rooms.sql`)
+  guards every insert with `WHERE NOT EXISTS`, unlike `V1.0009`'s
+  unconditional inserts.** Necessary because, unlike the user-seed data
+  `V1.0009` adds (which only ever runs once against an empty table set),
+  this phase's manual testing routinely creates a `Gym`/`Room` through the
+  editor UI *before* this migration might run against that same database -
+  an unconditional insert would leave a duplicate `Gym` row (schema allows
+  it; nothing enforces the "exactly one row" expectation at the DB level,
+  see "Upgrade: schema decisions"). The guard makes the migration a no-op on
+  a database that already has gym data and a real seed on a fresh one.
+  Verified both ways: applied cleanly against this phase's already-populated
+  dev database (correctly skipped both inserts, existing `Test Gym`/
+  `Studio A` untouched) - a fresh-volume run was not re-verified in this
+  phase since the existing dev Postgres volume had test data from Phase 2
+  that was more valuable to keep than to discard for a from-scratch replay.
+- **Verified end-to-end in this phase**: `mvn compile`/`tsc -b` both clean;
+  backend restarted against the existing dev Postgres/Redis volume with the
+  `login-refresh` fix and the new dev-seed migration (applied cleanly, see
+  above); logged in through the actual UI as the dev `admin` (MANAGER)
+  account; created a room in the editor via drag-to-create, dragged it,
+  confirmed the new position persisted across a page reload, then deleted
+  it; confirmed no console errors on either manager screen; and - the core
+  "wow" check - checked a client into a room via `curl` while the live
+  floor-plan page was open and watched the tile flip from grey/0 to green/
+  1 with no page reload, then checked out and watched it flip back, purely
+  from the `/topic/gym/occupancy` WebSocket push (confirmed both an
+  HTTP-loaded initial snapshot and a WebSocket-delivered live update render
+  identically, as intended). The `admin` dev user's password was reset to a
+  known bcrypt hash for this manual testing (dev-only DB row, not a
+  migration change) since no plaintext dev credentials were previously
+  documented anywhere in the repo - worth fixing properly (e.g. documenting
+  a dev login in the README) in a future session.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -644,5 +815,28 @@ either upgrade session to pick up:
   decisions" for the full rationale. Verified with real logins across
   MANAGER, a trainer who has trained the client, and a trainer who hasn't
   (`403`). No migrations, no behavior change for MANAGER or CLIENT callers.
+- 2026-08-06: Upgrade Phase 3, frontend (`upgrade/claude-code` branch).
+  First fixed a real bug ahead of the frontend work: `POST /api/user/
+  login-refresh` was unreachable after access-token expiry because it
+  wasn't excluded from `JwtInterceptor`/`RoleInterceptor` (see "Known
+  issues" - now fixed there). Then scaffolded `Frontend/` from scratch
+  (React + TypeScript + Vite, Tailwind CSS v4, Zustand, react-router-dom,
+  react-konva, `@stomp/stompjs`): login screen against `/api/user/login`,
+  token storage with a proactive silent-refresh timer plus a reactive
+  401 fallback, protected routes, a role-gated shell with a role switcher
+  for multi-role accounts, a MANAGER 2D room editor (drag/resize/rotate via
+  react-konva, full CRUD against the Phase 2 Room API), and the live gym
+  floor-plan view (HTTP initial snapshot + `/topic/gym/occupancy` WebSocket
+  updates, CSS-animated occupancy coloring) - see "Upgrade: frontend
+  decisions" above for every design choice and its rationale. Added
+  dev-seed data (`V1.0016`, guarded with `WHERE NOT EXISTS`) so a fresh dev
+  database has a starter gym/room layout. TRAINER/CLIENT areas are routed
+  but only placeholder screens, per the phase's explicit scope. Verified
+  end-to-end against the existing dev Postgres/Redis volume: `mvn compile`
+  and `tsc -b` both clean, logged into the real running frontend as the dev
+  `admin` (MANAGER) account, created/dragged/deleted a room in the editor
+  with persistence confirmed across a reload, and confirmed a real
+  check-in/check-out via `curl` updates the live floor-plan view instantly
+  over the WebSocket with no page reload and no console errors.
 
 ## Imported Claude Cowork project instructions
