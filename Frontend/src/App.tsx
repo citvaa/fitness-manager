@@ -6,8 +6,9 @@ import { RefreshScheduler } from './auth/RefreshScheduler'
 import { HomeRedirect } from './pages/HomeRedirect'
 import { RoomEditorPage } from './features/gym/RoomEditorPage'
 import { LiveFloorPlanPage } from './features/gym/LiveFloorPlanPage'
-import { TrainerPlaceholderPage } from './pages/trainer/TrainerPlaceholderPage'
-import { ClientPlaceholderPage } from './pages/client/ClientPlaceholderPage'
+import { ManagerInsightsPage } from './features/insights/ManagerInsightsPage'
+import { TrainerProgressPage } from './features/progress/TrainerProgressPage'
+import { ClientProgressPage } from './features/progress/ClientProgressPage'
 
 export default function App() {
   return (
@@ -23,14 +24,15 @@ export default function App() {
             <Route element={<RequireActiveRole role="MANAGER" />}>
               <Route path="/manager/room-editor" element={<RoomEditorPage />} />
               <Route path="/manager/floor-plan" element={<LiveFloorPlanPage />} />
+              <Route path="/manager/insights" element={<ManagerInsightsPage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="TRAINER" />}>
-              <Route path="/trainer" element={<TrainerPlaceholderPage />} />
+              <Route path="/trainer" element={<TrainerProgressPage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="CLIENT" />}>
-              <Route path="/client" element={<ClientPlaceholderPage />} />
+              <Route path="/client" element={<ClientProgressPage />} />
             </Route>
           </Route>
         </Route>

@@ -13,6 +13,7 @@ const NAV_BY_ROLE: Record<Role, { to: string; label: string }[]> = {
   MANAGER: [
     { to: '/manager/floor-plan', label: 'Plan teretane (live)' },
     { to: '/manager/room-editor', label: 'Editor sala' },
+    { to: '/manager/insights', label: 'AI uvid' },
   ],
   TRAINER: [{ to: '/trainer', label: 'Praćenje napretka' }],
   CLIENT: [{ to: '/client', label: 'Moj napredak' }],
