@@ -1,5 +1,5 @@
 export type Role = 'MANAGER' | 'TRAINER' | 'CLIENT'
-export type RoomType = 'CARDIO' | 'STRENGTH' | 'GROUP_FITNESS' | 'FUNCTIONAL' | 'STUDIO' | 'LOCKER_ROOM' | 'OTHER'
+export type RoomType = 'CARDIO' | 'WEIGHTS' | 'GROUP_STUDIO' | 'FUNCTIONAL' | 'LOCKER_ROOM' | 'OTHER'
 
 export interface AuthResponse {
   accessToken: string
