@@ -11,6 +11,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
+    private static final String[] PUBLIC_PATHS = {
+            "/api/user/login",
+            "/api/user/login-refresh",
+            "/api/user/register",
+            "/swagger-ui.html",
+            "/swagger-ui/**",
+            "/v3/api-docs/**",
+            "/v3/api-docs.yaml"
+    };
+
     private final JwtInterceptor jwtInterceptor;
     private final RoleInterceptor roleInterceptor;
 
@@ -18,10 +28,10 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(@NotNull InterceptorRegistry registry) {
         registry.addInterceptor(jwtInterceptor)
                 .order(1)
-                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
+                .excludePathPatterns(PUBLIC_PATHS);
 
         registry.addInterceptor(roleInterceptor)
                 .order(2)
-                .excludePathPatterns("/api/user/login", "/swagger-ui.html", "/api/user/register", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml");
+                .excludePathPatterns(PUBLIC_PATHS);
     }
 }

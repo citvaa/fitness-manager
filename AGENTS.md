@@ -326,7 +326,9 @@ either upgrade session to pick up:
   without an existing valid JWT.
 - `POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`,
   so refreshing requires a currently-valid access token - unusual for a
-  refresh endpoint, whose point is normally to work *after* expiry.
+  refresh endpoint, whose point is normally to work *after* expiry. **Resolved
+  in Phase 3:** `/api/user/login-refresh` is now excluded from both custom
+  interceptors and accepts a valid refresh token without an access token.
 - Refresh tokens have no rotation and no server-side revocation.
 - `AuditorAwareImpl` always returns empty (see Audit section above) -
   `createdBy`/`updatedBy` are effectively dead columns.
@@ -384,3 +386,7 @@ either upgrade session to pick up:
   combined occupancy REST/STOMP snapshots, cached Anthropic-backed manager and
   client-progress narratives, and trainer-owned/client-self progress APIs.
   Added no frontend or schema migrations.
+- 2026-08-06: Upgrade Phase 3 frontend preparation (`upgrade/codex`). Made
+  `POST /api/user/login-refresh` a public auth endpoint in both custom
+  interceptor registrations so silent refresh continues after access-token
+  expiry.
