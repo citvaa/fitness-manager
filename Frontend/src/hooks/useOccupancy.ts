@@ -14,7 +14,8 @@ export function useOccupancy() {
     const brokerURL=API_URL.replace(/^http/,'ws')+'/ws'
     const client=new Client({brokerURL,reconnectDelay:3000,heartbeatIncoming:10000,heartbeatOutgoing:10000,
       onConnect:()=>{if(!active)return;setConnected(true);setError('');client.subscribe('/topic/gym/occupancy',message=>{try{setSnapshot(JSON.parse(message.body) as OccupancySnapshot)}catch{setError('Primljen je neispravan live snapshot.')}})},
-      onWebSocketClose:()=>active&&setConnected(false),onStompError:(frame)=>active&&setError(frame.headers.message??'Live veza je prekinuta.')})
+      onWebSocketClose:()=>{if(active){setConnected(false);setError('Live veza je prekinuta. Ponovno povezivanje je u toku…')}},
+      onStompError:(frame)=>active&&setError(frame.headers.message??'Live veza je prekinuta. Ponovno povezivanje je u toku…')})
     client.activate()
     return()=>{active=false;void client.deactivate()}
   },[])
