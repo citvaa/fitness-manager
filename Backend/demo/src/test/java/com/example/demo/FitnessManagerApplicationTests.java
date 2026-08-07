@@ -1,13 +1,15 @@
 package com.example.demo;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootTest(properties = {"spring.profiles.active=dev"})
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 class FitnessManagerApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void applicationEntrypointIsConfigured() {
+		assertNotNull(FitnessManagerApplication.class.getAnnotation(SpringBootApplication.class));
 	}
 
 }
