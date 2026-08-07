@@ -13,6 +13,10 @@ import type { RoomOccupancyDTO } from './types'
 export function useOccupancySocket() {
   const [occupancy, setOccupancy] = useState<RoomOccupancyDTO[]>([])
   const [connected, setConnected] = useState(false)
+  // Distinguishes "still connecting for the first time" from "was live, then
+  // dropped" - only the latter should read as a disconnect to the user (see
+  // AGENTS.md "Upgrade: frontend decisions" WebSocket section).
+  const [everConnected, setEverConnected] = useState(false)
   const clientRef = useRef<Client | null>(null)
 
   useEffect(() => {
@@ -33,6 +37,7 @@ export function useOccupancySocket() {
       heartbeatOutgoing: 10000,
       onConnect: () => {
         setConnected(true)
+        setEverConnected(true)
         client.subscribe('/topic/gym/occupancy', (message) => {
           try {
             const data = JSON.parse(message.body) as RoomOccupancyDTO[]
@@ -44,6 +49,7 @@ export function useOccupancySocket() {
       },
       onDisconnect: () => setConnected(false),
       onWebSocketClose: () => setConnected(false),
+      onStompError: () => setConnected(false),
     })
 
     clientRef.current = client
@@ -55,5 +61,5 @@ export function useOccupancySocket() {
     }
   }, [])
 
-  return { occupancy, connected }
+  return { occupancy, connected, everConnected }
 }

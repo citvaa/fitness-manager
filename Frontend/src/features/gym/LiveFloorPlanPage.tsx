@@ -87,7 +87,7 @@ function RoomTile({ room, occ }: { room: RoomDTO; occ: RoomOccupancyDTO | undefi
 
 export function LiveFloorPlanPage() {
   const [rooms, setRooms] = useState<RoomDTO[]>([])
-  const { occupancy, connected } = useOccupancySocket()
+  const { occupancy, connected, everConnected } = useOccupancySocket()
 
   useEffect(() => {
     void listRooms().then(setRooms)
@@ -131,6 +131,13 @@ export function LiveFloorPlanPage() {
           </div>
         </div>
       </div>
+
+      {!connected && everConnected && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-900/50 bg-amber-950/40 px-4 py-2 text-sm text-amber-300">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+          Veza sa uživo prikazom je prekinuta, ponovno povezivanje...
+        </div>
+      )}
 
       <div className="mb-4 flex gap-4 text-xs text-slate-400">
         <Legend color="#334155" label="Slobodno" />

@@ -214,7 +214,7 @@ export function RoomEditorPage() {
           </button>
         </div>
 
-        <div className="inline-block rounded-xl border border-slate-800 bg-slate-900/40 p-2">
+        <div className="relative inline-block rounded-xl border border-slate-800 bg-slate-900/40 p-2">
           <Stage
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
@@ -235,6 +235,11 @@ export function RoomEditorPage() {
               ))}
             </Layer>
           </Stage>
+          {rooms.length === 0 && (
+            <p className="pointer-events-none absolute inset-2 flex items-center justify-center text-sm text-slate-500">
+              Još nema sala — klikni „+ Nova sala" da dodaš prvu.
+            </p>
+          )}
         </div>
       </div>
 
@@ -242,6 +247,9 @@ export function RoomEditorPage() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Sale ({rooms.length})
         </h2>
+        {rooms.length === 0 && (
+          <p className="mb-6 text-sm text-slate-500">Još nema sala u ovoj teretani.</p>
+        )}
         <ul className="mb-6 space-y-1">
           {rooms.map((room) => (
             <li key={room.id}>
