@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -19,4 +20,8 @@ public interface ClientRepository extends JpaRepository<Client, Integer> {
 
     Optional<Client> findByUserEmail(String userMail);
     Optional<Client> findByUserId(Integer userId);
+
+    @Query("select distinct ca.client from ClientAppointment ca where ca.appointment.trainer.id = :trainerId order by ca.client.user.email")
+    List<Client> findDistinctTrainedBy(@Param("trainerId") Integer trainerId);
 }
+

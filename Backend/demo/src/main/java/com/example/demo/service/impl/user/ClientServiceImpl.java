@@ -1,5 +1,6 @@
 package com.example.demo.service.impl.user;
 
+import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.dto.user.ClientDTO;
 import com.example.demo.enums.Role;
 import com.example.demo.mapper.user.ClientMapper;
@@ -51,4 +52,9 @@ public class ClientServiceImpl implements ClientService {
     public List<ClientDTO> getAll() {
         return clientMapper.toDto(clientRepository.findAll());
     }
+
+    public List<ClientSummaryDTO> findTrainedBy(Integer trainerId) {
+        return clientRepository.findDistinctTrainedBy(trainerId).stream().map(clientMapper::toSummaryDto).toList();
+    }
 }
+

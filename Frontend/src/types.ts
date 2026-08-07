@@ -56,3 +56,8 @@ export interface OccupancySnapshot {
 }
 
 export interface AiInsight { text: string; model: string; generatedAt: string }
+
+export interface ClientSummary { id:number; email:string }
+export type RecordUnit='KG'|'LB'|'REPS'|'SECONDS'|'MINUTES'|'METERS'|'KM'
+export interface ProgressEntry { id:number; client:ClientSummary; entryDate:string; weightKg:number|null; bodyFatPercent:number|null; waistCm:number|null; chestCm:number|null; hipCm:number|null; thighCm:number|null; armCm:number|null; notes:string|null }
+export interface PersonalRecord { id:number; client:ClientSummary; exerciseName:string; value:number; unit:RecordUnit; recordDate:string }

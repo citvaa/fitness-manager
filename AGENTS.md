@@ -381,6 +381,9 @@ deliberately deferred to the following phase.
 
 - **AI narratives are rendered as safe text paragraphs.** Manager and client-progress responses are split on line breaks and displayed as React text nodes rather than interpreted as HTML or Markdown. This preserves readable formatting while maintaining the Phase 3 rule that the SPA does not render untrusted HTML. Both screens expose the backend generation timestamp and model, and only role-authorized trainer/manager views expose force regeneration.
 
+- **Trainer client discovery mirrors progress ownership.** A small GET /api/trainer/clients endpoint returns distinct lightweight client summaries only for clients linked to the authenticated trainer through an appointment. The progress UI uses this list as its sole selector source, so it cannot invite navigation to arbitrary client IDs.
+- **Progress visualization uses one shared role-aware page and Recharts.** Trainer and client areas share chart, record-list, and narrative presentation so equivalent data cannot drift visually; write forms and force-refresh controls are rendered only in trainer mode. Seven typed measurement series share one responsive line chart, with null values connected so partially completed measurements remain useful.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -464,4 +467,5 @@ either upgrade session to pick up:
 - 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
   browser runtime and changed the login identifier control so the seeded
   `admin` manager account can submit through native browser validation.
+
 
