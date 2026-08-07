@@ -1116,12 +1116,22 @@ either upgrade session to pick up:
     the same client returned `409`, checked out, confirmed occupancy
     returned to `0`; confirmed `GET /api/insights/manager` and
     `GET /api/progress/insight/me` both returned genuine Claude-generated
-    text (the manager one in Serbian Cyrillic script, the client one in
-    Serbian Latin script - both are valid Serbian, just worth noting the
-    model isn't pinned to one script per call); `mvn test` (full suite,
-    including the pre-existing `contextLoads()` test) passed 61/61 against
-    this same fresh instance; frontend `npm run build` and `npx tsc -b` both
-    clean.
+    text (the manager one came back in Serbian Cyrillic script, the client
+    one in Serbian Latin script - both are valid Serbian, but jarring next
+    to an entirely Latin-script UI; fixed immediately after, see the
+    follow-up entry below rather than left as a known issue, since it's a
+    one-line prompt fix); `mvn test` (full suite, including the pre-existing
+    `contextLoads()` test) passed 61/61 against this same fresh instance;
+    frontend `npm run build` and `npx tsc -b` both clean.
+  - **Follow-up**: pinned both `SYSTEM_PROMPT`s (`ManagerInsightsServiceImpl`,
+    `ClientProgressInsightServiceImpl`) to Serbian *Latin* script explicitly
+    ("latinica ... do not use Cyrillic (ćirilica)"), not just "Serbian" -
+    the earlier wording (Phase 4's follow-up, see above) named the language
+    but not the script, and Claude isn't consistent about which Serbian
+    script it defaults to. Verified by restarting the backend and calling
+    `POST /api/insights/manager/refresh` twice and
+    `GET /api/progress/insight/me` once, all three genuinely regenerated
+    (not cached) and all three came back Latin-script.
   - Added `docs/defense-demo-script.md` - a concrete, timed walkthrough for
     the actual thesis defense (which account for which step, the exact
     check-in/check-out sequence to demonstrate the live floor plan updating
