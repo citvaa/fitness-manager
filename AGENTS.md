@@ -928,9 +928,13 @@ either upgrade session to pick up:
   authenticated user (any role) can call it.
 - No global exception handler - error responses aren't a consistent JSON
   shape yet.
-- `pom.xml` sets `maven.test.skip=true`; combined with there being effectively
-  only one trivial `contextLoads()` test, there is no real test coverage and
-  tests don't run by default even if written.
+- ~~`pom.xml` sets `maven.test.skip=true`~~ **Fixed 2026-08-07** (`upgrade/
+  claude-code` branch, thesis-defense-finalization session): removed the
+  property; the backend now has real unit test coverage for all Phase 1-4
+  upgrade code (61 tests, see "Upgrade: final summary" below). `mvn test`
+  requires Postgres/Redis to be up (`FitnessManagerApplicationTests`, the
+  original pre-existing test, needs a live `EntityManagerFactory`) - this
+  was already true before, just never exercised because tests were skipped.
 - `application.yaml` and `application-dev.yaml` duplicate almost every
   property instead of the dev file overriding only what differs (currently
   just `flyway.locations`) - keep both in sync manually until this is
@@ -939,6 +943,19 @@ either upgrade session to pick up:
   in git history (now moved to an env var, but the old value is still
   recoverable from history) - **the app password must be rotated in the
   Gmail account**, this repo change alone does not invalidate it.
+- `BaseEntity`'s Lombok `@Data`-generated `equals()`/`hashCode()` only
+  compares `BaseEntity`'s own fields (`version`, `createdAt`, etc.), never
+  the subclass's `id` - so two distinct entities of the same type with all-
+  null audit fields (e.g. two freshly-built, unsaved `ClientAppointment`s)
+  compare as equal. Found while writing unit tests in the finalization
+  session (a `Set.of(...)` of three such entities threw
+  `IllegalArgumentException: duplicate element`); worked around in the test
+  with an identity-based `Set` rather than fixing `BaseEntity`, since this
+  session was tests/polish-only. Any real code that relies on
+  `HashSet`/`equals()` semantics for unsaved entities of the same type would
+  hit the same problem - worth a real fix (override `equals()`/`hashCode()`
+  per-entity on `id`, or switch collections that hold these entities to
+  `List`) in a future session.
 
 ## Session log
 
@@ -1050,5 +1067,155 @@ either upgrade session to pick up:
   see "Upgrade: frontend decisions" above. Verified with real regenerate
   calls on both endpoints; screenshots in `docs/browser-qa/phase4-05-*`/
   `phase4-06-*`. No DTO/frontend changes needed.
+- 2026-08-07: Phase 5, thesis-defense finalization (`upgrade/claude-code`
+  branch). No new features - hardening, polish, tests, and documentation
+  only, ahead of the actual defense. See "Upgrade: final summary" below for
+  the consolidated overview of all five phases; the notable items from this
+  specific session:
+  - Removed `maven.test.skip=true` from `pom.xml` and added 61 unit tests
+    (JUnit 5 + Mockito, no live DB/Redis/network) covering every service
+    added in Phases 1-4: `GymServiceImpl`, `RoomServiceImpl`,
+    `RoomCheckInServiceImpl` (including the occupancy computation and both
+    paths of the "one active check-in per client" rule),
+    `ManagerInsightsServiceImpl` (data aggregation + the manual cache
+    refresh path, Claude client mocked), `ClientProgressEntryServiceImpl`/
+    `ClientPersonalRecordServiceImpl`/`ClientProgressInsightServiceImpl`
+    (guard delegation, cache lookup/populate, Claude client mocked), and
+    `TrainerClientAccessGuard`. Found and documented (not fixed, out of
+    scope for a tests-only pass) a real `BaseEntity.equals()` gap - see
+    "Known issues" above.
+  - Frontend polish: a visible WebSocket-disconnect banner on
+    `LiveFloorPlanPage` (distinct from the initial-connect indicator, driven
+    by a new `everConnected` flag in `useOccupancySocket`, also now reacting
+    to `onStompError` in addition to `onDisconnect`/`onWebSocketClose`), and
+    a zero-rooms empty state on `RoomEditorPage` (canvas overlay + sidebar
+    message). Everything else audited (loading/empty states across
+    `ProgressCharts`/`PersonalRecordsList`/`InsightPanel`/`ManagerInsightsPage`/
+    `TrainerProgressPage`/`ClientProgressPage`, and the browser tab
+    title/favicon) was already in place from Phases 3-4 and needed no
+    change.
+  - Fixed a stale-build-artifact issue hit while doing the fresh-volume
+    verification below: `Backend/demo/target/classes/db/migration/` still
+    contained a `V1.0012__create_client_progress_tables.sql` left over from
+    an earlier rename of that migration to `V1.0011`, alongside the current
+    `V1.0012__create_room_check_in_table.sql` - Flyway refused to start
+    ("Found more than one migration with version 1.0012") because Maven's
+    `resources` step copies but never deletes stale files from `target/`.
+    Not a source-tree bug (the actual `src/main/resources/db/migration/`
+    only ever had one `V1.0012` file) and not migration content to fix -
+    resolved by deleting `target/` and rebuilding clean. Worth remembering
+    for any future "why won't Flyway start" confusion on this project: check
+    for a stale `target/classes/db/migration/` before suspecting the
+    migrations themselves.
+  - Verified completely from a fresh Postgres/Redis volume (`docker compose
+    down`, deleted `Docker/postgres_data/pgdata`, `docker compose up -d`,
+    clean `target/` rebuild): all 18 migrations applied in one run to
+    `v1.0018`; backend started with no manual DB step; logged in via `curl`
+    as all three seeded accounts; checked a client into a room, confirmed
+    `GET /api/gym/occupancy` reflected it, confirmed a second check-in for
+    the same client returned `409`, checked out, confirmed occupancy
+    returned to `0`; confirmed `GET /api/insights/manager` and
+    `GET /api/progress/insight/me` both returned genuine Claude-generated
+    text (the manager one in Serbian Cyrillic script, the client one in
+    Serbian Latin script - both are valid Serbian, just worth noting the
+    model isn't pinned to one script per call); `mvn test` (full suite,
+    including the pre-existing `contextLoads()` test) passed 61/61 against
+    this same fresh instance; frontend `npm run build` and `npx tsc -b` both
+    clean.
+  - Added `docs/defense-demo-script.md` - a concrete, timed walkthrough for
+    the actual thesis defense (which account for which step, the exact
+    check-in/check-out sequence to demonstrate the live floor plan updating
+    in real time via a second tab/terminal, talking points, and a "Plan B"
+    section for AI/network failures and WebSocket drops during the defense
+    itself).
+
+## Upgrade: final summary
+
+A consolidated overview of the whole `upgrade/claude-code` branch (Phases
+1-5, 2026-08-04 through 2026-08-07), written for later reference when
+writing the thesis itself - the "Upgrade: schema/service layer/frontend
+decisions" sections above remain the detailed record; this section is the
+short version plus the parts that only make sense once the whole arc is
+visible.
+
+**The three delivered features, end to end:**
+
+1. **Live gym floor plan.** `Gym`/`Room` (rectangle geometry, not polygon)
+   + `RoomCheckIn` in the data layer (Phase 1) → CRUD, check-in/check-out
+   with a DB-enforced "one active check-in per client" invariant, and
+   additive (non-deduplicated) occupancy computation combining manual
+   check-ins with in-progress appointments, broadcast over
+   `/topic/gym/occupancy` both event-driven and on a once-a-minute sweep
+   (Phase 2) → a drag/resize/rotate `react-konva` room editor and a
+   CSS-animated live occupancy view consuming that same WebSocket topic
+   (Phase 3) → a visible disconnect banner when the socket drops (Phase 5).
+2. **AI manager insights.** No new tables needed - aggregates existing
+   `RoomCheckIn`/`Payment`/`Appointment` history (Phase 1 data, Phase 2
+   service) into a Claude-generated Serbian-language narrative, cached 30
+   minutes with an explicit force-refresh endpoint, surfaced as its own
+   screen with a working "Regeneriši" button (Phase 3-4).
+3. **Client progress tracking.** `ClientProgressEntry` (fixed measurement
+   columns) + `ClientPersonalRecord` (free-text exercise) in the data layer
+   (Phase 1) → CRUD + an AI narrative summary, cached 10 minutes with
+   automatic eviction on new entries, gated by a real trainer-has-trained-
+   this-client authorization check (`TrainerClientAccessGuard`, added after
+   an initial gap - see the service-layer section) (Phase 2) → a shared
+   chart/list/narrative UI split into a trainer-editable screen and a
+   client-read-only screen (Phase 3-4).
+
+**Key technical decisions that cut across all three** (each justified in
+depth in its own section above - this is the index):
+- Rectangle-not-polygon room geometry, chosen specifically because it maps
+  1:1 onto `react-konva`'s `Rect`.
+- Fixed typed columns over JSON/EAV for body measurements, matching this
+  codebase's existing no-JSON-column convention.
+- `claude-haiku-4-5` for both AI features - deliberately the cheapest
+  current Claude model, justified by both features being single-turn
+  summarization-shaped calls on already-aggregated data, gated by a cache
+  rather than by direct user action.
+- Two independently-tuned Redis cache regions (30 min event-less TTL for
+  manager insights vs. 10 min + explicit eviction for progress insights)
+  rather than one shared AI-response cache, because the two features have
+  genuinely different staleness tolerances and invalidation triggers.
+- A single full-snapshot WebSocket topic (not per-room, not deltas) for
+  occupancy, trading payload size for a trivial "replace the whole list"
+  client-side merge.
+- One added backend endpoint across the entire frontend phase
+  (`GET /api/trainer/me/clients`) - the frontend phases were otherwise built
+  entirely against the Phase 2 API surface without needing it to grow.
+
+**Known limitations, carried into the thesis writeup rather than fixed**
+(full detail in "Known issues" above; this is the subset most relevant to
+the three new features specifically, as opposed to pre-existing baseline
+issues):
+- Occupancy double-counts a client who is both manually checked in and on
+  an in-progress appointment in the same room - a deliberate simplicity-
+  over-exactness trade, not an oversight.
+- "Revenue" in manager insights is a paid-appointment-count proxy, because
+  the schema has no per-session price field anywhere - adding real pricing
+  is a schema change, out of scope for this branch.
+- Refresh has no equivalent on the progress-narrative screen (only manager
+  insights got a force-refresh endpoint) - a reasonable but unbuilt
+  follow-up, per the Phase 4 rationale.
+- `BaseEntity`'s Lombok-generated `equals()` doesn't compare entity `id`
+  (found in Phase 5 while writing tests) - affects any code across the
+  whole codebase that puts same-type unsaved entities in a `HashSet`, not
+  specific to this branch's new code, but only surfaced now.
+- No CI pipeline runs `mvn test` automatically - it must be run manually,
+  and requires Postgres/Redis to be up first.
+
+**What a comparison-study reader should take away**: every phase in this
+branch stayed inside its explicitly scoped task brief (data layer only,
+then service+API only, then frontend only, then the two placeholder screens
++ one screen, then hardening-only) rather than opportunistically fixing
+adjacent pre-existing issues found along the way - each such issue was
+documented in "Known issues" instead. The one deliberate exception was
+fixing bugs *introduced by this branch's own code* immediately upon
+discovery (the login-refresh interceptor exclusion before Phase 3's
+frontend could depend on it, the trainer-client authorization gap right
+after Phase 2, the `SELECT DISTINCT`/`ORDER BY` Postgres bug in Phase 4's
+new endpoint, the stale `target/` Flyway conflict in Phase 5) - the
+distinction being "I broke this, I fix it now" versus "this was already
+broken, it's material for the next phase or the write-up."
 
 ## Imported Claude Cowork project instructions
