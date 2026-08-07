@@ -384,6 +384,8 @@ deliberately deferred to the following phase.
 - **Trainer client discovery mirrors progress ownership.** A small GET /api/trainer/clients endpoint returns distinct lightweight client summaries only for clients linked to the authenticated trainer through an appointment. The progress UI uses this list as its sole selector source, so it cannot invite navigation to arbitrary client IDs.
 - **Progress visualization uses one shared role-aware page and Recharts.** Trainer and client areas share chart, record-list, and narrative presentation so equivalent data cannot drift visually; write forms and force-refresh controls are rendered only in trainer mode. Seven typed measurement series share one responsive line chart, with null values connected so partially completed measurements remain useful.
 
+- **Client progress stays backend-enforced read-only.** Client mode calls only the existing `/api/client/progress` self endpoints, never accepts a client ID, and renders neither measurement/record forms nor force regeneration. This duplicates the backend boundary in the UI without treating hidden controls as authorization.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -467,5 +469,6 @@ either upgrade session to pick up:
 - 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
   browser runtime and changed the login identifier control so the seeded
   `admin` manager account can submit through native browser validation.
+
 
 
