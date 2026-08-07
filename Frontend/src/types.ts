@@ -54,3 +54,5 @@ export interface OccupancySnapshot {
   generatedAt: string
   rooms: RoomOccupancy[]
 }
+
+export interface AiInsight { text: string; model: string; generatedAt: string }

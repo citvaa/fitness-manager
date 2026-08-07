@@ -377,6 +377,10 @@ deliberately deferred to the following phase.
   location data, while a fresh local database opens immediately into a useful
   defense-ready plan that remains fully editable through the manager UI.
 
+### Upgrade Phase 4 UI decisions
+
+- **AI narratives are rendered as safe text paragraphs.** Manager and client-progress responses are split on line breaks and displayed as React text nodes rather than interpreted as HTML or Markdown. This preserves readable formatting while maintaining the Phase 3 rule that the SPA does not render untrusted HTML. Both screens expose the backend generation timestamp and model, and only role-authorized trainer/manager views expose force regeneration.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -460,3 +464,4 @@ either upgrade session to pick up:
 - 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
   browser runtime and changed the login identifier control so the seeded
   `admin` manager account can submit through native browser validation.
+
