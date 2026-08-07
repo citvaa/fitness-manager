@@ -21,7 +21,8 @@ public interface ClientRepository extends JpaRepository<Client, Integer> {
     Optional<Client> findByUserEmail(String userMail);
     Optional<Client> findByUserId(Integer userId);
 
-    @Query("select distinct ca.client from ClientAppointment ca where ca.appointment.trainer.id = :trainerId order by ca.client.user.email")
+    @Query("select distinct ca.client from ClientAppointment ca where ca.appointment.trainer.id = :trainerId")
     List<Client> findDistinctTrainedBy(@Param("trainerId") Integer trainerId);
 }
+
 
