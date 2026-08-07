@@ -420,9 +420,10 @@ either upgrade session to pick up:
 - Only Phase 2's explicit `ApiException` and database-integrity failures have a
   consistent JSON error shape; older unclassified exceptions still fall
   through to Spring Boot's default response.
-- `pom.xml` sets `maven.test.skip=true`; combined with there being effectively
-  only one trivial `contextLoads()` test, there is no real test coverage and
-  tests don't run by default even if written.
+- **Resolved in the final hardening phase:** `maven.test.skip` was removed and
+  focused upgrade-service tests now run by default with `mvn test`. The suite
+  uses mocked repositories and a fake Claude boundary, so it needs neither
+  infrastructure nor network/API budget.
 - `application.yaml` and `application-dev.yaml` duplicate almost every
   property instead of the dev file overriding only what differs (currently
   just `flyway.locations`) - keep both in sync manually until this is
@@ -474,6 +475,40 @@ either upgrade session to pick up:
   Markdown syntax, preserving the frontend's safe React-text rendering. Forced
   real Claude regeneration for manager and trainer progress insights and
   captured browser QA screenshots confirming that `#` and `**` are absent.
+- 2026-08-07: Final defense hardening (`upgrade/codex`). Enabled Maven tests and
+  added focused coverage for Gym/Room invariants, occupancy source summation and
+  the global active-check-in guard, trainer-client ownership, and AI cache
+  hit/forced-refresh behavior using a fake Claude service. Added explicit live
+  loading/disconnection states and a branded favicon, plus the committed
+  `docs/defense-demo-script.md` runbook. A destructive fresh-volume rehearsal
+  applied all 16 Flyway migrations and verified seeded logins, five demo rooms,
+  live check-in/checkout with duplicate HTTP 409, API-created trainer schedule
+  and appointment, trainer-owned progress writes, client read-only visibility,
+  and the expected HTTP 503 AI response when no Anthropic key is configured.
+
+## Final upgrade summary
+
+The completed upgrade has three connected pillars. The **live gym plan** stores
+an audited installation and rotated-rectangle rooms, combines manual check-ins
+with in-progress appointment participation in timezone-aware occupancy
+snapshots, and distributes the same representation through REST and STOMP. The
+**manager insight** pillar aggregates a rolling 30-day operational window and
+uses a pinned Claude Haiku model with a six-hour Redis cache; payment analytics
+remain an explicitly labelled appointment-unit proxy because the baseline has
+no monetary amount. The **client progress** pillar stores typed measurements
+and free-text exercise records, charts them in a shared role-aware UI, restricts
+trainer access through existing appointment relationships, keeps client routes
+self-scoped/read-only, and caches narratives per client for one hour with
+write-through eviction.
+
+The implementation deliberately retains the existing interceptor-based JWT
+authorization model, stateless non-rotating refresh tokens, explicit Flyway and
+Envers migrations, browser-local token storage, and the single-installation Gym
+assumption. Other inherited known issues listed above also remain out of scope.
+AI endpoints require a real `ANTHROPIC_API_KEY` and return HTTP 503 rather than
+mocked production text when it is absent; automated tests instead fake the
+Claude boundary. The final defense runbook documents demo accounts, the two-tab
+live check-in sequence, preparation steps, and offline/API/WebSocket fallbacks.
 
 
 
