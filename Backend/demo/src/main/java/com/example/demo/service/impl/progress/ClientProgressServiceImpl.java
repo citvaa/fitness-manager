@@ -78,7 +78,7 @@ public class ClientProgressServiceImpl implements ClientProgressService {
         List<ClientProgressEntry> entries = entryRepository.findByClientIdOrderByEntryDateAsc(clientId);
         List<ClientPersonalRecord> records = recordRepository.findByClientIdOrderByRecordDateDesc(clientId);
         if (entries.isEmpty() && records.isEmpty()) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "No progress data exists for this client");
-        String text = claudeService.generate("You are a careful fitness progress assistant. Reply in Serbian with a short factual trend summary and one safe general recommendation. Do not diagnose or provide medical advice.", "Measurements: " + entries.stream().map(this::entryData).toList() + "\nPersonal records: " + records.stream().map(this::recordData).toList());
+        String text = claudeService.generate("You are a careful fitness progress assistant. Reply in Serbian with a short factual trend summary and one safe general recommendation. Use plain text only: do not use Markdown, headings, hash characters, asterisks, bullets, or other formatting syntax. Separate the summary and recommendation with a blank line. Do not diagnose or provide medical advice.", "Measurements: " + entries.stream().map(this::entryData).toList() + "\nPersonal records: " + records.stream().map(this::recordData).toList());
         AiInsightResponse response = new AiInsightResponse(text, claudeService.model(), LocalDateTime.now()); if (cache != null) cache.put(key, response); return response;
     }
 

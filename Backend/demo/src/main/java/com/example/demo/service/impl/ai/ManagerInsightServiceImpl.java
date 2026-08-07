@@ -50,7 +50,9 @@ public class ManagerInsightServiceImpl implements ManagerInsightService {
                 + "\nPaid appointment units sold (revenue proxy; prices are not stored): " + soldAppointments
                 + "\nLive room occupancy: " + live.rooms();
         String text = claudeService.generate(
-                "You are a gym operations analyst. Reply in Serbian with 3-5 concise, actionable observations. Do not invent monetary revenue because the input has no prices.", data);
+                "You are a gym operations analyst. Reply in Serbian with 3-5 concise, actionable observations. "
+                        + "Use plain text only: do not use Markdown, headings, hash characters, asterisks, bullets, or other formatting syntax. "
+                        + "Separate observations with blank lines. Do not invent monetary revenue because the input has no prices.", data);
         AiInsightResponse response = new AiInsightResponse(text, claudeService.model(), LocalDateTime.now());
         if (cache != null) cache.put("current", response);
         return response;

@@ -379,7 +379,7 @@ deliberately deferred to the following phase.
 
 ### Upgrade Phase 4 UI decisions
 
-- **AI narratives are rendered as safe text paragraphs.** Manager and client-progress responses are split on line breaks and displayed as React text nodes rather than interpreted as HTML or Markdown. This preserves readable formatting while maintaining the Phase 3 rule that the SPA does not render untrusted HTML. Both screens expose the backend generation timestamp and model, and only role-authorized trainer/manager views expose force regeneration.
+- **AI narratives are rendered as safe plain-text paragraphs.** Manager and client-progress prompts explicitly prohibit Markdown syntax and request blank-line-separated plain text; responses are split on line breaks and displayed as React text nodes rather than interpreted as HTML or Markdown. This preserves readable formatting while maintaining the Phase 3 rule that the SPA does not render untrusted markup. Both screens expose the backend generation timestamp and model, and only role-authorized trainer/manager views expose force regeneration.
 
 - **Trainer client discovery mirrors progress ownership.** A small GET /api/trainer/clients endpoint returns distinct lightweight client summaries only for clients linked to the authenticated trainer through an appointment. The progress UI uses this list as its sole selector source, so it cannot invite navigation to arbitrary client IDs.
 - **Progress visualization uses one shared role-aware page and Recharts.** Trainer and client areas share chart, record-list, and narrative presentation so equivalent data cannot drift visually; write forms and force-refresh controls are rendered only in trainer mode. Seven typed measurement series share one responsive line chart, with null values connected so partially completed measurements remain useful.
@@ -469,6 +469,11 @@ either upgrade session to pick up:
 - 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
   browser runtime and changed the login identifier control so the seeded
   `admin` manager account can submit through native browser validation.
+- 2026-08-07: Phase 4 AI text formatting fix (`upgrade/codex`). Updated both
+  Anthropic system prompts to require blank-line-separated plain text without
+  Markdown syntax, preserving the frontend's safe React-text rendering. Forced
+  real Claude regeneration for manager and trainer progress insights and
+  captured browser QA screenshots confirming that `#` and `**` are absent.
 
 
 
