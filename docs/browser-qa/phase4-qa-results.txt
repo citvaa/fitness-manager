@@ -1,0 +1,3 @@
+TRAINER measurement+record+Claude summary OK
+CLIENT read-only data+Claude summary OK
+MANAGER real Claude force refresh OK
