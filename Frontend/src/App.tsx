@@ -14,6 +14,9 @@ import { TrainerProgressPage } from './features/progress/TrainerProgressPage'
 import { ClientProgressPage } from './features/progress/ClientProgressPage'
 import { AdminPage } from './features/admin/AdminPage'
 import { TrainerSchedulePage } from './features/schedule/TrainerSchedulePage'
+import { ManagerPaymentsPage } from './features/payments/ManagerPaymentsPage'
+import { MyPaymentsPage } from './features/payments/MyPaymentsPage'
+import { DailySchedulePage } from './features/calendar/DailySchedulePage'
 
 export default function App() {
   return (
@@ -34,6 +37,8 @@ export default function App() {
               <Route path="/manager/floor-plan" element={<LiveFloorPlanPage />} />
               <Route path="/manager/insights" element={<ManagerInsightsPage />} />
               <Route path="/manager/administracija" element={<AdminPage />} />
+              <Route path="/manager/placanja" element={<ManagerPaymentsPage />} />
+              <Route path="/manager/dnevni-raspored" element={<DailySchedulePage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="TRAINER" />}>
@@ -43,6 +48,7 @@ export default function App() {
 
             <Route element={<RequireActiveRole role="CLIENT" />}>
               <Route path="/client" element={<ClientProgressPage />} />
+              <Route path="/client/uplate" element={<MyPaymentsPage />} />
             </Route>
           </Route>
         </Route>

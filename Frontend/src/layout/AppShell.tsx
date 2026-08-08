@@ -15,12 +15,17 @@ const NAV_BY_ROLE: Record<Role, { to: string; label: string }[]> = {
     { to: '/manager/room-editor', label: 'Editor sala' },
     { to: '/manager/insights', label: 'AI uvid' },
     { to: '/manager/administracija', label: 'Administracija' },
+    { to: '/manager/placanja', label: 'Plaćanja' },
+    { to: '/manager/dnevni-raspored', label: 'Dnevni raspored' },
   ],
   TRAINER: [
     { to: '/trainer', label: 'Praćenje napretka' },
     { to: '/trainer/raspored', label: 'Moj raspored' },
   ],
-  CLIENT: [{ to: '/client', label: 'Moj napredak' }],
+  CLIENT: [
+    { to: '/client', label: 'Moj napredak' },
+    { to: '/client/uplate', label: 'Moje uplate' },
+  ],
 }
 
 export function AppShell() {
