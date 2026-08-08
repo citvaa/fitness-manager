@@ -432,15 +432,18 @@ deliberately deferred to the following phase.
   holiday labels use the `sr-Latn-RS` locale instead of relying on the browser's
   default script for `sr-RS`, preventing Cyrillic weekday/month abbreviations
   from appearing inside the otherwise Latin-script interface.
-- **Phase 6 uses a deliberately broad validation fallback.** The existing
-  `ApiException` and database-integrity handlers retain their specific statuses,
-  while every other `RuntimeException` is returned as HTTP 400 with a minimal
-  `{message}` body. This intentionally includes `IllegalArgumentException`,
-  `EntityNotFoundException`, and genuine unexpected runtime failures such as a
-  null dereference; the coarse classification matches the comparison scope and
-  is not presented as a complete production exception taxonomy. Frontend error
-  banners prefer this server message and use their generic status fallback only
-  when the response has no textual `message`.
+- **Phase 6 uses a deliberately broad validation fallback, with authorization
+  kept distinct.** The existing `ApiException` and database-integrity handlers
+  retain their specific statuses, while otherwise-unclassified
+  `RuntimeException`s return HTTP 400 with a minimal `{message}` body. This
+  includes `IllegalArgumentException`, `EntityNotFoundException`, and genuine
+  unexpected runtime failures such as a null dereference; the coarse
+  classification matches the comparison scope and is not presented as a
+  complete production exception taxonomy. A later regression pass added the
+  required more-specific `AccessDeniedException` handler, so appointment
+  ownership/profile failures now return HTTP 403 instead of being swallowed by
+  this 400 fallback. Frontend error banners prefer the server message and use
+  their generic status fallback only when the response has no textual message.
 
 ### Upgrade Phase 7 decisions
 
@@ -513,9 +516,10 @@ either upgrade session to pick up:
   (with a new migration) before relying on it.
 - **Resolved in the Phase 6 continuation:** the aggregate daily calendar is
   explicitly MANAGER-only and is consumed by the manager timeline screen.
-- Only Phase 2's explicit `ApiException` and database-integrity failures have a
-  consistent JSON error shape; older unclassified exceptions still fall
-  through to Spring Boot's default response.
+- Phase 2's explicit `ApiException`, database-integrity failures, and Spring
+  Security `AccessDeniedException`s have structured status-bearing JSON
+  responses. Other runtime failures use Phase 6's coarse HTTP 400 `{message}`
+  fallback rather than a complete production exception taxonomy.
 - **Resolved in the final hardening phase:** `maven.test.skip` was removed and
   focused upgrade-service tests now run by default with `mvn test`. The suite
   uses mocked repositories and a fake Claude boundary, so it needs neither
@@ -600,30 +604,76 @@ either upgrade session to pick up:
   operational dataset. A fresh-volume rehearsal applied all 17 migrations,
   generated past/future data, verified restart idempotence, and completed live
   client reserve/cancel and trainer assign/own-list flows.
+- 2026-08-08: Phase 6/7 completion hardening (`upgrade/codex`). Added focused
+  tests for trainer self-service ownership, Client CRUD, payment scoping,
+  manager-only calendar access, appointment marketplace actions and self-scoped
+  history. Fixed the broad runtime handler's `AccessDeniedException` regression
+  with an explicit HTTP 403 handler and MVC test. Rewrote the defense runbook as
+  a complete activation-to-booking scenario. A destructive fresh-volume run
+  cleaned stale Maven output, applied all 17 production/dev migrations, started
+  backend and frontend, and verified activation/login, manager holiday creation,
+  five-room live occupancy check-in/out, seeded progress, trainer self-service,
+  client reserve/cancel, trainer assign/unassign, live forbidden response, and
+  unchanged fixture counts after backend restart. Runtime AI calls returned the
+  intentional HTTP 503 because this verification environment had no
+  `ANTHROPIC_API_KEY`; fake-Claude automated tests remained green.
 
-## Final upgrade summary
+## Final upgrade summary (Phases 1-7)
 
-The completed upgrade has three connected pillars. The **live gym plan** stores
-an audited installation and rotated-rectangle rooms, combines manual check-ins
-with in-progress appointment participation in timezone-aware occupancy
-snapshots, and distributes the same representation through REST and STOMP. The
-**manager insight** pillar aggregates a rolling 30-day operational window and
-uses a pinned Claude Haiku model with a six-hour Redis cache; payment analytics
-remain an explicitly labelled appointment-unit proxy because the baseline has
-no monetary amount. The **client progress** pillar stores typed measurements
-and free-text exercise records, charts them in a shared role-aware UI, restricts
-trainer access through existing appointment relationships, keeps client routes
-self-scoped/read-only, and caches narratives per client for one hour with
-write-through eviction.
+The upgrade now covers the full usable application lifecycle, not only its three
+original demonstration pillars. **Phase 1** added the migration-driven, audited
+Gym/Room/check-in and client-progress data model: one real installation row,
+rotated-rectangle room geometry, an optional appointment-room link, historical
+manual check-ins with one globally active room per client, typed body metrics,
+and free-text personal records with fixed units. **Phase 2** exposed that model
+through manager-controlled floor-plan CRUD, staff check-in/out, timezone-aware
+REST/STOMP occupancy snapshots, trainer-owned/client-self progress APIs, and
+pinned Claude Haiku narratives with purpose-specific Redis TTLs. Manager
+“revenue” remains an explicitly labelled purchased-appointment proxy because
+Payment has no amount or currency.
 
-The implementation deliberately retains the existing interceptor-based JWT
-authorization model, stateless non-rotating refresh tokens, explicit Flyway and
-Envers migrations, browser-local token storage, and the single-installation Gym
-assumption. Other inherited known issues listed above also remain out of scope.
-AI endpoints require a real `ANTHROPIC_API_KEY` and return HTTP 503 rather than
-mocked production text when it is absent; automated tests instead fake the
-Claude boundary. The final defense runbook documents demo accounts, the two-tab
-live check-in sequence, preparation steps, and offline/API/WebSocket fallbacks.
+**Phases 3 and 4** introduced the React 19/TypeScript/Vite SPA, durable multi-role
+JWT sessions with refresh, a responsive React-Konva room editor, animated live
+occupancy, manager insight presentation, and a shared Recharts progress view.
+AI text is rendered as plain React text rather than HTML/Markdown, trainer client
+discovery follows the same appointment-history ownership rule as the backend,
+and clients receive read-only self-scoped progress screens. The frontend stores
+bearer tokens in local storage as a documented thesis-scale trade-off.
+
+**Phase 5** hardened the three pillars with focused repository/service tests, a
+fake Claude boundary, explicit loading/disconnection UI, a defense runbook, and
+the first destructive fresh-volume rehearsal. **Phase 6** completed public
+invite activation and password recovery, manager account/Trainer/Client CRUD,
+weekly gym hours and holidays, manager schedule oversight, JWT-derived trainer
+self-service shifts/absence, role-scoped payment history, and a manager-only
+aggregate daily calendar. Deleting a domain profile removes only its matching
+role, while the underlying User and unrelated roles remain.
+
+**Phase 7** completed the trainer/client booking lifecycle: one JWT-scoped
+`/api/appointment/me` history endpoint, future-only client marketplace
+reservation with a 24-hour cancellation deadline, and trainer self-assignment/
+unassignment of future unassigned slots. A transactional dev `ApplicationRunner`
+creates a date-relative, defense-ready dataset and uses one known trainer email
+as an all-or-nothing idempotence marker. Cancellation history cannot be retained
+because the inherited schema represents cancellation by deleting the
+ClientAppointment link and has no status/timestamp column.
+
+The final completion pass extends automated coverage to Phase 6/7 security and
+business flows and makes Spring Security `AccessDeniedException` consistently
+return HTTP 403 ahead of the broad RuntimeException-to-400 fallback. The final
+defense runbook follows activation, manager operations, all three wow pillars,
+trainer self-service, and client/trainer booking in one role-labelled scenario,
+with core/time-permitting branches and a plan B for every external dependency.
+
+The implementation deliberately retains the baseline's interceptor-based REST
+authorization, stateless non-rotating refresh tokens, explicit Flyway/Envers
+migrations, single-installation Gym assumption, browser-local token storage, and
+the remaining known issues above. AI endpoints require a real
+`ANTHROPIC_API_KEY` and return HTTP 503 rather than fabricated text when it is
+absent; automated tests fake only the Claude boundary. Fresh-volume verification
+requires a clean Maven output directory as well as an empty database volume so
+deleted/renamed resource artifacts cannot survive in `target/classes` and appear
+to Flyway as duplicate migrations.
 
 
 
