@@ -45,8 +45,9 @@ export const resetPassword=(resetKey:string,password:string)=>publicClient.post(
 
 export function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { message?: string } | undefined
-    return data?.message ?? (error.response ? `Server je vratio grešku ${error.response.status}.` : 'Backend nije dostupan na portu 8088.')
+    const data = error.response?.data
+    const serverMessage = typeof data === 'object' && data !== null && 'message' in data && typeof data.message === 'string' ? data.message : null
+    return serverMessage ?? (error.response ? `Server je vratio grešku ${error.response.status}.` : 'Backend nije dostupan na portu 8088.')
   }
   return error instanceof Error ? error.message : 'Došlo je do neočekivane greške.'
 }

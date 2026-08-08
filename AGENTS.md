@@ -432,6 +432,15 @@ deliberately deferred to the following phase.
   holiday labels use the `sr-Latn-RS` locale instead of relying on the browser's
   default script for `sr-RS`, preventing Cyrillic weekday/month abbreviations
   from appearing inside the otherwise Latin-script interface.
+- **Phase 6 uses a deliberately broad validation fallback.** The existing
+  `ApiException` and database-integrity handlers retain their specific statuses,
+  while every other `RuntimeException` is returned as HTTP 400 with a minimal
+  `{message}` body. This intentionally includes `IllegalArgumentException`,
+  `EntityNotFoundException`, and genuine unexpected runtime failures such as a
+  null dereference; the coarse classification matches the comparison scope and
+  is not presented as a complete production exception taxonomy. Frontend error
+  banners prefer this server message and use their generic status fallback only
+  when the response has no textual `message`.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 

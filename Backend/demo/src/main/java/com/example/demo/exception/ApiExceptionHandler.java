@@ -21,6 +21,14 @@ public class ApiExceptionHandler {
         return response(HttpStatus.CONFLICT, "The requested change conflicts with existing data");
     }
 
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException exception) {
+        String message = exception.getMessage() == null || exception.getMessage().isBlank()
+                ? "Invalid request"
+                : exception.getMessage();
+        return ResponseEntity.badRequest().body(Map.of("message", message));
+    }
+
     private ResponseEntity<Map<String, Object>> response(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(Map.of(
                 "timestamp", LocalDateTime.now(),
