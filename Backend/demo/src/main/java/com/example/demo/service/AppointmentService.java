@@ -34,6 +34,12 @@ public interface AppointmentService {
 
     AppointmentDTO unassign(Integer id);
 
+    /** The logged-in client's own reserved appointments, past and future - see AGENTS.md "Upgrade: Faza 7 decisions". */
+    List<AppointmentDTO> getMyAppointmentsAsClient();
+
+    /** The logged-in trainer's own assigned appointments, past and future - see AGENTS.md "Upgrade: Faza 7 decisions". */
+    List<AppointmentDTO> getMyAppointmentsAsTrainer();
+
     List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date);
 
     Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date);

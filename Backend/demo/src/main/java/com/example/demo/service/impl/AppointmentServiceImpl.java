@@ -222,6 +222,22 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentRepository.findByStartTimeBetweenAndDate(start, end, date);
     }
 
+    public List<AppointmentDTO> getMyAppointmentsAsClient() {
+        Client client = getAuthenticatedClient();
+        return appointmentRepository.findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(client.getId())
+                .stream()
+                .map(appointmentMapper::toDto)
+                .toList();
+    }
+
+    public List<AppointmentDTO> getMyAppointmentsAsTrainer() {
+        Trainer trainer = getAuthenticatedTrainer();
+        return appointmentRepository.findByTrainerIdOrderByDateDescStartTimeDesc(trainer.getId())
+                .stream()
+                .map(appointmentMapper::toDto)
+                .toList();
+    }
+
 
 
 
@@ -360,6 +376,15 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private @NotNull Pair<Trainer, Appointment> getAuthenticatedTrainerAndAppointment(Integer id) {
+        Trainer trainer = getAuthenticatedTrainer();
+
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+
+        return Pair.of(trainer, appointment);
+    }
+
+    private Trainer getAuthenticatedTrainer() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new AccessDeniedException("Unauthorized access!");
@@ -367,12 +392,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         String email = jwt.getClaim("email");
 
-        Trainer trainer = trainerRepository.findByUserEmail(email)
+        return trainerRepository.findByUserEmail(email)
                 .orElseThrow(() -> new RuntimeException("Trainer not found for the logged-in user!"));
-
-        Appointment appointment = appointmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
-
-        return Pair.of(trainer, appointment);
     }
 }

@@ -29,4 +29,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
             "session"
     })
     List<Appointment> findByDate(LocalDate date);
+
+    /** A client's own reserved appointments (past + future) - backs "my appointments" for CLIENT. */
+    List<Appointment> findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(Integer clientId);
+
+    /** A trainer's own assigned appointments (past + future) - backs "my appointments" for TRAINER. */
+    List<Appointment> findByTrainerIdOrderByDateDescStartTimeDesc(Integer trainerId);
 }
