@@ -1,0 +1,354 @@
+package com.example.demo.service.impl;
+
+import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.mapper.AppointmentMapper;
+import com.example.demo.model.Appointment;
+import com.example.demo.model.Session;
+import com.example.demo.model.user.Client;
+import com.example.demo.model.user.ClientAppointment;
+import com.example.demo.model.user.ClientSessionTracking;
+import com.example.demo.model.user.Trainer;
+import com.example.demo.repository.AppointmentRepository;
+import com.example.demo.repository.SessionRepository;
+import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.schedule.TrainerScheduleRepository;
+import com.example.demo.repository.user.ClientAppointmentRepository;
+import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.repository.user.ClientSessionTrackingRepository;
+import com.example.demo.repository.user.TrainerRepository;
+import com.example.demo.service.notification.NotificationService;
+import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for {@link AppointmentServiceImpl} - the Faza 7 marketplace flow (reserve/cancel,
+ * assign/unassign, the "my appointments" endpoints) plus the pre-existing available/without-
+ * trainer filtering it builds on. See AGENTS.md "Upgrade: Faza 7 decisions".
+ */
+@ExtendWith(MockitoExtension.class)
+class AppointmentServiceImplTest {
+
+    @Mock
+    private SessionRepository sessionRepository;
+    @Mock
+    private TrainerRepository trainerRepository;
+    @Mock
+    private ClientRepository clientRepository;
+    @Mock
+    private AppointmentRepository appointmentRepository;
+    @Mock
+    private AppointmentMapper appointmentMapper;
+    @Mock
+    private GymScheduleRepository gymScheduleRepository;
+    @Mock
+    private TrainerScheduleRepository trainerScheduleRepository;
+    @Mock
+    private ClientSessionTrackingRepository clientSessionTrackingRepository;
+    @Mock
+    private NotificationService notificationService;
+    @Mock
+    private ClientAppointmentRepository clientAppointmentRepository;
+
+    private AppointmentServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new AppointmentServiceImpl(sessionRepository, trainerRepository, clientRepository,
+                appointmentRepository, appointmentMapper, gymScheduleRepository, trainerScheduleRepository,
+                clientSessionTrackingRepository, notificationService, clientAppointmentRepository);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAsClient(String email) {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", email)
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(900))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(jwt, null, List.of()));
+    }
+
+    private void authenticateAsTrainer(String email) {
+        authenticateAsClient(email); // identical shape - only which repository resolves the email differs
+    }
+
+    private Session session(int maxParticipants) {
+        return new Session(1, com.example.demo.enums.SessionType.GROUP, maxParticipants);
+    }
+
+    // ---------- reserve ----------
+
+    @Test
+    void reserve_addsClientWhenSpotAvailable() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        Session session = session(3);
+        Appointment appointment = Appointment.builder().id(10).session(session).clientAppointments(new HashSet<>()).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(clientSessionTrackingRepository.findByClientAndSession(client, session)).thenReturn(Optional.empty());
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.reserve(10);
+
+        assertThat(appointment.getClientAppointments()).hasSize(1);
+        verify(clientSessionTrackingRepository).save(any(ClientSessionTracking.class));
+    }
+
+    @Test
+    void reserve_throwsWhenAppointmentIsFull() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        Session session = session(1);
+        HashSet<ClientAppointment> existing = new HashSet<>();
+        existing.add(ClientAppointment.builder().id(1).client(Client.builder().id(99).build()).build());
+        Appointment appointment = Appointment.builder().id(10).session(session).clientAppointments(existing).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.reserve(10))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("No available spots");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void reserve_throwsWhenUnauthenticated() {
+        assertThatThrownBy(() -> service.reserve(10)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ---------- cancel ----------
+
+    @Test
+    void cancel_removesClientAndRefundsTrackingWhenBeforeDeadline() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        Session session = session(3);
+        HashSet<ClientAppointment> clientAppointments = new HashSet<>();
+        clientAppointments.add(ClientAppointment.builder().id(1).client(client).build());
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .date(LocalDate.now().plusDays(5)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(11, 0))
+                .clientAppointments(clientAppointments).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        ClientSessionTracking tracking = ClientSessionTracking.builder()
+                .client(client).session(session).remainingAppointments(2).reservedAppointments(1).build();
+        when(clientSessionTrackingRepository.findByClientAndSession(client, session)).thenReturn(Optional.of(tracking));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.cancel(10);
+
+        assertThat(appointment.getClientAppointments()).isEmpty();
+        assertThat(tracking.getRemainingAppointments()).isEqualTo(3);
+        assertThat(tracking.getReservedAppointments()).isEqualTo(0);
+    }
+
+    @Test
+    void cancel_throwsWhenPastTheTwentyFourHourDeadline() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        HashSet<ClientAppointment> clientAppointments = new HashSet<>();
+        clientAppointments.add(ClientAppointment.builder().id(1).client(client).build());
+        // Starts in 2 hours - inside the 24h cancellation deadline, so cancelling now must fail.
+        java.time.LocalDateTime startsAt = java.time.LocalDateTime.now().plusHours(2);
+        Appointment appointment = Appointment.builder().id(10).session(session(3))
+                .date(startsAt.toLocalDate()).startTime(startsAt.toLocalTime()).endTime(startsAt.toLocalTime().plusHours(1))
+                .clientAppointments(clientAppointments).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.cancel(10))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Too late to cancel");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void cancel_throwsWhenClientNotRegisteredForAppointment() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        Appointment appointment = Appointment.builder().id(10).session(session(3))
+                .date(LocalDate.now().plusDays(5)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(11, 0))
+                .clientAppointments(new HashSet<>()).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.cancel(10))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("not registered");
+    }
+
+    // ---------- assign / unassign ----------
+
+    @Test
+    void assign_setsCallingTrainerOnTheAppointment() {
+        authenticateAsTrainer("trener@gym.com");
+        Trainer trainer = Trainer.builder().id(7).build();
+        when(trainerRepository.findByUserEmail("trener@gym.com")).thenReturn(Optional.of(trainer));
+
+        Appointment appointment = Appointment.builder().id(10).trainer(null).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.assign(10);
+
+        assertThat(appointment.getTrainer()).isSameAs(trainer);
+    }
+
+    @Test
+    void unassign_clearsTrainerWhenCallerIsTheAssignedTrainer() {
+        authenticateAsTrainer("trener@gym.com");
+        Trainer trainer = Trainer.builder().id(7).build();
+        when(trainerRepository.findByUserEmail("trener@gym.com")).thenReturn(Optional.of(trainer));
+
+        Appointment appointment = Appointment.builder().id(10).trainer(trainer).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.unassign(10);
+
+        assertThat(appointment.getTrainer()).isNull();
+    }
+
+    @Test
+    void unassign_throwsWhenCallerIsNotTheAssignedTrainer() {
+        authenticateAsTrainer("trener@gym.com");
+        // BaseEntity's Lombok-generated equals() only compares its own (version/createdAt/...)
+        // fields, never the subclass id (see AGENTS.md "Known issues") - two otherwise-distinct
+        // Trainers with all-null audit fields would incorrectly compare equal, so distinguish
+        // them by version here the same way to actually exercise the "not the assigned trainer"
+        // branch rather than accidentally passing via the equals() bug.
+        Trainer caller = Trainer.builder().id(7).build();
+        caller.setVersion(7);
+        when(trainerRepository.findByUserEmail("trener@gym.com")).thenReturn(Optional.of(caller));
+
+        Trainer someoneElse = Trainer.builder().id(8).build();
+        someoneElse.setVersion(8);
+        Appointment appointment = Appointment.builder().id(10).trainer(someoneElse).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.unassign(10))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("not assigned");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    // ---------- available / without-trainer filtering ----------
+
+    @Test
+    void getAvailable_onlyReturnsAppointmentsWithFreeCapacity() {
+        // Distinct version numbers: BaseEntity's Lombok-generated equals() only compares its own
+        // (version/createdAt/...) fields, never subclass id (see AGENTS.md "Known issues") - two
+        // otherwise-distinct Appointments with all-null audit fields would compare equal, which
+        // would make Mockito's equals-based verify(never()).toDto(full) below spuriously match
+        // the call for "open" too.
+        Appointment full = Appointment.builder().id(1).session(session(1))
+                .clientAppointments(setOf(ClientAppointment.builder().id(1).build())).build();
+        full.setVersion(1);
+        Appointment open = Appointment.builder().id(2).session(session(2))
+                .clientAppointments(new HashSet<>()).build();
+        open.setVersion(2);
+        when(appointmentRepository.findAll()).thenReturn(List.of(full, open));
+        when(appointmentMapper.toDto(open)).thenReturn(new AppointmentDTO());
+
+        List<AppointmentDTO> result = service.getAvailable();
+
+        assertThat(result).hasSize(1);
+        verify(appointmentMapper, never()).toDto(full);
+    }
+
+    @Test
+    void getAllWithoutTrainer_onlyReturnsUnassignedAppointments() {
+        // See the equals()-collision note in getAvailable_onlyReturnsAppointmentsWithFreeCapacity
+        // above - same reason for the distinct version numbers here.
+        Appointment assigned = Appointment.builder().id(1).trainer(Trainer.builder().id(1).build()).build();
+        assigned.setVersion(1);
+        Appointment unassigned = Appointment.builder().id(2).trainer(null).build();
+        unassigned.setVersion(2);
+        when(appointmentRepository.findAll()).thenReturn(List.of(assigned, unassigned));
+        when(appointmentMapper.toDto(unassigned)).thenReturn(new AppointmentDTO());
+
+        List<AppointmentDTO> result = service.getAllWithoutTrainer();
+
+        assertThat(result).hasSize(1);
+        verify(appointmentMapper, never()).toDto(assigned);
+    }
+
+    // ---------- my-appointments ----------
+
+    @Test
+    void getMyAppointmentsAsClient_resolvesClientFromJwt() {
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+        when(appointmentRepository.findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(5))
+                .thenReturn(List.of(new Appointment()));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        List<AppointmentDTO> result = service.getMyAppointmentsAsClient();
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getMyAppointmentsAsTrainer_resolvesTrainerFromJwt() {
+        authenticateAsTrainer("trener@gym.com");
+        Trainer trainer = Trainer.builder().id(7).build();
+        when(trainerRepository.findByUserEmail("trener@gym.com")).thenReturn(Optional.of(trainer));
+        when(appointmentRepository.findByTrainerIdOrderByDateDescStartTimeDesc(7))
+                .thenReturn(List.of(new Appointment()));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        List<AppointmentDTO> result = service.getMyAppointmentsAsTrainer();
+
+        assertThat(result).hasSize(1);
+    }
+
+    private HashSet<ClientAppointment> setOf(ClientAppointment... items) {
+        HashSet<ClientAppointment> set = new HashSet<>();
+        for (ClientAppointment item : items) {
+            set.add(item);
+        }
+        return set;
+    }
+}
