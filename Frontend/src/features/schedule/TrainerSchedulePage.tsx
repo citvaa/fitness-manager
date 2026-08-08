@@ -1,6 +1,20 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { isAxiosError } from 'axios'
 import { createMySchedule, createMyUnavailability, deleteMyScheduleEntry, getMySchedule } from './api'
 import type { TrainerScheduleDTO, WorkStatus } from './types'
+
+/**
+ * The backend now returns a real, specific message for validation errors (see AGENTS.md
+ * "Known issues"/GlobalExceptionHandler - "No gym schedule found for ...", "Trainer already has
+ * a shift overlapping...", etc.) instead of a bare 500. Prefer that message; fall back to a
+ * generic Serbian one only if the response has no body (network error, unexpected shape).
+ */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err) && typeof err.response?.data?.message === 'string') {
+    return err.response.data.message
+  }
+  return fallback
+}
 
 const STATUS_LABEL: Record<WorkStatus, string> = {
   WORKING: 'Radi',
@@ -50,9 +64,12 @@ export function TrainerSchedulePage() {
       await createMySchedule({ date, startTime: `${startTime}:00`, endTime: `${endTime}:00` })
       setDate('')
       await reload()
-    } catch {
+    } catch (err) {
       setError(
-        'Unos radnog vremena nije uspeo - proveri da li je datum u okviru radnog vremena teretane i da se ne preklapa sa postojećom smenom.',
+        extractErrorMessage(
+          err,
+          'Unos radnog vremena nije uspeo - proveri da li je datum u okviru radnog vremena teretane i da se ne preklapa sa postojećom smenom.',
+        ),
       )
     } finally {
       setSavingShift(false)
@@ -68,8 +85,8 @@ export function TrainerSchedulePage() {
       setUnavailStart('')
       setUnavailEnd('')
       await reload()
-    } catch {
-      setError('Unos neradnog perioda nije uspeo.')
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Unos neradnog perioda nije uspeo.'))
     } finally {
       setSavingUnavail(false)
     }

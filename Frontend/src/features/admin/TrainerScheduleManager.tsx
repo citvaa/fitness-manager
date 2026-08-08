@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { isAxiosError } from 'axios'
 import {
   createTrainerSchedule,
   createTrainerUnavailability,
@@ -6,6 +7,15 @@ import {
   getTrainerSchedule,
 } from './api'
 import type { TrainerScheduleDTO, WorkStatus } from './types'
+
+/** See the same helper in features/schedule/TrainerSchedulePage.tsx - the backend now returns a
+ * real, specific validation message instead of a bare 500 (GlobalExceptionHandler). */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err) && typeof err.response?.data?.message === 'string') {
+    return err.response.data.message
+  }
+  return fallback
+}
 
 const STATUS_LABEL: Record<WorkStatus, string> = {
   WORKING: 'Radi',
@@ -59,8 +69,13 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
       })
       setDate('')
       await reload()
-    } catch {
-      setError('Unos radnog vremena nije uspeo - proveri da li je datum u okviru radnog vremena teretane i da se ne preklapa sa postojećom smenom.')
+    } catch (err) {
+      setError(
+        extractErrorMessage(
+          err,
+          'Unos radnog vremena nije uspeo - proveri da li je datum u okviru radnog vremena teretane i da se ne preklapa sa postojećom smenom.',
+        ),
+      )
     }
   }
 
@@ -77,8 +92,8 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
       setUnavailStart('')
       setUnavailEnd('')
       await reload()
-    } catch {
-      setError('Unos neradnog perioda nije uspeo.')
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Unos neradnog perioda nije uspeo.'))
     }
   }
 

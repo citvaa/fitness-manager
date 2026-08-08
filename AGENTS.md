@@ -1148,6 +1148,83 @@ one since these are the same task brief, just completed.
   raspored, plaćanja, dnevni raspored) as a result. This is flagged
   explicitly rather than silently skipped, per instruction - a manual
   click-through before the defense is still outstanding.
+  **Update**: the browser-QA screenshots were captured by the user directly
+  in a later session (`docs/browser-qa/phase6-*.jpg`, 9 screens) - the gap
+  above is resolved, just not by this assistant.
+
+### Faza 6 decisions (continued, part 2) - trainer-delete role parity + global exception handler
+
+Two small correctness fixes, picked up as a quick follow-up pass after Phase
+6 was otherwise functionally complete, before moving on to Phase 7.
+
+- **`TrainerServiceImpl.delete` now also removes the `TRAINER` role from the
+  underlying `User` account** (`userService.removeRole(userId, Role.TRAINER)`,
+  called after the `Trainer` row and its schedule are deleted, inside the
+  same `@Transactional` boundary). Before this fix, deleting a trainer's
+  domain profile left the `User` account with a dangling `TRAINER` role and
+  no matching `Trainer` row - the mirror-image of the gap already documented
+  for `UserService.addRole` in "Upgrade: Faza 6 decisions" (adding a role
+  doesn't create a domain row; now, removing the domain row doesn't remove
+  the role either, unless explicitly done). Uses the exact same
+  `removeRole` the admin "Korisnici" UI already calls - no new mechanism.
+  Deliberately does **not** touch the `User` account itself (email,
+  activation state, other roles) - only the one role tied to the profile
+  being deleted, per the task's explicit scope. One consequence worth
+  noting: `removeRole` throws `IllegalArgumentException` if the role is
+  already absent (e.g. an admin manually stripped the role via Swagger
+  first) - since `delete` is one transaction, that would now roll back the
+  entire trainer deletion instead of silently succeeding. Accepted as
+  correct fail-safe behavior (the "same mechanism as removeRole" the task
+  asked for, no special-casing added) rather than treated as a new bug.
+  Verified with `curl`: created a throwaway trainer, deleted it, and
+  confirmed `GET /api/user/{id}` shows `"roles":[]` afterward.
+- **`GlobalExceptionHandler` (`com.example.demo.exception`, minimal
+  `@RestControllerAdvice`) added specifically to fix a real, observed UX
+  bug**: `TrainerScheduleServiceImpl.validateGymHours` throws a bare
+  `RuntimeException("No gym schedule found for " + date)` when no
+  `GymSchedule` row exists for that day of week, and its sibling validation
+  methods throw `IllegalArgumentException` for out-of-hours/overlap/closed-
+  gym cases - none of these were ever caught, so every one of them
+  previously surfaced as a content-less `{"status":500}` on both the
+  self-service (`/trainer/raspored`) and manager-facing (`Administracija ->
+  Treneri -> raspored`) trainer-schedule screens, with the frontend's error
+  banner falling back to a generic hardcoded message. Handles exactly
+  `IllegalArgumentException` and bare `RuntimeException` -> `400` with
+  `{"message": "<the exception's own message>"}` - see the "Known issues"
+  entry above for the accepted trade-offs (EntityNotFoundException now also
+  maps to 400 instead of 404; an unexpected RuntimeException bug now also
+  reports as 400 instead of 500). `IllegalStateException` is deliberately
+  left unhandled here - `RoomCheckInController` already catches it locally
+  and returns `409` (see "Upgrade: service layer decisions"), so a global
+  handler for it would never actually run for that code path and would be
+  redundant to add.
+  - **Frontend**: the error banner already existed on both trainer-schedule
+    screens (`TrainerSchedulePage`/`TrainerScheduleManager`), but neither
+    read the response body - they always displayed the same hardcoded
+    Serbian fallback string regardless of what the backend said, so the new
+    specific backend messages would have been invisible without a change.
+    Added a small `extractErrorMessage(err, fallback)` helper (duplicated in
+    both files, same "small duplication over cross-feature coupling"
+    reasoning as the rest of this phase) that reads
+    `err.response.data.message` via axios's `isAxiosError`, falling back to
+    the original generic message only if the response has no body (network
+    error, unexpected shape). The backend's messages are plain English
+    strings (not translated for this fix, out of scope) shown inline next
+    to Serbian labels - acceptable for now since no error-message i18n layer
+    exists anywhere else in this codebase either.
+  - **Verified with `curl` against a freshly-recreated Postgres volume**
+    (the dev DB's Flyway schema-history checksums had drifted from the
+    on-disk migration files, unrelated to this fix - recreated the volume
+    per the standard recovery procedure documented in "Upgrade: final
+    summary"; `mvn test` then passed all 62 tests, including
+    `contextLoads`, after also clearing the stale `target/classes/db/
+    migration` directory per the same known Phase 5 gotcha): attempted a
+    trainer-schedule `POST` for a Sunday (the dev-seed only configures
+    `GymSchedule` for Monday) and got `400` with
+    `{"message":"No gym schedule found for 2026-08-09"}`; attempted one with
+    `startTime` after `endTime` and got `400` with
+    `{"message":"Start time is after end time"}` - both previously would
+    have been a bare 500. `mvn compile` and `npx tsc -b` clean.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -1203,8 +1280,27 @@ either upgrade session to pick up:
   client on it). Added `@RoleRequired({"MANAGER", "TRAINER"})`. Verified with
   `curl` across all three seeded roles: CLIENT now gets `403`, MANAGER and
   TRAINER both get `200`. See "Upgrade: Faza 6 decisions" (continued).
-- No global exception handler - error responses aren't a consistent JSON
-  shape yet.
+- ~~No global exception handler - error responses aren't a consistent JSON
+  shape yet.~~ **Partially fixed 2026-08-08** (`upgrade/claude-code` branch,
+  Phase 6 continuation): added `GlobalExceptionHandler`
+  (`com.example.demo.exception`), a minimal `@RestControllerAdvice` mapping
+  `IllegalArgumentException` and bare `RuntimeException` to `400` with a
+  `{"message": "..."}` body, instead of both falling through to Spring
+  Boot's default error response (which drops the message entirely). This is
+  "partially" fixed, not "fixed", on purpose: it covers exactly the two
+  exception types that were causing a real, observed problem
+  (`TrainerScheduleServiceImpl`'s validation exceptions surfacing as a raw
+  500 with no explanation, on both the self-service and manager-facing
+  trainer-schedule screens) - it is not a complete, codebase-wide exception
+  taxonomy. Notably, `jakarta.persistence.EntityNotFoundException` (used
+  throughout for "resource not found" - a `RuntimeException` subclass) now
+  also gets swept into the same `400` handler instead of a more
+  semantically-correct `404`, and any genuinely unexpected `RuntimeException`
+  (e.g. a `NullPointerException` indicating a real bug) is now also reported
+  as `400` rather than `500`. Both are accepted trade-offs for this fix's
+  minimal scope, not deliberate REST-semantics decisions - a real 404/500
+  split is a reasonable follow-up. See "Upgrade: Faza 6 decisions"
+  (continued) for the full rationale and verification.
 - ~~`pom.xml` sets `maven.test.skip=true`~~ **Fixed 2026-08-07** (`upgrade/
   claude-code` branch, thesis-defense-finalization session): removed the
   property; the backend now has real unit test coverage for all Phase 1-4
