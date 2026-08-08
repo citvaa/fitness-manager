@@ -1469,6 +1469,167 @@ decisions and findings as thesis comparison material, not just an internal note.
   rendering correctly with no console errors. `mvn test` (106/106, including the 44 new tests),
   `mvn compile`, `npx tsc -b`, and `npm run build` all clean against this same fresh instance.
 
+## Upgrade: Faza 9 decisions
+
+Faza 9 (`upgrade/claude-code` branch) closed three gaps an independent full-application audit
+found - real, unintended gaps left by earlier phases' task briefs never asking for them, not
+implementation taste. Same spirit as every prior "Upgrade: ..." section - documenting the
+non-obvious decisions as thesis comparison material.
+
+- **MANAGER appointment/slot management: a new "Termini" tab in Administracija, not a
+  `Dnevni raspored` extension.** `DailySchedulePage` ("Dnevni raspored") is a single-day read-only
+  view (`GET /api/calendar`) with no create/assign/add-client affordance and no per-appointment
+  identity beyond what's visible for that one day - retrofitting slot management onto it would
+  have meant either changing its read-only contract or bolting on unrelated write actions to a
+  screen whose whole point is a quick daily overview. A new tab in the existing tabbed
+  Administracija shape (matching Korisnici/Treneri/Klijenti/Radno vreme) fits the same "one
+  concern per tab" convention `AdminPage.tsx` already established, and reuses the trainer/client
+  pickers already available there via `getTrainers()`/`getClients()`.
+- **One new backend endpoint, `GET /api/appointment` (MANAGER-only), added specifically because no
+  existing endpoint could back a management list.** `getAvailable()` filters to "has a free spot"
+  and `getAllWithoutTrainer()` filters to "no trainer assigned" - both are self-service-shaped
+  queries for a specific consumer, not "give me everything so I can manage it." Read `Appointment`/
+  `AppointmentServiceImpl`/`AppointmentController` in full before adding anything (per this
+  session's brief) and confirmed `create`/`addTrainer`/`removeTrainer`/`addClients`/`removeClient`
+  already existed with zero frontend caller - this phase's whole first task was building that
+  caller, not new service logic.
+- **`Appointment.room` wired into the API for the first time, closing a gap Phase 1 explicitly
+  deferred.** The Phase 1 schema decision ("Existing `AppointmentDTO`/`AppointmentMapper`
+  intentionally left untouched") left `room` unexposed because no consumer existed yet for a
+  room-aware appointment endpoint. This phase's task brief explicitly asks for "soba ako je
+  primenjivo" (room, if applicable) on the new creation form, so that consumer now exists:
+  `CreateAppointmentRequest` gained an optional `roomId`, `AppointmentDTO` gained a nullable
+  `room` (`RoomSummaryDTO`, mirroring how `trainer` is already a summary DTO), and
+  `AppointmentMapper`/`AppointmentServiceImpl.create` wire it through with `RoomMapper` added to
+  the mapper's `uses`. No migration needed - the column and FK have existed on `Appointment`
+  since Phase 1. Deliberately did **not** add an update-room endpoint - the task asked for room
+  selection at creation time only, and retrofitting a `PUT` for one field (with the trainer
+  add/remove endpoints as a precedent for "add this after creation instead") was judged
+  unnecessary scope for what was asked.
+- **Client add/remove on an appointment reuses the existing `Set<Integer> clientIds`
+  query-param-bound endpoint as-is; the frontend builds the query string manually rather than via
+  axios's `params` object.** `AppointmentController.addClients` takes `@RequestParam Set<Integer>
+  clientIds`, which Spring binds from repeated `clientIds=1&clientIds=2` query params - axios's
+  default array-param serialization is not guaranteed to produce that exact wire format (bracket
+  vs. repeat vs. comma-joined conventions differ across libraries/versions), so
+  `addClientToAppointment` in `features/admin/api.ts` appends `?clientIds=<id>` directly to the
+  URL instead of trusting axios's serializer, avoiding an entire class of "works with one id,
+  breaks with two" bugs. Each client is added one at a time from the UI (the manager picks one
+  client, clicks "Dodaj", repeats) rather than a multi-select-then-batch-submit interaction - matches
+  the granularity of the underlying add/remove-one-client backend actions and needed no new
+  batch endpoint.
+- **Progress entry/personal record edit and delete: added at both the backend (new `PUT`/`DELETE`
+  on both controllers) and the frontend (inline edit forms in list rows), since neither existed
+  anywhere before this phase.** Checked `ClientProgressEntryController`/`ClientPersonalRecordController`
+  and their service interfaces in full first (per the task brief) and confirmed only `create`+
+  read endpoints existed - a trainer who mistyped a measurement or logged a personal record for
+  the wrong date had no way to fix it, ever, on this branch until now.
+  - **Authorization for `update`/`delete` is checked against the entry/record's own (already-persisted)
+    client, never against the request body's `clientId`.** `update(id, request)` fetches the
+    entity by `id` first, then calls `TrainerClientAccessGuard.assertCanAccessClient(entity.getClient().getId())`
+    - the request's `clientId` field is populated (the frontend sends it, since `CreateProgressEntryRequest`/
+    `CreatePersonalRecordRequest` are reused for both create and update to avoid a parallel
+    `UpdateXRequest` DTO pair) but is otherwise ignored for both the ownership check and the
+    update itself. This was a deliberate, tested decision (see `ClientProgressEntryServiceImplTest`/
+    `ClientPersonalRecordServiceImplTest` update tests, which construct a request with a
+    deliberately wrong `clientId` and assert the guard is still called with the entry's real
+    client): trusting the request body's `clientId` for authorization would let a malicious or
+    buggy caller claim access to an entry by lying about which client it belongs to, since the
+    guard would then check the wrong (attacker-chosen) client's training history instead of the
+    entry's actual owner.
+  - **Reusing `CreateProgressEntryRequest`/`CreatePersonalRecordRequest` for update rather than
+    adding parallel `Update...Request` DTOs.** Both request shapes are already "every field the
+    entity has, all writable" - an update is structurally identical to a create except for which
+    row it targets (`id` from the path, not the body) and the ownership source (existing entity,
+    not a fresh lookup). A separate DTO would have been a distinction without a difference; this
+    also matches how `GymScheduleServiceImpl.create`'s Faza 6 upsert reuses `CreateGymScheduleRequest`
+    for both the insert and update path rather than introducing an update-specific request type.
+  - **`ClientProgressEntryServiceImpl.update()`/`.delete()` evict `CLIENT_PROGRESS_INSIGHT_CACHE`
+    manually via an injected `CacheManager`, not a declarative `@CacheEvict`.** `create()`'s
+    `@CacheEvict(key = "#request.clientId")` works because the client id is a method argument
+    from the start; `update`/`delete` only take an `id` (the entry's own primary key) - the
+    client id is only known *after* fetching the entity. Declaring `@CacheEvict(key =
+    "#result.clientId")` was considered and rejected: Spring evaluates the eviction SpEL
+    *before* the method body runs for a plain `@CacheEvict` (no `beforeInvocation=false` changes
+    that for `@CachePut`-shaped result-dependent keys reliably on all Spring versions used here),
+    so a manual `cacheManager.getCache(...).evict(clientId)` call at the end of the method,
+    once the entity is in hand, was the more explicit and reliably-correct choice - same
+    "no self-invocation, explicit `CacheManager` access" style `ClientProgressInsightServiceImpl`
+    already established in Phase 2 for a different reason (avoiding the AOP self-invocation
+    pitfall). `ClientPersonalRecordServiceImpl.update()`/`.delete()` have no equivalent eviction -
+    consistent with the pre-existing Phase 2 decision that personal-record writes never evict the
+    insight cache (see "Upgrade: Faza 8 decisions"'s note on "Osveži" behavior), unchanged by this
+    phase.
+  - **Frontend: `EntriesList.tsx` is a new component** (raw measurement history previously only
+    ever existed aggregated into `ProgressCharts`, with no per-entry list at all) **and
+    `PersonalRecordsList.tsx` gained inline edit** (it already existed as a read-only list, from
+    Phase 4). Both take an `editable` prop (default `false`) and an `onChanged` callback:
+    `TrainerProgressPage` passes `editable` + `onChanged={() => loadDetail(...)}`,
+    `ClientProgressPage` renders both with `editable` omitted (defaults to read-only, per the
+    task's explicit "klijentski prikaz ostaje read-only" instruction) - one shared component pair
+    for both roles rather than forking a trainer-only vs. client-only variant, matching the
+    existing Phase 4 pattern of sharing every display component across the trainer/client progress
+    screens and isolating the role difference to presence/absence of write affordances.
+  - **Inline edit-in-place rows, not a modal/separate edit page.** Clicking "Izmeni" replaces that
+    one list row with a small form pre-filled from the entity, "Sačuvaj"/"Otkaži" collapse it back
+    - avoids introducing a modal/dialog pattern that doesn't exist anywhere else in this frontend,
+    and keeps the edit target visually anchored to the row being changed rather than requiring the
+    user to re-locate it after a modal closes.
+  - **Delete uses a plain `window.confirm(...)`, matching every other destructive action in this
+    frontend** (`TrainerScheduleManager`'s schedule-entry delete, `AdminPage`'s trainer delete) -
+    no new confirmation-dialog component was introduced for this one case, consistent with the
+    existing convention of using the browser's native confirm for irreversible actions rather than
+    a custom modal.
+- **Auth/administration test coverage: `UserServiceImplTest` (new), `TrainerServiceImplTest`
+  (new), `HolidayServiceImplTest` (new)** - `ClientServiceImplTest` and `GymScheduleServiceImplTest`
+  already existed from Faza 6/8 and needed no further coverage for this brief.
+  `UserServiceImplTest` covers login (success/wrong-password/unknown-email), register
+  (valid-key/expired-key-is-a-no-op), forgot/reset-password (found/not-found), and add/removeRole
+  (success/duplicate-role/missing-role) - the most security-sensitive code in the app (password
+  reset, role grants) had zero dedicated tests before this phase despite every other Faza 6/7/8
+  service getting coverage. `TrainerServiceImplTest` covers create/update/delete (including the
+  Faza 6 `removeRole` side effect on delete, and delete's `EntityNotFoundException` path not
+  calling `removeRole`) and `getAll()`. `HolidayServiceImplTest` covers `create`/`isGymClosedOn`/
+  `getAll` - deliberately has no update/delete tests to write, since `HolidayServiceImpl` itself
+  has no update/delete methods (insert-only by design, see "Upgrade: Faza 6 decisions" - holidays
+  don't need the correction support a recurring weekly schedule does).
+- **`AppointmentServiceImplTest` extended with `create()`/`getAll()` tests for the two things this
+  phase actually changed in that service** (room wiring on create, the new `getAll()` method) -
+  not a full re-test of `create()`'s pre-existing validation logic (gym hours, trainer/client
+  overlap), which Faza 8 already covered. Hit the same `BaseEntity.equals()` gap documented in
+  "Known issues" a third time while writing `getAll_returnsEveryAppointmentRegardlessOfState` (two
+  bare `new Appointment()` instances compared equal under Mockito's `anyList()`/list-content
+  matching) - worked around with `List.of(new Appointment(), new Appointment())` compared by
+  `.hasSize(2)` rather than by equality, not a production code change, consistent with how Faza 5
+  and Faza 8 both already worked around the same gap rather than fixing `BaseEntity` itself.
+- **Verified end-to-end against the existing dev Postgres/Redis volume** (not re-wiped fresh this
+  time, since the goal was verifying new behavior against the branch's already-realistic seeded
+  data, not a from-scratch migration replay - Faza 7/8 already did that fresh-volume check for the
+  schema this phase didn't touch): `mvn test` 140/140 green (106 pre-existing + 34 new); `mvn
+  compile`, `npx tsc -b`, `npm run build` all clean. Exercised the full flow through the actual
+  running frontend (Claude-in-Chrome connected, screenshots in `docs/browser-qa/phase9-*.jpg`):
+  logged in as `admin` (MANAGER), created a new appointment (2026-08-25, Individualni, room "Sala
+  za tegove") through the new "Termini" tab, assigned trainer `ogi` to it, added client `citva` to
+  it, and confirmed it flipped to "1/1 (popunjeno)"; logged in as `ogi` (TRAINER) and confirmed the
+  same appointment appeared in "Moji termini" under "Budući dodeljeni termini"; still as `ogi`,
+  edited an existing progress entry's note through the new inline edit form on "Praćenje napretka"
+  and confirmed the change appeared immediately with no reload; logged in as `citva` (CLIENT) and
+  confirmed the edited note was visible on the read-only "Moj napredak" screen (via the new,
+  read-only `EntriesList`) with no edit/delete controls present, and confirmed the manager-created
+  appointment appeared in "Moji termini". Delete was verified via direct backend calls rather than
+  through a second browser click - **one real, worth-recording caveat from this session**: clicking
+  "Obriši" on a progress entry in the live browser triggers the app's native `window.confirm(...)`
+  dialog, which - as documented in this environment's browser-automation guidance - blocks the
+  CDP connection entirely (screenshots, JS execution, and further clicks all time out) until the
+  dialog is dismissed by a real user; a same-tab `Enter` keypress did not reliably reach the native
+  dialog before it froze the tab in this run, and the tab had to be closed and a fresh one opened
+  to continue. The delete code path itself (`deleteEntry`/`deleteRecord` → `DELETE
+  /api/progress/entry|record/{id}`) was verified directly via `curl` instead (confirmed a scratch
+  entry/record created for this purpose was removed and no longer appears in
+  `GET /api/progress/entry/client/{id}`), and is additionally covered by the new unit tests above -
+  functionally exercised, just not via a literal second browser click on "Obriši" once the first
+  attempt's dialog had already frozen that tab.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -1902,6 +2063,26 @@ either upgrade session to pick up:
   `mvn test` 106/106 green (61 pre-existing + 45 new, including the
   regression test above), `mvn compile`, `npx tsc -b`, `npm run build` all
   clean.
+- 2026-08-08: Faza 9 (`upgrade/claude-code` branch) - closed three real gaps an independent
+  full-application audit found (backend endpoint vs. frontend caller cross-check, not a
+  self-reported completeness check): a MANAGER slot-management screen for the appointment
+  "marketplace" (create/assign-trainer/add-client, all of which existed on the backend since
+  Faza 2/7 with zero frontend caller), progress entry/personal record edit and delete (backend
+  `PUT`/`DELETE` plus inline-edit UI, neither of which existed anywhere before), and unit test
+  coverage for the previously-untested auth/administration services (`UserServiceImpl`,
+  `TrainerServiceImpl`, `HolidayServiceImpl`). Also wired `Appointment.room` into the API for the
+  first time (`CreateAppointmentRequest.roomId`, `AppointmentDTO.room`), a gap Phase 1 had
+  explicitly deferred until a real consumer needed it. See "Upgrade: Faza 9 decisions" above for
+  every design choice, including the deliberate "authorize against the entity's own client, not
+  the request body's `clientId`" pattern (tested explicitly) and the one real environment
+  limitation hit during verification (a native `window.confirm()` on progress-entry delete froze
+  the browser-automation tab, verified via `curl` instead). `mvn test` 140/140 green (106
+  pre-existing + 34 new), `mvn compile`, `npx tsc -b`, `npm run build` all clean. Verified live
+  through the running frontend end-to-end: a MANAGER-created appointment (with room + trainer +
+  client all set through the new UI) appeared correctly on both the trainer's "Moji termini" and
+  the client's "Moji termini"/booking-capacity view; a trainer-edited progress-entry note appeared
+  immediately on the client's read-only progress screen with no edit controls present there.
+  Screenshots in `docs/browser-qa/phase9-*.jpg`.
 
 ## Upgrade: final summary
 
@@ -1950,11 +2131,13 @@ usable, not just a showcase of three isolated features.)
    vulnerable shape (writing another trainer's schedule) is unrepresentable, not just
    permission-checked. A shared `DELETE /api/schedule/trainer/{id}` lets a MANAGER delete any
    entry and a TRAINER only their own.
-7. **Appointment marketplace / booking flow (Faza 7).** MANAGER creates appointment slots
-   (optionally pre-assigned); CLIENT self-books/cancels (`/client/zakazivanje`,
+7. **Appointment marketplace / booking flow (Faza 7, MANAGER-side UI in Faza 9).** MANAGER creates
+   appointment slots (optionally pre-assigned, and - since Faza 9 - optionally with a room) through
+   a dedicated "Termini" tab in Administracija; CLIENT self-books/cancels (`/client/zakazivanje`,
    `/client/moji-termini`, with a 24h cancellation deadline); TRAINER self-assigns/unassigns to
    unassigned slots (`/trainer/termini`). New `GET /api/appointment/me` and
-   `GET /api/appointment/trainer/me` "my appointments" endpoints back the two history screens.
+   `GET /api/appointment/trainer/me` "my appointments" endpoints back the two history screens; a
+   Faza 9 `GET /api/appointment` (MANAGER) backs the slot-management list.
 8. **Payment history + gym-wide daily schedule (Faza 6 continuation).** `GET /api/payment`
    (MANAGER, optional client filter) and `GET /api/payment/me` (CLIENT); a real authorization fix
    for `CalendarController.getScheduleForDay` (previously reachable by any role including CLIENT,
