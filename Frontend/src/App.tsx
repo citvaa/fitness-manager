@@ -1,5 +1,8 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './pages/LoginPage'
+import { CompleteRegistrationPage } from './pages/CompleteRegistrationPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { AppShell } from './layout/AppShell'
 import { ProtectedRoute, RequireActiveRole } from './auth/ProtectedRoute'
 import { RefreshScheduler } from './auth/RefreshScheduler'
@@ -9,6 +12,8 @@ import { LiveFloorPlanPage } from './features/gym/LiveFloorPlanPage'
 import { ManagerInsightsPage } from './features/insights/ManagerInsightsPage'
 import { TrainerProgressPage } from './features/progress/TrainerProgressPage'
 import { ClientProgressPage } from './features/progress/ClientProgressPage'
+import { AdminPage } from './features/admin/AdminPage'
+import { TrainerSchedulePage } from './features/schedule/TrainerSchedulePage'
 
 export default function App() {
   return (
@@ -16,6 +21,9 @@ export default function App() {
       <RefreshScheduler />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register/complete" element={<CompleteRegistrationPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
@@ -25,10 +33,12 @@ export default function App() {
               <Route path="/manager/room-editor" element={<RoomEditorPage />} />
               <Route path="/manager/floor-plan" element={<LiveFloorPlanPage />} />
               <Route path="/manager/insights" element={<ManagerInsightsPage />} />
+              <Route path="/manager/administracija" element={<AdminPage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="TRAINER" />}>
               <Route path="/trainer" element={<TrainerProgressPage />} />
+              <Route path="/trainer/raspored" element={<TrainerSchedulePage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="CLIENT" />}>
