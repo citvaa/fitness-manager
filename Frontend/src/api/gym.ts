@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Gym, OccupancySnapshot, Room, RoomDraft } from '../types'
+import type { ClientProfile, Gym, OccupancySnapshot, Room, RoomDraft } from '../types'
 
 export const gymApi = {
   gym: async () => (await api.get<Gym>('/api/gym')).data,
@@ -10,4 +10,7 @@ export const gymApi = {
   updateRoom: async (id: number, body: RoomDraft) => (await api.put<Room>(`/api/gym/rooms/${id}`, body)).data,
   deleteRoom: async (id: number) => { await api.delete(`/api/gym/rooms/${id}`) },
   occupancy: async () => (await api.get<OccupancySnapshot>('/api/gym/occupancy')).data,
+  checkIn: async (roomId:number,clientId:number) => (await api.post('/api/gym/occupancy/check-ins',{roomId,clientId})).data,
+  checkOut: async (clientId:number) => (await api.post(`/api/gym/occupancy/check-outs/${clientId}`)).data,
+  occupancyClients: async () => (await api.get<ClientProfile[]>('/api/gym/occupancy/clients')).data,
 }

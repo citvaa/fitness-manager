@@ -47,6 +47,9 @@ export function AppShell() {
               <NavLink to="/app/calendar">
                 <i>◫</i> Dnevni raspored
               </NavLink>
+              <NavLink to="/app/manage-appointments">
+                <i>＋</i> Upravljanje terminima
+              </NavLink>
               <NavLink to="/app/payments">
                 <i>¤</i> Plaćanja
               </NavLink>
@@ -57,7 +60,7 @@ export function AppShell() {
                 <i>↗</i> Praćenje napretka
               </NavLink>
               {session.activeRole === "TRAINER" && (
-                <><NavLink to="/app/appointments"><i>◫</i> Moji termini</NavLink><NavLink to="/app/schedules"><i>▦</i> Moj raspored</NavLink></>
+                <><NavLink to="/app/live"><i>◉</i> Plan uživo</NavLink><NavLink to="/app/appointments"><i>◫</i> Moji termini</NavLink><NavLink to="/app/schedules"><i>▦</i> Moj raspored</NavLink></>
               )}
               {session.activeRole === "CLIENT" && (
                 <><NavLink to="/app/appointments"><i>◫</i> Zakaži trening</NavLink><NavLink to="/app/payments"><i>¤</i> Moje uplate</NavLink></>

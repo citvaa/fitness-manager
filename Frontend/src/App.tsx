@@ -31,6 +31,7 @@ const SchedulesPage = lazy(() =>
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const DailyCalendarPage = lazy(() => import("./pages/DailyCalendarPage").then((m) => ({ default: m.DailyCalendarPage })));
 const AppointmentsPage = lazy(() => import("./pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
+const ManagerAppointmentsPage = lazy(() => import("./pages/ManagerAppointmentsPage").then((m) => ({ default: m.ManagerAppointmentsPage })));
 function ProtectedShell() {
   const session = useAuthStore((s) => s.session);
   const location = useLocation();
@@ -70,6 +71,7 @@ function ProgressOnly({ children }: { children: React.ReactNode }) {
     <Navigate to="/app" replace />
   );
 }
+function StaffOnly({ children }: { children: React.ReactNode }) { const role=useAuthStore(s=>s.session?.activeRole); return role==='MANAGER'||role==='TRAINER'?children:<Navigate to="/app/progress" replace/> }
 function PaymentAccess({ children }: { children: React.ReactNode }) {
   const role = useAuthStore((s) => s.session?.activeRole);
   return role === "MANAGER" || role === "CLIENT" ? children : <Navigate to="/app" replace />;
@@ -96,11 +98,11 @@ export default function App() {
         <Route
           path="live"
           element={
-            <ManagerOnly>
+            <StaffOnly>
               <Suspense fallback={loading("Učitavanje plana…")}>
                 <LivePlanPage />
               </Suspense>
-            </ManagerOnly>
+            </StaffOnly>
           }
         />
         <Route
@@ -142,6 +144,7 @@ export default function App() {
           }
         />
         <Route path="calendar" element={<ManagerOnly><Suspense fallback={loading("Učitavanje kalendara…")}><DailyCalendarPage /></Suspense></ManagerOnly>} />
+        <Route path="manage-appointments" element={<ManagerOnly><Suspense fallback={loading("Učitavanje termina…")}><ManagerAppointmentsPage /></Suspense></ManagerOnly>} />
         <Route path="payments" element={<PaymentAccess><Suspense fallback={loading("Učitavanje uplata…")}><PaymentsPage /></Suspense></PaymentAccess>} />
         <Route path="appointments" element={<ProgressOnly><Suspense fallback={loading("Učitavanje termina…")}><AppointmentsPage /></Suspense></ProgressOnly>} />
         <Route

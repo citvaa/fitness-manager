@@ -488,6 +488,40 @@ deliberately deferred to the following phase.
   Both access and refresh token generation now pin HS256, matching the documented
   auth contract for every allowed secret length.
 
+### Upgrade Phase 9 decisions
+
+- **Manager appointment operations use a dedicated screen backed by the daily
+  calendar snapshot.** The manager creates a slot and then manages its trainer
+  and roster in one date-scoped surface. This keeps the Phase 6 read-only daily
+  timeline intact while making the previously backend-only marketplace source
+  usable. The create contract now accepts an optional `roomId`, and a
+  manager-only session-type read endpoint supplies the seeded session IDs so
+  the frontend never hardcodes database identifiers. No schema change was
+  required because `Appointment.room` already existed.
+- **Manager roster changes preserve appointment credits.** The inherited helper
+  decremented a client's remaining credits twice when staff added them and did
+  not restore a credit on staff removal. The manager flow now adjusts each
+  tracking row exactly once, rejects capacity overflow and scheduling overlap,
+  and treats adding an already-linked client as idempotent.
+- **Progress correction reuses the existing ownership-protected API.** PUT and
+  DELETE already existed for both measurements and personal records, so Phase 9
+  adds trainer-only edit/delete controls and pre-populated forms without a new
+  backend contract. Client progress remains read-only. Every mutation reloads
+  entries, records, charts and the cache-backed narrative state immediately.
+- **Manual occupancy stays on the live plan and is available to both staff
+  roles.** The live route is now accessible to MANAGER and TRAINER, with a small
+  room/client check-in form beside the existing WebSocket-driven snapshot. A
+  narrow staff-only occupancy-client endpoint supplies selector options instead
+  of exposing manager account administration to trainers. Check-in/out uses the
+  existing REST mutations; the existing `/topic/gym/occupancy` full snapshot is
+  still the sole real-time update mechanism.
+- **Phase 9 service tests emphasize security-sensitive state transitions.**
+  Mockito coverage now exercises login success/failure, valid registration,
+  password-reset key lifecycle, role add/remove, Trainer and Client profile
+  ownership cleanup, and GymSchedule/Holiday CRUD boundaries. These remain fast
+  unit tests with mocked repositories/email/JWT boundaries; browser QA covers
+  the cross-role operational flows.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
