@@ -9,4 +9,6 @@ public interface HolidayService {
     HolidayDTO create(CreateHolidayRequest request);
 
     boolean isGymClosedOn(LocalDate date);
+    java.util.List<HolidayDTO> getAll();
+    void delete(Integer id);
 }

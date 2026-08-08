@@ -30,4 +30,9 @@ public class HolidayServiceImpl implements HolidayService {
     public boolean isGymClosedOn(LocalDate date) {
         return holidayRepository.existsByDate(date);
     }
+
+    public java.util.List<HolidayDTO> getAll() { return holidayRepository.findAll().stream().map(holidayMapper::toDTO).toList(); }
+
+    @Transactional
+    public void delete(Integer id) { holidayRepository.deleteById(id); }
 }

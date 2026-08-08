@@ -10,6 +10,9 @@ import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.service.HolidayService;
+import com.example.demo.service.security.AuthenticatedUserService;
+import com.example.demo.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -31,6 +35,7 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final TrainerScheduleMapper trainerScheduleMapper;
     private final HolidayService holidayService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @Transactional
     public TrainerScheduleDTO createSchedule(@NotNull CreateTrainerScheduleRequest request) {
@@ -69,6 +74,39 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
             trainerScheduleRepository.save(schedule);
             currentDate = currentDate.plusDays(1);
         }
+    }
+
+    public List<TrainerScheduleDTO> getByTrainer(Integer trainerId) { return trainerScheduleRepository.findByTrainerIdOrderByDateAscStartTimeAsc(trainerId).stream().map(trainerScheduleMapper::toDto).toList(); }
+    public List<TrainerScheduleDTO> getOwn() { return getByTrainer(authenticatedUserService.trainer().getId()); }
+
+    @Transactional
+    public TrainerScheduleDTO createOwnSchedule(CreateTrainerScheduleRequest request) {
+        request.setTrainerId(authenticatedUserService.trainer().getId());
+        return createSchedule(request);
+    }
+
+    @Transactional
+    public void createOwnUnavailability(CreateTrainerUnavailabilityRequest request) {
+        request.setTrainerId(authenticatedUserService.trainer().getId());
+        createUnavailability(request);
+    }
+
+    @Transactional
+    public TrainerScheduleDTO update(Integer id, CreateTrainerScheduleRequest request, boolean ownOnly) {
+        TrainerSchedule existing = trainerScheduleRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Trainer schedule not found"));
+        if (ownOnly && !existing.getTrainer().getId().equals(authenticatedUserService.trainer().getId())) throw new ApiException(HttpStatus.FORBIDDEN, "You can only change your own schedule");
+        Integer trainerId = ownOnly ? existing.getTrainer().getId() : request.getTrainerId();
+        validateScheduleRequest(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateGymHours(request.getDate(), request.getStartTime(), request.getEndTime());
+        existing.setTrainer(fetchTrainer(trainerId)); existing.setDate(request.getDate()); existing.setStartTime(request.getStartTime()); existing.setEndTime(request.getEndTime()); existing.setStatus(WorkStatus.WORKING);
+        return trainerScheduleMapper.toDto(trainerScheduleRepository.save(existing));
+    }
+
+    @Transactional
+    public void delete(Integer id, boolean ownOnly) {
+        TrainerSchedule existing = trainerScheduleRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Trainer schedule not found"));
+        if (ownOnly && !existing.getTrainer().getId().equals(authenticatedUserService.trainer().getId())) throw new ApiException(HttpStatus.FORBIDDEN, "You can only delete your own schedule");
+        trainerScheduleRepository.delete(existing);
     }
 
 
