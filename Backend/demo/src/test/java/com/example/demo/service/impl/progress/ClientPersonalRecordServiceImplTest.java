@@ -162,4 +162,73 @@ class ClientPersonalRecordServiceImplTest {
 
         assertThatThrownBy(() -> service.getMine()).isInstanceOf(AccessDeniedException.class);
     }
+
+    // ---------- update/delete (Faza 9 - correcting/removing an existing record) ----------
+
+    @Test
+    void update_checksAccessAgainstTheRecordsOwnClient() {
+        Client client = Client.builder().id(7).build();
+        ClientPersonalRecord existing = ClientPersonalRecord.builder().id(50).client(client)
+                .exerciseName("Squat").value(new BigDecimal("100")).unit(RecordUnit.KG)
+                .recordDate(LocalDate.now().minusDays(3)).build();
+        when(clientPersonalRecordRepository.findById(50)).thenReturn(Optional.of(existing));
+        when(clientPersonalRecordRepository.save(existing)).thenReturn(existing);
+        when(clientPersonalRecordMapper.toDto(existing)).thenReturn(new ClientPersonalRecordDTO());
+
+        // clientId in the request is deliberately different from the record's real client (7) -
+        // it must be ignored for authorization, see AGENTS.md ("Upgrade: Faza 9 decisions").
+        CreatePersonalRecordRequest request = new CreatePersonalRecordRequest();
+        request.setClientId(999);
+        request.setExerciseName("Squat");
+        request.setValue(new BigDecimal("105"));
+        request.setUnit(RecordUnit.KG);
+        request.setRecordDate(LocalDate.now());
+
+        service.update(50, request);
+
+        verify(trainerClientAccessGuard).assertCanAccessClient(7);
+        assertThat(existing.getValue()).isEqualTo(new BigDecimal("105"));
+    }
+
+    @Test
+    void update_throwsWhenRecordNotFound() {
+        when(clientPersonalRecordRepository.findById(50)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(50, new CreatePersonalRecordRequest()))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void update_propagatesAccessDeniedAndNeverSaves() {
+        Client client = Client.builder().id(7).build();
+        ClientPersonalRecord existing = ClientPersonalRecord.builder().id(50).client(client).build();
+        when(clientPersonalRecordRepository.findById(50)).thenReturn(Optional.of(existing));
+        doThrow(new AccessDeniedException("denied")).when(trainerClientAccessGuard).assertCanAccessClient(7);
+
+        assertThatThrownBy(() -> service.update(50, new CreatePersonalRecordRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(clientPersonalRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void delete_checksAccessBeforeDeleting() {
+        Client client = Client.builder().id(7).build();
+        ClientPersonalRecord existing = ClientPersonalRecord.builder().id(50).client(client).build();
+        when(clientPersonalRecordRepository.findById(50)).thenReturn(Optional.of(existing));
+
+        service.delete(50);
+
+        verify(trainerClientAccessGuard).assertCanAccessClient(7);
+        verify(clientPersonalRecordRepository).delete(existing);
+    }
+
+    @Test
+    void delete_throwsWhenRecordNotFound() {
+        when(clientPersonalRecordRepository.findById(50)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.delete(50)).isInstanceOf(EntityNotFoundException.class);
+
+        verify(clientPersonalRecordRepository, never()).delete(any());
+    }
 }

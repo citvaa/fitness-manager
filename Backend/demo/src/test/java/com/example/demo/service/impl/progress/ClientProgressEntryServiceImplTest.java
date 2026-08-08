@@ -16,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -50,13 +52,18 @@ class ClientProgressEntryServiceImplTest {
     private ClientProgressEntryMapper clientProgressEntryMapper;
     @Mock
     private TrainerClientAccessGuard trainerClientAccessGuard;
+    @Mock
+    private CacheManager cacheManager;
+    @Mock
+    private Cache cache;
 
     private ClientProgressEntryServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(cacheManager.getCache(any())).thenReturn(cache);
         service = new ClientProgressEntryServiceImpl(clientProgressEntryRepository, clientRepository,
-                clientProgressEntryMapper, trainerClientAccessGuard);
+                clientProgressEntryMapper, trainerClientAccessGuard, cacheManager);
     }
 
     @AfterEach
@@ -160,5 +167,73 @@ class ClientProgressEntryServiceImplTest {
         SecurityContextHolder.clearContext();
 
         assertThatThrownBy(() -> service.getMine()).isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ---------- update/delete (Faza 9 - correcting/removing an existing entry) ----------
+
+    @Test
+    void update_checksAccessAgainstTheEntrysOwnClientAndEvictsInsightCache() {
+        Client client = Client.builder().id(7).build();
+        ClientProgressEntry existing = ClientProgressEntry.builder().id(50).client(client)
+                .entryDate(LocalDate.now().minusDays(3)).weightKg(new BigDecimal("70")).build();
+        when(clientProgressEntryRepository.findById(50)).thenReturn(Optional.of(existing));
+        when(clientProgressEntryRepository.save(existing)).thenReturn(existing);
+        when(clientProgressEntryMapper.toDto(existing)).thenReturn(new ClientProgressEntryDTO());
+
+        // clientId in the request is deliberately different from the entry's real client (7) -
+        // it must be ignored for authorization, see AGENTS.md ("Upgrade: Faza 9 decisions").
+        CreateProgressEntryRequest request = new CreateProgressEntryRequest();
+        request.setClientId(999);
+        request.setEntryDate(LocalDate.now());
+        request.setWeightKg(new BigDecimal("71.5"));
+
+        service.update(50, request);
+
+        verify(trainerClientAccessGuard).assertCanAccessClient(7);
+        assertThat(existing.getWeightKg()).isEqualTo(new BigDecimal("71.5"));
+        verify(cache).evict(7);
+    }
+
+    @Test
+    void update_throwsWhenEntryNotFound() {
+        when(clientProgressEntryRepository.findById(50)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(50, new CreateProgressEntryRequest()))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void update_propagatesAccessDeniedAndNeverSaves() {
+        Client client = Client.builder().id(7).build();
+        ClientProgressEntry existing = ClientProgressEntry.builder().id(50).client(client).build();
+        when(clientProgressEntryRepository.findById(50)).thenReturn(Optional.of(existing));
+        doThrow(new AccessDeniedException("denied")).when(trainerClientAccessGuard).assertCanAccessClient(7);
+
+        assertThatThrownBy(() -> service.update(50, new CreateProgressEntryRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(clientProgressEntryRepository, never()).save(any());
+    }
+
+    @Test
+    void delete_checksAccessAndEvictsInsightCache() {
+        Client client = Client.builder().id(7).build();
+        ClientProgressEntry existing = ClientProgressEntry.builder().id(50).client(client).build();
+        when(clientProgressEntryRepository.findById(50)).thenReturn(Optional.of(existing));
+
+        service.delete(50);
+
+        verify(trainerClientAccessGuard).assertCanAccessClient(7);
+        verify(clientProgressEntryRepository).delete(existing);
+        verify(cache).evict(7);
+    }
+
+    @Test
+    void delete_throwsWhenEntryNotFound() {
+        when(clientProgressEntryRepository.findById(50)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.delete(50)).isInstanceOf(EntityNotFoundException.class);
+
+        verify(clientProgressEntryRepository, never()).delete(any());
     }
 }

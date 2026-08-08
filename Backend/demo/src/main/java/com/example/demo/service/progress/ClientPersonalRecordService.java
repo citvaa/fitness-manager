@@ -9,6 +9,13 @@ public interface ClientPersonalRecordService {
 
     ClientPersonalRecordDTO create(CreatePersonalRecordRequest request);
 
+    /** Correct an existing record - same MANAGER/TRAINER authorization as create(), checked
+     * against the record's own client (see AGENTS.md "Upgrade: Faza 9 decisions"). */
+    ClientPersonalRecordDTO update(Integer id, CreatePersonalRecordRequest request);
+
+    /** Delete an existing record - same authorization as update(). */
+    void delete(Integer id);
+
     List<ClientPersonalRecordDTO> getForClient(Integer clientId);
 
     /** For the CLIENT role viewing their own records - resolves the client from the JWT. */

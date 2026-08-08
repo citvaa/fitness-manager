@@ -3,6 +3,7 @@ import { getEntriesForClient, getInsightForClient, getMyClients, getRecordsForCl
 import { EntryForm } from './EntryForm'
 import { RecordForm } from './RecordForm'
 import { ProgressCharts } from './ProgressCharts'
+import { EntriesList } from './EntriesList'
 import { PersonalRecordsList } from './PersonalRecordsList'
 import { InsightPanel } from './InsightPanel'
 import type {
@@ -103,7 +104,19 @@ export function TrainerProgressPage() {
               <RecordForm clientId={selectedId} onCreated={() => void loadDetail(selectedId)} />
             </div>
 
-            <PersonalRecordsList records={records} />
+            <EntriesList
+              clientId={selectedId}
+              entries={entries}
+              editable
+              onChanged={() => void loadDetail(selectedId)}
+            />
+
+            <PersonalRecordsList
+              clientId={selectedId}
+              records={records}
+              editable
+              onChanged={() => void loadDetail(selectedId)}
+            />
 
             <InsightPanel
               insight={insight}

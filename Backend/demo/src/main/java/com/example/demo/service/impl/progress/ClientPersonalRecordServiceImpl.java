@@ -54,6 +54,37 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
     }
 
     @Override
+    @Transactional
+    public ClientPersonalRecordDTO update(Integer id, CreatePersonalRecordRequest request) {
+        ClientPersonalRecord record = clientPersonalRecordRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Personal record not found"));
+
+        // Authorization is checked against the record's own (immutable) client, not the request
+        // body - see the identical reasoning in ClientProgressEntryServiceImpl.update() and
+        // AGENTS.md ("Upgrade: Faza 9 decisions").
+        trainerClientAccessGuard.assertCanAccessClient(record.getClient().getId());
+
+        record.setExerciseName(request.getExerciseName());
+        record.setValue(request.getValue());
+        record.setUnit(request.getUnit());
+        record.setRecordDate(request.getRecordDate());
+        record.setNotes(request.getNotes());
+
+        return clientPersonalRecordMapper.toDto(clientPersonalRecordRepository.save(record));
+    }
+
+    @Override
+    @Transactional
+    public void delete(Integer id) {
+        ClientPersonalRecord record = clientPersonalRecordRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Personal record not found"));
+
+        trainerClientAccessGuard.assertCanAccessClient(record.getClient().getId());
+
+        clientPersonalRecordRepository.delete(record);
+    }
+
+    @Override
     public List<ClientPersonalRecordDTO> getForClient(Integer clientId) {
         // A trainer may only view records for a client they have actually trained - see
         // AGENTS.md ("Upgrade: service layer decisions"). No-op for MANAGER. Not applied to

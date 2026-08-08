@@ -13,6 +13,7 @@ import com.example.demo.service.progress.ClientProgressEntryService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -32,6 +33,7 @@ public class ClientProgressEntryServiceImpl implements ClientProgressEntryServic
     private final ClientRepository clientRepository;
     private final ClientProgressEntryMapper clientProgressEntryMapper;
     private final TrainerClientAccessGuard trainerClientAccessGuard;
+    private final CacheManager cacheManager;
 
     @Override
     @Transactional
@@ -60,6 +62,58 @@ public class ClientProgressEntryServiceImpl implements ClientProgressEntryServic
                 .build();
 
         return clientProgressEntryMapper.toDto(clientProgressEntryRepository.save(entry));
+    }
+
+    @Override
+    @Transactional
+    public ClientProgressEntryDTO update(Integer id, CreateProgressEntryRequest request) {
+        ClientProgressEntry entry = clientProgressEntryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Progress entry not found"));
+
+        // Authorization is checked against the entry's own (immutable) client, not the request
+        // body - the request's clientId is otherwise ignored for update, so a caller can't
+        // reassign someone else's entry to a client they can access. See AGENTS.md
+        // ("Upgrade: Faza 9 decisions").
+        trainerClientAccessGuard.assertCanAccessClient(entry.getClient().getId());
+
+        entry.setEntryDate(request.getEntryDate());
+        entry.setWeightKg(request.getWeightKg());
+        entry.setBodyFatPercent(request.getBodyFatPercent());
+        entry.setWaistCm(request.getWaistCm());
+        entry.setChestCm(request.getChestCm());
+        entry.setHipCm(request.getHipCm());
+        entry.setThighCm(request.getThighCm());
+        entry.setArmCm(request.getArmCm());
+        entry.setNotes(request.getNotes());
+
+        ClientProgressEntryDTO dto = clientProgressEntryMapper.toDto(clientProgressEntryRepository.save(entry));
+        evictInsightCache(entry.getClient().getId());
+        return dto;
+    }
+
+    @Override
+    @Transactional
+    public void delete(Integer id) {
+        ClientProgressEntry entry = clientProgressEntryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Progress entry not found"));
+
+        trainerClientAccessGuard.assertCanAccessClient(entry.getClient().getId());
+
+        Integer clientId = entry.getClient().getId();
+        clientProgressEntryRepository.delete(entry);
+        evictInsightCache(clientId);
+    }
+
+    // update()/delete() can't use a declarative @CacheEvict(key = "#request.clientId") like
+    // create() does - the client isn't known from the method arguments alone (an id, not a
+    // clientId), only after the entry is fetched - so the cache is evicted manually here instead,
+    // the same "no self-invocation, no annotation needed" style CacheManager access
+    // ClientProgressInsightServiceImpl already uses. See AGENTS.md ("Upgrade: Faza 9 decisions").
+    private void evictInsightCache(Integer clientId) {
+        var cache = cacheManager.getCache(RedisConfig.CLIENT_PROGRESS_INSIGHT_CACHE);
+        if (cache != null) {
+            cache.evict(clientId);
+        }
     }
 
     @Override

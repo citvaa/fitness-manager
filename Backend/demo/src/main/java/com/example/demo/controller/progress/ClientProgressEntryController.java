@@ -29,6 +29,20 @@ public class ClientProgressEntryController {
     }
 
     @RoleRequired({"MANAGER", "TRAINER"})
+    @PutMapping("/{id}")
+    public ResponseEntity<ClientProgressEntryDTO> update(
+            @PathVariable Integer id, @RequestBody CreateProgressEntryRequest request) {
+        return ResponseEntity.ok(clientProgressEntryService.update(id, request));
+    }
+
+    @RoleRequired({"MANAGER", "TRAINER"})
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+        clientProgressEntryService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @RoleRequired({"MANAGER", "TRAINER"})
     @GetMapping("/client/{clientId}")
     public ResponseEntity<List<ClientProgressEntryDTO>> getForClient(@PathVariable Integer clientId) {
         return ResponseEntity.ok(clientProgressEntryService.getForClient(clientId));

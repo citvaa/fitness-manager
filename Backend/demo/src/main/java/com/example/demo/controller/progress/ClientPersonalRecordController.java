@@ -25,6 +25,20 @@ public class ClientPersonalRecordController {
     }
 
     @RoleRequired({"MANAGER", "TRAINER"})
+    @PutMapping("/{id}")
+    public ResponseEntity<ClientPersonalRecordDTO> update(
+            @PathVariable Integer id, @RequestBody CreatePersonalRecordRequest request) {
+        return ResponseEntity.ok(clientPersonalRecordService.update(id, request));
+    }
+
+    @RoleRequired({"MANAGER", "TRAINER"})
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+        clientPersonalRecordService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @RoleRequired({"MANAGER", "TRAINER"})
     @GetMapping("/client/{clientId}")
     public ResponseEntity<List<ClientPersonalRecordDTO>> getForClient(@PathVariable Integer clientId) {
         return ResponseEntity.ok(clientPersonalRecordService.getForClient(clientId));
