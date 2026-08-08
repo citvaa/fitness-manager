@@ -21,10 +21,13 @@ const NAV_BY_ROLE: Record<Role, { to: string; label: string }[]> = {
   TRAINER: [
     { to: '/trainer', label: 'Praćenje napretka' },
     { to: '/trainer/raspored', label: 'Moj raspored' },
+    { to: '/trainer/termini', label: 'Moji termini' },
   ],
   CLIENT: [
     { to: '/client', label: 'Moj napredak' },
     { to: '/client/uplate', label: 'Moje uplate' },
+    { to: '/client/zakazivanje', label: 'Zakaži trening' },
+    { to: '/client/moji-termini', label: 'Moji termini' },
   ],
 }
 

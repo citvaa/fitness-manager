@@ -17,6 +17,9 @@ import { TrainerSchedulePage } from './features/schedule/TrainerSchedulePage'
 import { ManagerPaymentsPage } from './features/payments/ManagerPaymentsPage'
 import { MyPaymentsPage } from './features/payments/MyPaymentsPage'
 import { DailySchedulePage } from './features/calendar/DailySchedulePage'
+import { ClientBookingPage } from './features/appointments/ClientBookingPage'
+import { ClientAppointmentsPage } from './features/appointments/ClientAppointmentsPage'
+import { TrainerAppointmentsPage } from './features/appointments/TrainerAppointmentsPage'
 
 export default function App() {
   return (
@@ -44,11 +47,14 @@ export default function App() {
             <Route element={<RequireActiveRole role="TRAINER" />}>
               <Route path="/trainer" element={<TrainerProgressPage />} />
               <Route path="/trainer/raspored" element={<TrainerSchedulePage />} />
+              <Route path="/trainer/termini" element={<TrainerAppointmentsPage />} />
             </Route>
 
             <Route element={<RequireActiveRole role="CLIENT" />}>
               <Route path="/client" element={<ClientProgressPage />} />
               <Route path="/client/uplate" element={<MyPaymentsPage />} />
+              <Route path="/client/zakazivanje" element={<ClientBookingPage />} />
+              <Route path="/client/moji-termini" element={<ClientAppointmentsPage />} />
             </Route>
           </Route>
         </Route>
