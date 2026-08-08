@@ -55,6 +55,12 @@ public class AppointmentController {
         return ResponseEntity.ok(updatedAppointment);
     }
 
+    @RoleRequired("MANAGER")
+    @GetMapping
+    public ResponseEntity<List<AppointmentDTO>> getAll() {
+        return ResponseEntity.ok(appointmentService.getAll());
+    }
+
     @RoleRequired({"MANAGER", "CLIENT"})
     @GetMapping("/available")
     public ResponseEntity<List<AppointmentDTO>> getAvailable() {

@@ -4,6 +4,7 @@ import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.*;
+import com.example.demo.model.gym.Room;
 import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.model.schedule.TrainerSchedule;
 import com.example.demo.model.user.Client;
@@ -11,6 +12,7 @@ import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.ClientSessionTracking;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.*;
+import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.repository.user.ClientAppointmentRepository;
@@ -56,6 +58,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final NotificationService notificationService;
     private final ClientAppointmentRepository clientAppointmentRepository;
+    private final RoomRepository roomRepository;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
@@ -63,6 +66,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Session session = fetchSession(request.getSessionId());
         Trainer trainer = fetchTrainer(request.getTrainerId());
+        Room room = fetchRoom(request.getRoomId());
 
         Appointment appointment = Appointment.builder()
                 .date(request.getDate())
@@ -70,6 +74,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .endTime(request.getEndTime())
                 .session(session)
                 .trainer(trainer)
+                .room(room)
                 .build();
 
         appointment.setClientAppointments(createClientAppointments(request.getClientIds(), appointment));
@@ -127,6 +132,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.getClientAppointments().removeIf(clientAppointment -> clientAppointment.getClient().getId().equals(clientId));
 
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
+    }
+
+    public List<AppointmentDTO> getAll() {
+        return appointmentMapper.toDto(appointmentRepository.findAll());
     }
 
     public List<AppointmentDTO> getAvailable() {
@@ -311,6 +320,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Trainer fetchTrainer(Integer id) {
         return (id != null) ? trainerRepository.findById(id).orElse(null) : null;
+    }
+
+    private Room fetchRoom(Integer id) {
+        return (id != null) ? roomRepository.findById(id).orElse(null) : null;
     }
 
     private Set<ClientAppointment> createClientAppointments(Set<Integer> clientIds, Appointment appointment) {

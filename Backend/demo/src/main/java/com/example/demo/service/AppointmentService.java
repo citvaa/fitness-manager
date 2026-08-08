@@ -24,6 +24,11 @@ public interface AppointmentService {
 
     List<AppointmentDTO> getAvailable();
 
+    /** Every appointment, regardless of capacity/trainer state - backs the MANAGER slot-management
+     * screen (see AGENTS.md "Upgrade: Faza 9 decisions"), unlike getAvailable()/getAllWithoutTrainer()
+     * which are each filtered for a specific self-service use case. */
+    List<AppointmentDTO> getAll();
+
     AppointmentDTO reserve(Integer id);
 
     AppointmentDTO cancel(Integer id);

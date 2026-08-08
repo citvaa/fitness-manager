@@ -4,14 +4,16 @@ import { UsersTab } from './UsersTab'
 import { TrainersTab } from './TrainersTab'
 import { ClientsTab } from './ClientsTab'
 import { GymScheduleHolidaysTab } from './GymScheduleHolidaysTab'
+import { AppointmentsTab } from './AppointmentsTab'
 
-type Tab = 'users' | 'trainers' | 'clients' | 'schedule'
+type Tab = 'users' | 'trainers' | 'clients' | 'schedule' | 'appointments'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'users', label: 'Korisnici' },
   { key: 'trainers', label: 'Treneri' },
   { key: 'clients', label: 'Klijenti' },
   { key: 'schedule', label: 'Radno vreme i praznici' },
+  { key: 'appointments', label: 'Termini' },
 ]
 
 /**
@@ -27,7 +29,7 @@ export function AdminPage() {
     <div className="p-6">
       <h1 className="mb-1 text-lg font-semibold text-slate-100">Administracija</h1>
       <p className="mb-6 text-sm text-slate-500">
-        Korisnici, treneri, klijenti, radno vreme teretane i praznici.
+        Korisnici, treneri, klijenti, radno vreme teretane, praznici i termini.
       </p>
 
       <div className="mb-6 flex gap-1 border-b border-slate-800">
@@ -51,6 +53,7 @@ export function AdminPage() {
       {tab === 'trainers' && <TrainersTab />}
       {tab === 'clients' && <ClientsTab />}
       {tab === 'schedule' && <GymScheduleHolidaysTab />}
+      {tab === 'appointments' && <AppointmentsTab />}
     </div>
   )
 }

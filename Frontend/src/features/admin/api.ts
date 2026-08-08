@@ -1,7 +1,9 @@
 import { http } from '../../lib/http'
 import type { Role } from '../../auth/types'
 import type {
+  AppointmentDTO,
   ClientDTO,
+  CreateAppointmentRequest,
   CreateGymScheduleRequest,
   CreateHolidayRequest,
   CreateTrainerRequest,
@@ -10,6 +12,8 @@ import type {
   GymScheduleDTO,
   HolidayDTO,
   PageResponse,
+  RoomOptionDTO,
+  SessionDTO,
   TrainerDTO,
   TrainerScheduleDTO,
   UserDTO,
@@ -107,4 +111,57 @@ export function createTrainerUnavailability(request: CreateTrainerUnavailability
 
 export function deleteTrainerScheduleEntry(id: number) {
   return http.delete(`/api/schedule/trainer/${id}`)
+}
+
+// ---- Appointment slot management (Faza 9) ----
+// The "marketplace" endpoints (create/add-trainer/remove-trainer/add-clients/remove-client)
+// existed since Faza 2/7 but had no frontend caller at all - see AGENTS.md
+// ("Upgrade: Faza 9 decisions"). GET /api/appointment (plain, unfiltered) is new this phase,
+// added specifically to back this management list - getAvailable()/getAllWithoutTrainer() each
+// filter for a different self-service use case and don't fit here.
+
+export function getAllAppointments() {
+  return http.get<AppointmentDTO[]>('/api/appointment').then((r) => r.data)
+}
+
+export function createAppointment(request: CreateAppointmentRequest) {
+  return http.post<AppointmentDTO>('/api/appointment', request).then((r) => r.data)
+}
+
+export function assignTrainerToAppointment(appointmentId: number, trainerId: number) {
+  return http
+    .post<AppointmentDTO>(`/api/appointment/${appointmentId}/add-trainer`, null, { params: { trainerId } })
+    .then((r) => r.data)
+}
+
+export function removeTrainerFromAppointment(appointmentId: number) {
+  return http.delete<AppointmentDTO>(`/api/appointment/${appointmentId}/remove-trainer`).then((r) => r.data)
+}
+
+export function addClientToAppointment(appointmentId: number, clientId: number) {
+  // Set<Integer> clientIds is bound from repeated query params server-side - built manually
+  // rather than via axios's `params` object so the wire format doesn't depend on axios's array
+  // serialization defaults (bracket vs. repeat vs. comma-joined all behave differently there).
+  return http
+    .post<AppointmentDTO>(`/api/appointment/${appointmentId}/add-clients?clientIds=${clientId}`)
+    .then((r) => r.data)
+}
+
+export function removeClientFromAppointment(appointmentId: number, clientId: number) {
+  return http
+    .delete<AppointmentDTO>(`/api/appointment/${appointmentId}/remove-client`, { params: { clientId } })
+    .then((r) => r.data)
+}
+
+export function getSessionsForPicker() {
+  return http.get<SessionDTO[]>('/api/session').then((r) => r.data)
+}
+
+/** Just enough to populate the "new appointment" room picker - duplicates RoomDTO's shape from
+ * features/gym rather than importing across features (see the same reasoning on getClients()
+ * duplication in features/payments/api.ts). */
+export function getRoomsForPicker() {
+  return http
+    .get<{ id: number; name: string }[]>('/api/gym/room')
+    .then((r): RoomOptionDTO[] => r.data.map((room) => ({ id: room.id, name: room.name })))
 }

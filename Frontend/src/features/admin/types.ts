@@ -103,3 +103,53 @@ export interface CreateTrainerUnavailabilityRequest {
   endDate: string
   status: WorkStatus
 }
+
+// ---- Appointment slot management (Faza 9) ----
+// Minimal duplicate of features/appointments/types.ts's shape, extended with `room` (wired into
+// AppointmentDTO/CreateAppointmentRequest this phase - see AGENTS.md "Upgrade: Faza 9
+// decisions"). Kept local to this feature rather than importing across features, matching this
+// codebase's existing tolerance for small duplication over cross-feature coupling.
+
+export type SessionType = 'INDIVIDUAL' | 'GROUP'
+
+export interface SessionDTO {
+  id: number
+  type: SessionType
+  maxParticipants: number
+}
+
+export interface AppointmentTrainerSummary {
+  id: number
+  email: string
+}
+
+export interface AppointmentClientSummary {
+  id: number
+  email: string
+}
+
+export interface RoomOptionDTO {
+  id: number
+  name: string
+}
+
+export interface AppointmentDTO {
+  id: number
+  date: string
+  startTime: string
+  endTime: string
+  session: SessionDTO
+  trainer: AppointmentTrainerSummary | null
+  room: RoomOptionDTO | null
+  clients: AppointmentClientSummary[]
+}
+
+export interface CreateAppointmentRequest {
+  date: string
+  startTime: string
+  endTime: string
+  sessionId: number
+  trainerId?: number | null
+  roomId?: number | null
+  clientIds?: number[]
+}

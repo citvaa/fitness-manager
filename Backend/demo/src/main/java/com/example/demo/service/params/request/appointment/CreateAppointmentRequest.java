@@ -25,5 +25,6 @@ public class CreateAppointmentRequest {
 
     private Integer sessionId;
     private Integer trainerId = null;
+    private Integer roomId = null;
     private Set<Integer> clientIds;
 }

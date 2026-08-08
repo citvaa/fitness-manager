@@ -10,6 +10,7 @@ import com.example.demo.model.user.ClientSessionTracking;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.SessionRepository;
+import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.repository.user.ClientAppointmentRepository;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -40,6 +42,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 /**
@@ -70,6 +73,8 @@ class AppointmentServiceImplTest {
     private NotificationService notificationService;
     @Mock
     private ClientAppointmentRepository clientAppointmentRepository;
+    @Mock
+    private RoomRepository roomRepository;
 
     private AppointmentServiceImpl service;
 
@@ -77,7 +82,7 @@ class AppointmentServiceImplTest {
     void setUp() {
         service = new AppointmentServiceImpl(sessionRepository, trainerRepository, clientRepository,
                 appointmentRepository, appointmentMapper, gymScheduleRepository, trainerScheduleRepository,
-                clientSessionTrackingRepository, notificationService, clientAppointmentRepository);
+                clientSessionTrackingRepository, notificationService, clientAppointmentRepository, roomRepository);
     }
 
     @AfterEach
@@ -342,6 +347,63 @@ class AppointmentServiceImplTest {
         List<AppointmentDTO> result = service.getMyAppointmentsAsTrainer();
 
         assertThat(result).hasSize(1);
+    }
+
+    // ---------- create (MANAGER slot management, Faza 9) ----------
+
+    @Test
+    void create_wiresRoomWhenRoomIdProvided() throws Exception {
+        LocalDate date = LocalDate.now().plusDays(1);
+        com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
+                new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
+                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, 3, null);
+
+        com.example.demo.model.schedule.GymSchedule gymSchedule = com.example.demo.model.schedule.GymSchedule.builder()
+                .openingTime(LocalTime.of(8, 0)).closingTime(LocalTime.of(22, 0)).build();
+        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(gymSchedule));
+        when(sessionRepository.findById(1)).thenReturn(Optional.of(session(3)));
+        com.example.demo.model.gym.Room room = com.example.demo.model.gym.Room.builder().id(3).build();
+        when(roomRepository.findById(3)).thenReturn(Optional.of(room));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.create(request);
+
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getRoom()).isSameAs(room);
+    }
+
+    @Test
+    void create_leavesRoomNullWhenRoomIdOmitted() throws Exception {
+        LocalDate date = LocalDate.now().plusDays(1);
+        com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
+                new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
+                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, null, null);
+
+        com.example.demo.model.schedule.GymSchedule gymSchedule = com.example.demo.model.schedule.GymSchedule.builder()
+                .openingTime(LocalTime.of(8, 0)).closingTime(LocalTime.of(22, 0)).build();
+        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(gymSchedule));
+        when(sessionRepository.findById(1)).thenReturn(Optional.of(session(3)));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.create(request);
+
+        verify(roomRepository, never()).findById(any());
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getRoom()).isNull();
+    }
+
+    // ---------- getAll (MANAGER slot management, Faza 9) ----------
+
+    @Test
+    void getAll_returnsEveryAppointmentRegardlessOfState() {
+        when(appointmentRepository.findAll()).thenReturn(List.of(new Appointment(), new Appointment()));
+        when(appointmentMapper.toDto(anyList())).thenReturn(List.of(new AppointmentDTO(), new AppointmentDTO()));
+
+        assertThat(service.getAll()).hasSize(2);
     }
 
     private HashSet<ClientAppointment> setOf(ClientAppointment... items) {
