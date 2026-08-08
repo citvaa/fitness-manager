@@ -889,6 +889,186 @@ non-obvious decisions as comparison material.
   frontend change needed - `insightText`/`narrative` were always
   freeform strings.
 
+## Upgrade: Faza 6 decisions
+
+Phase 6 of the upgrade (`upgrade/claude-code` branch) is the first of two
+phases aimed at making the application actually usable end-to-end, not just a
+showcase of the three "wow" features. It covers self-service registration
+completion, forgot/reset password, MANAGER administration of users/trainers/
+clients, gym opening hours + holidays, and TRAINER self-service scheduling.
+It deliberately does not touch the live floor plan, AI insights, or progress
+tracking screens built in Phases 1-5. Same spirit as every prior "Upgrade:
+..." section - documenting the non-obvious decisions as thesis comparison
+material.
+
+- **`reset-password` mapping fixed to have a leading slash** (`UserController`),
+  confirmed as a real (if mostly cosmetic) bug rather than fixed blind: Spring
+  resolved the relative `"reset-password"` against the class-level
+  `/api/user` mapping correctly in practice, but every sibling endpoint uses
+  a leading slash and Swagger/any tooling that treats the mapping value as an
+  absolute path fragment would have gotten it wrong. Changed to
+  `"/reset-password"` for consistency, no behavior change.
+- **`forgot-password`/`reset-password` added to `WebConfig`'s
+  interceptor exclude lists.** This was a real functional bug, not
+  cosmetic: a user who forgot their password by definition has no valid JWT,
+  so both endpoints were unreachable by their actual intended caller before
+  this fix (`JwtInterceptor` would 401 first). Verified with `curl` sending
+  no `Authorization` header at all to both endpoints post-fix - both now
+  return `200`.
+- **Two "list" endpoints added by exposing already-existing service
+  methods, not by writing new service logic**: `GET /api/trainer` and
+  `GET /api/client` (both MANAGER-only) simply call
+  `TrainerService.getAll()`/`ClientService.getAll()`, which already existed
+  (used internally / never wired to a controller). This was necessary for
+  the admin "Treneri"/"Klijenti" list screens to exist at all - there was no
+  way to enumerate trainers or clients through the API before this. Treated
+  as in-scope despite the task brief's backend restriction to points 1/3/4,
+  on the same "minimal necessary GET, well-documented" reasoning the brief
+  explicitly allowed for gym-schedule/holiday (point 3) - the alternative
+  (no trainer/client list screen at all) would have defeated the point of
+  this phase.
+- **`GET /api/schedule/gym` and `GET /api/schedule/holiday` added, open to
+  any authenticated role** (no `@RoleRequired`), matching the existing
+  Gym/Room read policy (`GymController`/`RoomController` - see "Upgrade:
+  service layer decisions") since gym hours and holidays are information
+  every role legitimately needs, not just managers.
+- **`GymScheduleServiceImpl.create` changed from insert-only (throws if the
+  day already has an entry) to an upsert-per-day.** The original endpoint
+  had no update path at all - a manager who mistyped opening hours for a day
+  would be permanently stuck, since Flyway migrations can't be edited and
+  there was no `PUT`. Rather than add a parallel `PUT /api/schedule/gym/{id}`
+  endpoint, `create` itself now finds-or-builds by `DayOfWeek` and
+  overwrites the times - the same "the caller shouldn't need to know whether
+  a row exists yet" reasoning as the Phase 2 `Gym` upsert decision. Holiday
+  intentionally got no equivalent upsert/edit/delete - "unos i pregled" (entry
+  and view) for holidays doesn't need correction support the same way a
+  recurring weekly schedule does, and adding it wasn't asked for.
+- **Trainer self-service schedule: new `/me` endpoints resolve the trainer
+  from the JWT, mirroring `TrainerClientAccessGuard`/`AppointmentServiceImpl`'s
+  established pattern exactly** (`SecurityContextHolder` → `Jwt` →
+  `jwt.getClaim("email")` → `TrainerRepository.findByUserEmail`). New
+  request DTOs (`CreateOwnTrainerScheduleRequest`,
+  `CreateOwnTrainerUnavailabilityRequest`) intentionally omit `trainerId`
+  entirely rather than accepting-but-ignoring a client-supplied one, so
+  there is no field a malicious or buggy client could set to write another
+  trainer's schedule - the type system itself makes the vulnerable shape
+  unrepresentable. The existing MANAGER-only `POST /api/schedule/trainer`
+  and `POST /api/schedule/trainer/unavailable` (which do take an explicit
+  `trainerId`) are unchanged, preserving manager oversight of any trainer.
+- **`TrainerScheduleDTO` gained a `date` field** - it was missing despite
+  `TrainerSchedule.date` existing on the entity (`unique = true` at the
+  entity level only, no DB constraint - see "Known issues", unrelated
+  pre-existing quirk, not touched here). Without it, neither a manager's nor
+  a trainer's schedule list screen could show *which day* an entry was for.
+  MapStruct picks it up automatically (name-matched), no explicit mapping
+  needed.
+- **One shared `DELETE /api/schedule/trainer/{id}`, not separate
+  `/me/{id}` and `/{id}` routes**, gated `@RoleRequired({"MANAGER",
+  "TRAINER"})` with the ownership check inside
+  `TrainerScheduleServiceImpl.deleteSchedule`: MANAGER may delete any
+  entry, a TRAINER only their own (`AccessDeniedException` → 403
+  otherwise, verified with a second trainer account against the first
+  trainer's entry). A single route already fully covers both cases once the
+  ownership check exists, so a parallel `/me/{id}` alias would have been
+  redundant surface area.
+- **Frontend: no `app.frontend.url` backend property added; the activation/
+  reset link is built entirely client-side** as
+  `${window.location.origin}/register/complete?registration_key=...`
+  (respectively `reset_key`). The existing Thymeleaf email templates still
+  point at the `https://nesto.com` placeholder (see "Upgrade: schema
+  decisions" era investigation) - untouched, since real email sending isn't
+  configured in this environment and wiring a real base-URL property through
+  `EmailServiceImpl` for templates that can't be end-to-end verified anyway
+  was judged out of scope for this phase. `UserDTO`/`TrainerDTO`/`ClientDTO`
+  already carry `registrationKey` in their create-response body, which is
+  all the frontend needs.
+- **`ActivationLinkBanner` on-screen registration link is a deliberate,
+  labeled dev/demo affordance, not a hack to hide.** It's shown directly
+  after a manager creates a user/trainer/client, with an explicit "u
+  produkciji ovo ide isključivo emailom" label. This exists specifically
+  because `MAIL_USERNAME`/`MAIL_PASSWORD` aren't a real Gmail app password in
+  this environment (see "Known issues" - the original one was rotated after
+  being found in git history), so activation emails are never actually
+  delivered; without this banner there would be no way to complete the
+  invite flow at all in this environment.
+- **Generic "Korisnici" role management deliberately restricts adding
+  TRAINER/CLIENT roles from the UI, but allows MANAGER.** `UserService
+  .addRole` only inserts a `UserRole` row - it does *not* create the
+  matching `Trainer`/`Client` domain entity (only `TrainerController.create`/
+  `ClientController.create` do that, via `findOrCreateUser` + `addRole` +
+  building the domain row together). If the generic role-toggle UI let an
+  admin add a TRAINER role to an arbitrary existing user, that user would
+  hold the role claim in their JWT but have no `Trainer` row - breaking
+  every trainer-identity lookup in the codebase
+  (`TrainerRepository.findByUserEmail`, used by `TrainerClientAccessGuard`,
+  `AppointmentServiceImpl`, and this phase's own self-service schedule
+  endpoints) with a confusing `EntityNotFoundException`/403 instead of a
+  clear error at the point of the mistake. MANAGER has no domain entity at
+  all, so toggling that role has no such gap and was left available
+  directly on the Users tab. Creating a trainer/client is only exposed via
+  the dedicated "Treneri"/"Klijenti" forms, which go through the correct
+  domain-creating endpoints. This is a real, pre-existing backend design
+  quirk (documented, not fixed - fixing `addRole` to also create domain rows
+  is a backend behavior change beyond this phase's frontend-only scope for
+  point 2) surfaced and worked around at the UI layer rather than ignored.
+- **`ClientsTab` has no edit/delete** - `ClientController` never had those
+  endpoints (only `create`, plus this phase's new `getAll`), and adding them
+  was outside the backend changes this phase's task brief allowed. A client
+  row's underlying `User` can still be edited/deleted from the "Korisnici"
+  tab if needed (with the caveat that deleting the `User` there does not
+  cascade-clean the `Client` domain row - a pre-existing gap, not
+  introduced or fixed here).
+- **`AdminPage` uses client-side tabs (Korisnici/Treneri/Klijenti/Radno
+  vreme i praznici) under a single `/manager/administracija` route**, rather
+  than one sub-route per tab. Keeps this phase's routing footprint to one
+  new entry in `App.tsx`'s existing flat per-page route list, while still
+  giving each concern its own uncluttered view - consistent with how the
+  rest of the app has no nested-route/layout-per-section pattern yet.
+- **MANAGER trainer-schedule oversight lives inside the "Treneri" tab**
+  (an expandable per-trainer panel, `TrainerScheduleManager`) rather than a
+  separate page/route - a manager managing a trainer's schedule is
+  naturally reached "from" that trainer's row, and this avoids adding a
+  `trainerId`-parameterized route for what is otherwise a small amount of
+  UI.
+- **TRAINER "Moj raspored" is a full top-level nav page** (`/trainer/
+  raspored`), unlike the manager's embedded panel - a trainer manages their
+  own schedule as a primary, regular activity (not an occasional oversight
+  action), so it gets its own persistent nav entry rather than living inside
+  another screen.
+- **Verified end-to-end against a fresh Postgres/Redis volume** (`docker
+  compose down`, deleted `Docker/postgres_data/pgdata`, `docker compose up
+  -d`, deleted the stale `target/` directory per the Phase 5 "Known issues"
+  note before rebuilding - hit the exact same stale-`V1.0012`-migration
+  Flyway conflict Phase 5 already documented, resolved the same way):
+  `mvn compile` clean; all 18 migrations applied from empty in one run;
+  backend started cleanly. Exercised entirely via `curl` (browser automation
+  was unavailable in this environment - the Claude-in-Chrome extension
+  wasn't connected, so the planned screenshot QA in `docs/browser-qa/`
+  could not be captured this session, unlike every prior phase): logged in
+  as `admin`/`ogi`/`citva`; confirmed `forgot-password` now returns `200`
+  with no `Authorization` header at all (previously would 401); created a
+  trainer via `POST /api/trainer`, extracted the returned `registrationKey`,
+  called `POST /api/user/register` with it (`201`), and logged in as the
+  newly-activated trainer successfully - the exact flow the
+  `ActivationLinkBanner` UI exists to support; ran the same loop for forgot/
+  reset-password (`forgot-password` → real `reset_key` read from the
+  database standing in for "received email" → `reset-password` with no auth
+  header → login with the new password, all `200`); confirmed
+  `GET /api/trainer`/`GET /api/client` return real data; confirmed
+  `POST /api/schedule/gym` upserts (posting the same day twice updates
+  rather than erroring); confirmed a trainer's own
+  `POST /api/schedule/trainer/me` + `GET /api/schedule/trainer/me` round-trip
+  and that the MANAGER-only `GET /api/schedule/trainer/{trainerId}` sees the
+  same entry; confirmed a *second* trainer account gets `403` both hitting
+  the MANAGER-only `GET /{trainerId}` and attempting
+  `DELETE /api/schedule/trainer/{id}` on the first trainer's entry. Frontend
+  `npx tsc -b` and `npm run build` both clean. Given the missing browser
+  tooling, the click-through UI verification (admin list rendering, the
+  on-screen activation link banner's copy button, the "Moj raspored" form
+  interactions) was **not** performed live in this session and should be
+  spot-checked manually before the defense - the underlying API contracts
+  every screen calls were verified directly as above.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -1138,6 +1318,35 @@ either upgrade session to pick up:
     in real time via a second tab/terminal, talking points, and a "Plan B"
     section for AI/network failures and WebSocket drops during the defense
     itself).
+- 2026-08-08: Phase 6, first "make the app actually usable end-to-end" phase
+  (`upgrade/claude-code` branch). Backend: fixed `reset-password`'s missing
+  leading slash and excluded `forgot-password`/`reset-password` from the JWT/
+  role interceptors (previously unreachable without an existing token);
+  exposed already-existing `TrainerService.getAll()`/`ClientService.getAll()`
+  via new `GET /api/trainer`/`GET /api/client`; added
+  `GET /api/schedule/gym`/`GET /api/schedule/holiday` (open to any role) and
+  turned `GymScheduleServiceImpl.create` into an upsert-per-day; added
+  TRAINER self-service scheduling (`GET/POST /api/schedule/trainer/me`,
+  `POST /me/unavailable`, MANAGER-facing `GET /api/schedule/trainer/
+  {trainerId}`, shared `DELETE /api/schedule/trainer/{id}` with an ownership
+  guard) and a `date` field on `TrainerScheduleDTO`. Frontend: public
+  self-service registration completion (`/register/complete`) and forgot/
+  reset-password screens; a new MANAGER "Administracija" area
+  (`/manager/administracija`) with Korisnici/Treneri/Klijenti/Radno vreme i
+  praznici tabs, including an on-screen dev/demo activation-link banner
+  standing in for the unconfigured mail server; a new TRAINER "Moj raspored"
+  self-service screen (`/trainer/raspored`). See "Upgrade: Faza 6 decisions"
+  above for every design choice and its rationale, including the
+  `UserService.addRole`-doesn't-create-domain-rows gap this phase worked
+  around at the UI layer. Verified end-to-end against a fresh Postgres/Redis
+  volume via `curl` (the full create-trainer → extract registrationKey →
+  register → login loop; the same loop for forgot/reset-password; the gym-
+  schedule upsert; a trainer's own self-service schedule round-trip plus a
+  second trainer correctly getting `403` on both the MANAGER-only schedule
+  GET and deleting another trainer's entry) - browser-based click-through QA
+  and screenshots were not possible this session (Claude-in-Chrome extension
+  not connected) and are noted as a follow-up spot-check before the defense.
+  `mvn compile`, `npx tsc -b`, and `npm run build` all clean.
 
 ## Upgrade: final summary
 
