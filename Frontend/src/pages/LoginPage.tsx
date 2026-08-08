@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { errorMessage, login } from '../api/client'
 import { useAuthStore } from '../auth/authStore'
 
@@ -40,7 +40,7 @@ export function LoginPage() {
         <label>Lozinka<input required type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="••••••••" /></label>
         {error && <div className="form-error" role="alert">{error}</div>}
         <button className="primary-button" disabled={loading}>{loading ? 'Prijavljivanje…' : 'Uđi u GymOS'}<span>→</span></button>
-        <small className="secure-note">🔒 Sesija se bezbedno obnavlja u pozadini</small>
+        <small className="secure-note"><Link to="/forgot-password">Zaboravili ste lozinku?</Link><br/>🔒 Sesija se bezbedno obnavlja u pozadini</small>
       </form>
     </section>
   </main>

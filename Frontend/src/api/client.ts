@@ -39,6 +39,9 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
 export async function login(email: string, password: string) {
   return (await publicClient.post<AuthResponse>('/api/user/login', { email, password })).data
 }
+export const register=(registrationKey:string,password:string)=>publicClient.post('/api/user/register',{registrationKey,password})
+export const forgotPassword=(email:string)=>publicClient.post('/api/user/forgot-password',null,{params:{email}})
+export const resetPassword=(resetKey:string,password:string)=>publicClient.post('/api/user/reset-password',{resetKey,password})
 
 export function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
