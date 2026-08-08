@@ -386,6 +386,33 @@ deliberately deferred to the following phase.
 
 - **Client progress stays backend-enforced read-only.** Client mode calls only the existing `/api/client/progress` self endpoints, never accepts a client ID, and renders neither measurement/record forms nor force regeneration. This duplicates the backend boundary in the UI without treating hidden controls as authorization.
 
+### Upgrade Phase 6 decisions
+
+- **Invite activation remains email-first with an explicit demo escape hatch.**
+  The public completion screen accepts the registration key from the activation
+  URL and never creates an account by itself. After a manager creates a user,
+  trainer, or client profile, the administration UI shows the complete link in
+  a clearly labelled dev/demo modal with copy/open actions. The modal states
+  that production delivery is email-only; this keeps the real invite contract
+  visible while allowing a defense environment without working SMTP credentials.
+- **Administration separates accounts from domain profiles.** One manager page
+  uses tabs for paginated/searchable User accounts, Trainer profiles, and Client
+  profiles. Email is shown on every profile row, while roles and activation
+  state remain account concerns. Thin list and Client CRUD endpoints were added
+  because the baseline services already exposed the data but the controllers
+  could not support a usable administration UI.
+- **Operational calendars share one role-aware surface.** Managers see weekly
+  gym opening hours, holidays, a trainer selector, and the selected trainer's
+  shifts. Trainers enter the same visual language through “Moj raspored” but
+  receive only `/me` data and controls. The backend derives the trainer ID from
+  the JWT for every self-service write and checks ownership again for update and
+  delete, so a changed URL or request body cannot target another trainer.
+- **Schedule reads and edits are additive API capabilities, not a schema
+  redesign.** Gym schedules, holidays, trainers, clients, and trainer schedules
+  gained the minimum list/update/delete operations required by the UI. Existing
+  manager create routes remain intact, `TrainerScheduleDTO` now includes its
+  existing entity date, and no migration was necessary.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -394,9 +421,9 @@ runtime behavior, and the goal of that session was a stable, unchanged-behavior
 baseline - not new features or behavior changes. They are fair game for
 either upgrade session to pick up:
 
-- `forgot-password`/`reset-password` endpoints are not excluded from
-  `JwtInterceptor`/`RoleInterceptor`, effectively making them unreachable
-  without an existing valid JWT.
+- **Resolved in Phase 6:** `forgot-password` and `reset-password` are public in
+  both interceptor registrations, and the reset mapping now consistently uses
+  `/reset-password` with a leading slash.
 - `POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`,
   so refreshing requires a currently-valid access token - unusual for a
   refresh endpoint, whose point is normally to work *after* expiry. **Resolved
@@ -412,9 +439,6 @@ either upgrade session to pick up:
   unique constraint actually exists in the migrations, so entity and schema
   disagree; this has had no observed effect yet but is worth fixing carefully
   (with a new migration) before relying on it.
-- `UserController`'s `reset-password` mapping is missing a leading `/`
-  (`"reset-password"` instead of `"/reset-password"`) - verify the resolved
-  path before assuming it works as intended.
 - `CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
   authenticated user (any role) can call it.
 - Only Phase 2's explicit `ApiException` and database-integrity failures have a
@@ -485,6 +509,14 @@ either upgrade session to pick up:
   live check-in/checkout with duplicate HTTP 409, API-created trainer schedule
   and appointment, trainer-owned progress writes, client read-only visibility,
   and the expected HTTP 503 AI response when no Anthropic key is configured.
+- 2026-08-08: Upgrade Phase 6 (`upgrade/codex`). Added public invite activation,
+  forgot-password and reset-password screens; manager administration for user,
+  trainer, and client records with an explicitly labelled demo activation link;
+  gym hours and holiday management; manager trainer-schedule oversight; and
+  JWT-derived trainer self-service schedule routes/UI. Backend and frontend
+  builds passed, and an isolated fresh database verified activation/login,
+  schedule and holiday writes, own-schedule reads, and HTTP 403 on a cross-trainer
+  self-service update attempt.
 
 ## Final upgrade summary
 
