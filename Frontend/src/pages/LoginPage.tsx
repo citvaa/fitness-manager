@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { login } from '../auth/api'
 import { useAuthStore } from '../auth/store'
 import { isAxiosError } from 'axios'
@@ -86,6 +86,12 @@ export function LoginPage() {
           >
             {submitting ? 'Prijava...' : 'Prijavi se'}
           </button>
+
+          <p className="text-center text-xs text-slate-500">
+            <Link to="/forgot-password" className="text-brand-400 hover:underline">
+              Zaboravljena lozinka?
+            </Link>
+          </p>
         </form>
       </div>
     </div>
