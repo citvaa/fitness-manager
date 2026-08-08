@@ -442,6 +442,49 @@ deliberately deferred to the following phase.
   banners prefer this server message and use their generic status fallback only
   when the response has no textual `message`.
 
+### Upgrade Phase 7 decisions
+
+- **Appointments keep the existing marketplace model and add one self-scoped
+  history endpoint.** `GET /api/appointment/me` serves both `TRAINER` and
+  `CLIENT`, derives the domain profile from the authenticated JWT email, and
+  returns the full past/future list ordered newest-first. No profile id is
+  accepted from the caller. The frontend separates upcoming and historical
+  rows, while trainers additionally see future unassigned slots and clients see
+  future non-full slots. Marketplace queries now exclude past start times.
+- **Future-only actions are enforced on both sides.** Trainers may assign or
+  unassign only future appointments and cannot take an already assigned slot.
+  Clients cannot reserve a past or duplicate appointment. Client cancellation
+  retains the baseline service rule requiring at least 24 hours of notice; the
+  UI disables that action inside the deadline and explains it, while the
+  backend remains authoritative.
+- **The demo dataset is application-seeded and relative to startup date.** A
+  dev-profile `ApplicationRunner` uses JDBC inside one transaction after Flyway
+  has completed. It adds three activated trainers, five activated clients,
+  seven-day gym hours, one upcoming maintenance holiday, trainer work shifts,
+  eight weeks of past and four weeks of future appointments, payments, room
+  check-in history, and seven biweekly measurement points plus three personal
+  records per demo client. Existing Phase 3 Gym/Room seed data is reused rather
+  than duplicated. JDBC is deliberate here: this is demo-fixture generation,
+  not business workflow, and direct batched relational inserts avoid paid email
+  notifications and hundreds of service-level side effects at every dev start.
+- **Idempotence uses a known activated trainer account as the dataset marker.**
+  If `marko.trener@momentum.demo` exists, the runner skips the entire dataset;
+  otherwise all inserts succeed or roll back together. This preserves developer
+  edits and prevents duplicates on restart. It intentionally does not attempt a
+  partial repair if someone manually deletes part of the fixture; removing the
+  marker opts into a fresh all-or-nothing seed on an otherwise clean database.
+- **Cancelled appointments cannot be represented historically by the current
+  schema.** `Appointment` and `ClientAppointment` have no status/cancellation
+  timestamp. A cancellation is therefore represented only by removal of the
+  client link, so the seeder creates realistic occupied and open historical
+  slots but cannot label former reservations as cancelled without an additive
+  audited schema migration. Phase 7 does not invent that larger lifecycle.
+- **JWT signing is explicitly HS256.** JJWT previously selected HS384
+  automatically when a valid secret happened to exceed 47 bytes, while Spring's
+  resource-server decoder accepts HS256; bearer requests then failed with 401.
+  Both access and refresh token generation now pin HS256, matching the documented
+  auth contract for every allowed secret length.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -551,6 +594,12 @@ either upgrade session to pick up:
   daily calendar to managers and added its timeline UI, and made Trainer/Client
   profile deletion transactionally remove the corresponding role while
   preserving the underlying User account.
+- 2026-08-08: Upgrade Phase 7 (`upgrade/codex`). Added JWT-scoped trainer/client
+  appointment history, trainer self-assignment marketplace and client booking/
+  cancellation UI, plus an idempotent relative dev seeder with a defense-ready
+  operational dataset. A fresh-volume rehearsal applied all 17 migrations,
+  generated past/future data, verified restart idempotence, and completed live
+  client reserve/cancel and trainer assign/own-list flows.
 
 ## Final upgrade summary
 
