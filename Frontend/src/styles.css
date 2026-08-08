@@ -1718,3 +1718,30 @@ button {
     justify-content: center;
   }
 }
+.payments-layout { display:grid; grid-template-columns:310px minmax(0,1fr); gap:18px; }
+.payment-form { height:max-content; }
+.payment-form h2 { margin:0 0 20px; font:750 25px "Manrope"; }
+.payment-form label { display:grid; gap:7px; margin:13px 0; color:#69756d; font-size:11px; font-weight:800; text-transform:uppercase; }
+.payment-form input,.payment-form select,.date-picker { padding:12px; border:1px solid #d9e1da; border-radius:9px; background:#fff; }
+.payment-list article { display:grid; grid-template-columns:110px 1fr auto; align-items:center; gap:18px; padding:16px 4px; border-bottom:1px solid #e6ebe6; }
+.payment-list article > div { display:grid; }
+.payment-list time,.payment-list small { color:#839087; }
+.payment-list b { font:750 22px "Manrope"; }
+.payment-list b small { font:600 10px "DM Sans"; }
+.calendar-timeline { max-width:980px; }
+.calendar-timeline > article { display:grid; grid-template-columns:80px 22px 1fr; gap:15px; align-items:start; }
+.calendar-timeline time { display:grid; justify-items:end; padding-top:22px; font:750 18px "Manrope"; }
+.calendar-timeline time small { color:#89948d; font:600 11px "DM Sans"; }
+.timeline-dot { position:relative; height:100%; border-left:1px solid #cfd8cf; }
+.timeline-dot:before { content:""; position:absolute; top:27px; left:-5px; width:9px; height:9px; border-radius:50%; background:var(--green-deep); box-shadow:0 0 0 5px #baf25244; }
+.calendar-timeline .progress-card { margin-bottom:14px; }
+.calendar-card-head { display:flex; justify-content:space-between; align-items:start; }
+.calendar-card-head h2 { margin:0; font:750 24px "Manrope"; }
+.calendar-card-head span { padding:7px 10px; border-radius:9px; color:#4b7122; background:#edf7df; font-weight:800; }
+.calendar-card-head .eyebrow { margin-bottom:5px; }
+.calendar-timeline dl { display:grid; grid-template-columns:1fr 2fr; gap:20px; margin:18px 0 0; }
+.calendar-timeline dl div { display:grid; gap:4px; }
+.calendar-timeline dt { color:#89948d; font-size:10px; font-weight:800; text-transform:uppercase; }
+.calendar-timeline dd { margin:0; color:#3e4a42; }
+@media (max-width:900px) { .payments-layout { grid-template-columns:1fr; } }
+@media (max-width:600px) { .payment-list article { grid-template-columns:1fr auto; }.payment-list time { grid-column:1/-1; }.calendar-timeline > article { grid-template-columns:55px 12px 1fr; gap:8px; }.calendar-timeline dl { grid-template-columns:1fr; } }

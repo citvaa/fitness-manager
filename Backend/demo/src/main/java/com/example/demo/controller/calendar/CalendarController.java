@@ -1,5 +1,6 @@
 package com.example.demo.controller.calendar;
 
+import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.schedule.DailyScheduleDTO;
 import com.example.demo.service.schedule.CalendarService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ public class CalendarController {
     @Operation(summary = "Get schedule for a specific day",
             description = "Retrieves all appointments for the given date. Format example: `YYYY-MM-DD`.")
     @GetMapping
+    @RoleRequired("MANAGER")
     public ResponseEntity<DailyScheduleDTO> getScheduleForDay(@RequestParam LocalDate date) {
         DailyScheduleDTO schedule = calendarService.getDailySchedule(date);
         return ResponseEntity.ok(schedule);
