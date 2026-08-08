@@ -12,6 +12,7 @@ import com.example.demo.service.user.UserService;
 import com.example.demo.service.params.request.user.CreateUserRequest;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import jakarta.persistence.EntityNotFoundException;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,21 @@ public class ClientServiceImpl implements ClientService {
 
     public List<ClientDTO> getAll() {
         return clientMapper.toDto(clientRepository.findAll());
+    }
+
+    public ClientDTO getById(Integer id) { return clientRepository.findById(id).map(clientMapper::toDto).orElseThrow(() -> new EntityNotFoundException("Client not found")); }
+
+    @Transactional
+    public ClientDTO update(Integer id, CreateUserRequest request) {
+        Client client = clientRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Client not found"));
+        client.getUser().setEmail(request.getEmail());
+        return clientMapper.toDto(clientRepository.save(client));
+    }
+
+    @Transactional
+    public void delete(Integer id) {
+        Client client = clientRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Client not found"));
+        clientRepository.delete(client);
     }
 
     public List<ClientSummaryDTO> findTrainedBy(Integer trainerId) {

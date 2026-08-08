@@ -10,6 +10,9 @@ public interface ClientService {
     ClientDTO create(CreateUserRequest request);
 
     List<ClientDTO> getAll();
+    ClientDTO getById(Integer id);
+    ClientDTO update(Integer id, CreateUserRequest request);
+    void delete(Integer id);
 
     List<ClientSummaryDTO> findTrainedBy(Integer trainerId);
 }
