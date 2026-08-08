@@ -428,6 +428,10 @@ deliberately deferred to the following phase.
   `UserService.removeRole` mechanism in the same transaction. The account and
   any unrelated roles remain available until a manager explicitly deletes the
   User from the separate user-administration tab.
+- **Serbian operational dates explicitly request Latin script.** Schedule and
+  holiday labels use the `sr-Latn-RS` locale instead of relying on the browser's
+  default script for `sr-RS`, preventing Cyrillic weekday/month abbreviations
+  from appearing inside the otherwise Latin-script interface.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 

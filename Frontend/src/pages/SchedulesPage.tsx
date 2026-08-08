@@ -227,7 +227,7 @@ export function SchedulesPage() {
                 <article key={h.id}>
                   <div>
                     <strong>
-                      {new Date(h.date + "T12:00").toLocaleDateString("sr-RS")}
+                      {new Date(h.date + "T12:00").toLocaleDateString("sr-Latn-RS")}
                     </strong>
                     <small>{h.description}</small>
                   </div>
@@ -325,7 +325,7 @@ export function SchedulesPage() {
           {rows.map((r) => (
             <article key={r.id}>
               <time>
-                {new Date(r.date + "T12:00").toLocaleDateString("sr-RS", {
+                {new Date(r.date + "T12:00").toLocaleDateString("sr-Latn-RS", {
                   weekday: "short",
                   day: "2-digit",
                   month: "short",
