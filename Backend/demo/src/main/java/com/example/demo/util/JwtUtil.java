@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
@@ -23,7 +22,7 @@ import java.util.stream.Collectors;
 @Component
 public class JwtUtil {
 
-    private final Key key;
+    private final SecretKey key;
     private final Integer accessTokenExpiration;
     private final Integer refreshTokenExpiration;
 
@@ -45,7 +44,7 @@ public class JwtUtil {
                 .claim("email", user.getEmail())
                 .claim("roles", new HashSet<>(user.getUserRoles().stream().map(UserRole::getRole).collect(Collectors.toSet())))
                 .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
-                .signWith(key)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -53,7 +52,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
-                .signWith(key)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 

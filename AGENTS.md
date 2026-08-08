@@ -1477,6 +1477,33 @@ either upgrade session to pick up:
   hit the same problem - worth a real fix (override `equals()`/`hashCode()`
   per-entity on `id`, or switch collections that hold these entities to
   `List`) in a future session.
+- ~~`JwtUtil.generateAccessToken`/`generateRefreshToken` called `.signWith(key)`
+  with no explicit algorithm.~~ **Fixed 2026-08-08** (`upgrade/claude-code`
+  branch, Faza 7 follow-up): jjwt's no-algorithm `signWith(Key)` overload
+  picks the *strongest* HMAC algorithm the key's byte length allows (HS256
+  for a 32-47 byte key, HS384 for 48-63, HS512 for 64+), while
+  `JwtConfig.jwtDecoder()` builds a `NimbusJwtDecoder.withSecretKey(...)`
+  that only ever validates HS256. With the short dev `JWT_SECRET` in `.env`
+  this happened to still pick HS256 by coincidence (the secret is under 48
+  bytes) - but any real/production secret of 48+ bytes (a completely
+  reasonable, even encouraged, choice for a signing key) would make token
+  generation silently switch to HS384/HS512 while the decoder kept rejecting
+  everything as invalid, breaking **every** authenticated request. Fixed by
+  pinning both call sites to `.signWith(key, Jwts.SIG.HS256)`, matching the
+  decoder explicitly instead of relying on key-length coincidence; also
+  narrowed the `key` field's declared type from `java.security.Key` to
+  `javax.crypto.SecretKey` (what `Keys.hmacShaKeyFor` actually returns and
+  what the explicit-algorithm `signWith` overload requires ) - a type-level
+  guardrail, not just a call-site fix. **Verified the failure mode was real,
+  not theoretical**: started the app against a temporary 82-byte
+  `JWT_SECRET` (well past the HS512 threshold) with the fix in place, and
+  confirmed the issued token's header is `{"alg":"HS256"}` and that
+  `GET /api/appointment/me` and `POST /api/user/login-refresh` both still
+  return `200` with that long secret - the exact case that would have
+  produced a decoder rejecting an HS512-signed token as HS256 before this
+  fix. Re-ran `mvn test` (61/61 green) against the normal `.env` secret
+  afterward to confirm no regression for the existing (short-secret,
+  already-working-by-coincidence) dev setup.
 
 ## Session log
 
@@ -1728,6 +1755,20 @@ either upgrade session to pick up:
   via the real running frontend as both `citva` (CLIENT) and `ogi`
   (TRAINER) - screenshots in `docs/browser-qa/phase7-*.jpg`. `mvn compile`,
   `npx tsc -b`, and `npm run build` all clean.
+- 2026-08-08: Faza 7 follow-up (`upgrade/claude-code` branch) - fixed a real,
+  previously-undiscovered auth bug (not introduced this session):
+  `JwtUtil`'s two token-generation methods signed with no explicit HMAC
+  algorithm, so jjwt picked whichever of HS256/HS384/HS512 the configured
+  `JWT_SECRET`'s byte length allowed, while `JwtConfig.jwtDecoder()` only
+  ever validates HS256 - a `JWT_SECRET` of 48+ bytes (a perfectly reasonable
+  production value) would make every issued token fail every subsequent
+  authenticated request. Pinned both call sites to `Jwts.SIG.HS256`
+  explicitly and narrowed the `key` field's type to `SecretKey`. Verified
+  by starting the app against a temporary 82-byte secret and confirming the
+  issued token is genuinely HS256-signed and accepted by protected
+  endpoints and `login-refresh`; re-ran `mvn test` (61/61) against the
+  normal short dev secret afterward to confirm no regression. See "Known
+  issues" for the full write-up.
 
 ## Upgrade: final summary
 
