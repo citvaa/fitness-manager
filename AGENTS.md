@@ -1226,6 +1226,154 @@ Two small correctness fixes, picked up as a quick follow-up pass after Phase
     `{"message":"Start time is after end time"}` - both previously would
     have been a bare 500. `mvn compile` and `npx tsc -b` clean.
 
+## Upgrade: Faza 7 decisions
+
+Phase 7 of the upgrade (`upgrade/claude-code` branch) closed the last big gap: the
+appointment/booking flow existed completely on the backend with zero frontend coverage, and the
+app had no dataset that looked like a gym actually in use. This phase added TRAINER/CLIENT
+self-service appointment screens and a realistic, idempotent Java dev-data seeder. Same spirit as
+every prior "Upgrade: ..." section - documenting the non-obvious decisions as thesis comparison
+material.
+
+- **Confirmed the "marketplace" model exactly as briefed, by reading `AppointmentController`/
+  `AppointmentServiceImpl` in full before writing anything.** MANAGER creates slots
+  (`POST /api/appointment`, optionally with a trainer and/or clients already attached);
+  `GET /available` (MANAGER+CLIENT) and `GET /without-trainer` (MANAGER+TRAINER) list appointments
+  with a free spot / no trainer, with **no date filter at all** on either query - both include
+  past appointments that happen to still satisfy the capacity/no-trainer condition. CLIENT
+  self-books via `POST/{id}/reserve` and `DELETE/{id}/cancel` (the latter enforces a 24h-before-
+  start cancellation deadline, throwing a plain `RuntimeException` that `GlobalExceptionHandler`
+  already turns into a `400` with a real message - see "Upgrade: Faza 6 decisions (continued,
+  part 2)"). TRAINER self-assigns via `POST/{id}/assign` and drops their own assignment via
+  `DELETE/{id}/unassign` (ownership-checked: throws if the calling trainer isn't the one
+  assigned). Two real behavioral quirks confirmed directly in the service code, not assumed: (1)
+  `reserve()`/`addClients()` increment `ClientSessionTracking.reservedAppointments` unconditionally
+  with no floor check against `remainingAppointments` - a client can reserve into negative
+  balance; (2) the MANAGER-only `removeClient()` does not decrement tracking at all (asymmetric
+  with client-initiated `cancel()`, which does refund it) - both are pre-existing backend
+  behavior, left untouched per this phase's frontend-and-seeder-only scope.
+- **No "my appointments" endpoint existed for either role - added the minimal pair the brief
+  anticipated**, `GET /api/appointment/me` (CLIENT) and `GET /api/appointment/trainer/me`
+  (TRAINER), both resolving the caller from the JWT with the exact same
+  `SecurityContextHolder` → `Jwt` → `jwt.getClaim("email")` → repository-by-email idiom already
+  used throughout `AppointmentServiceImpl` (`getAuthenticatedClient`) - factored a matching
+  `getAuthenticatedTrainer()` out of the existing `getAuthenticatedTrainerAndAppointment` instead
+  of duplicating the JWT-extraction block a third time. Backed by two new derived-query repository
+  methods (`findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc`,
+  `findByTrainerIdOrderByDateDescStartTimeDesc`) rather than reusing the existing single-date
+  `getAppointmentsForTrainer(trainerId, date)`/`getAppointmentForClient(clientId, date)` methods,
+  since those answer "what's on this one date" (used internally by notification/calendar code),
+  not "give me this user's whole history" - a different query shape, not a redundant one.
+- **Both new "my appointments" screens (and the trainer's without-trainer list) filter to
+  "upcoming" client-side, not on the backend.** Since `/available` and `/without-trainer` return
+  every matching appointment regardless of date (a pre-existing backend quirk, confirmed above,
+  not introduced by this phase), and `/me` intentionally returns full history (past + future) by
+  design, every page that only wants "what's still bookable/assignable right now" does its own
+  `date/endTime >= now` filter in the component rather than the backend changing shape for one
+  screen's convenience - fixing the backend's missing date filter would be a genuine behavior
+  change to two existing, already-relied-upon endpoints, out of scope for a frontend-and-seeder
+  phase.
+- **Three appointment screens, mirroring the existing `payments`/`schedule` feature module shape
+  exactly** (`Frontend/src/features/appointments/{types,api}.ts` + one page per concern):
+  `ClientBookingPage` ("Zakaži trening" - available slots + reserve),
+  `ClientAppointmentsPage` ("Moji termini" - CLIENT's own history, split into upcoming/past
+  tables, cancel only offered on upcoming rows), and `TrainerAppointmentsPage` ("Moji termini" -
+  TRAINER's own upcoming/past assignments plus a separate "termini bez trenera" list with a
+  self-assign button). All three reuse the `extractErrorMessage(err, fallback)` pattern already
+  established in `TrainerSchedulePage`/`TrainerScheduleManager` (read
+  `err.response.data.message` via axios's `isAxiosError`, fall back to a generic Serbian message
+  only if the response has no body) so the 24h-cancellation-deadline message and any
+  `RuntimeException`-turned-400 from the backend actually reaches the user instead of a generic
+  string. New nav entries added to both the CLIENT and TRAINER sections of `AppShell`'s
+  `NAV_BY_ROLE` map and matching routes in `App.tsx` (`/client/zakazivanje`,
+  `/client/moji-termini`, `/trainer/termini`), following the existing flat per-page routing
+  convention (no nested routes/layouts).
+- **The realistic dev-data seeder is a `@Profile("dev")` `CommandLineRunner`
+  (`com.example.demo.config.dev.DevDataSeeder`), not a Flyway migration - exactly as the task
+  brief recommended, for the same reason spelled out there**: the dataset needs to be expressed
+  relative to "now" (weeks of appointment history *before* today, a few weeks of bookable slots
+  *after* today), which a Flyway migration - a static SQL file whose "now" is frozen at whatever
+  date it was written - cannot express correctly on every future run. Confirmed before writing
+  it that no `CommandLineRunner`/`ApplicationRunner` existed anywhere in the codebase yet (dev
+  seeding had been 100% Flyway-based through Phase 6) - this is a new pattern for this codebase,
+  introduced deliberately rather than by default.
+- **Idempotency: guarded by checking whether one specific marker trainer's email
+  (`marko.markovic@fitpro.dev`, the first trainer this seeder creates) already exists - if so,
+  the entire `run()` returns immediately.** Considered and rejected two alternatives: (1) a
+  row-count threshold (e.g. "skip if `appointment` count > N") - rejected because it's a fragile
+  magic number that has to be kept above whatever the Flyway dev-data migrations already insert
+  (`V1.0018` adds one) and below whatever this seeder itself inserts, an invariant that silently
+  breaks if either side's data volume changes later; (2) a dedicated marker/sentinel table -
+  rejected as unnecessary schema surface for a problem a plain existence check already solves
+  cleanly, and this session's rules already forbid editing/adding schema-carrying migrations for
+  dev-only concerns anyway. A real, human-meaningful email that must exist if and only if the
+  seeder has run mirrors the `WHERE NOT EXISTS` guards the Flyway dev-data migrations already use
+  for the identical reason, just expressed as a repository lookup instead of SQL.
+- **The seeder deliberately re-uses the two pre-existing dev accounts (`ogi` the trainer, `citva`
+  the client) alongside the new ones it creates, rather than seeding an entirely separate,
+  disconnected dataset.** `seedTrainers()`/`seedClients()` fetch `ogi`/`citva` by email
+  (`trainerRepository.findByUserEmail("ogi")`/`clientRepository.findByUserEmail("citva")`) and
+  fold them into the same pool used for appointment/payment/progress generation. Rationale: every
+  earlier phase's docs, screenshots, and this phase's own manual QA credentials reference `ogi`/
+  `citva` by name - if the realistic dataset only populated brand-new accounts, those two
+  well-known accounts would still show up empty in the UI, which is exactly the "technically
+  functional but looks unconvincing" problem this phase exists to fix.
+- **Session-tracking numbers (`ClientSessionTracking.remainingAppointments`/
+  `reservedAppointments`) are computed in-memory during generation, then added on top of
+  whatever a `(client, session)` row already holds in the database - not blindly inserted as a
+  fresh row.** The seeder simulates its own "payments" (topping up `remaining`) and "reservations"
+  (moving units from `remaining` to `reserved`) via a plain `Map<clientId, Map<sessionId, int[]>>`
+  accumulator while building `Payment`/`Appointment`/`ClientAppointment` rows, then at the end
+  looks up any pre-existing tracking row via the same `findByClientAndSession` the real service
+  uses and adds its deltas on top. This matters specifically because `ogi`/`citva` are reused (see
+  above) - if either account already had real tracking history from earlier phases' manual QA,
+  blindly inserting a second row for the same `(client, session)` pair would create a duplicate
+  the rest of the app was never written to expect (`getOrCreateClientSessionTracking` assumes at
+  most one row per pair).
+- **"Cancelled" past appointments are approximated as empty slots, not a distinct history
+  entry - because the schema has no persisted appointment status column at all** (confirmed
+  while reading `Appointment`/`AppointmentServiceImpl` - state is entirely implicit: capacity
+  reached or not, trainer assigned or not). Real `cancel()` calls simply delete the
+  `ClientAppointment` row and refund the tracking counter, leaving no residue distinguishing "no
+  one ever booked this slot" from "someone booked and later cancelled." The seeder can't create
+  data more expressive than the schema allows, so ~15% of past appointment slots are generated
+  with zero clients on purpose, as the closest available approximation of that history - flagged
+  here explicitly as a deliberate limitation, not an oversight, in case a future phase adds a
+  real status column and wants to revisit this.
+- **Appointment volume: 8 weeks of past history (Mon/Wed/Fri, 3 session slots/day) and 3 weeks of
+  future slots (Mon/Wed/Fri/Sat, 3 slots/day)**, landing around 110 appointments total on a fresh
+  run - enough to make every list screen (available, without-trainer, my-appointments upcoming/
+  past) show real, varied data without being an unreviewable wall of rows. Trainer/room
+  assignment and client fill-rate are randomized (fixed-seed `Random(42)` for a reproducible
+  shape across fresh runs) rather than exhaustive, deliberately leaving some future slots
+  trainer-less (for the self-assign screen) and some with open capacity (for the booking screen).
+- **Also seeds gym-schedule days beyond the single pre-existing Monday row, one past + one future
+  holiday, payment history (two `INDIVIDUAL` payments plus one `GROUP` payment per client, one
+  more optional big-group payment), 15 historical room check-ins plus one still-open check-in
+  (so the live floor plan already shows non-zero occupancy on first load), and 6-7 progress
+  entries plus 2-3 personal records per client spread over the past several months** (so the
+  Phase 4 charts show an actual trend line instead of two data points). Rooms themselves are not
+  re-seeded - confirmed via `roomRepository.findAll()` that Phase 3's `V1.0016` dev-data rooms
+  already exist and are simply read and reused for appointment/check-in room assignment.
+- **Verified end-to-end against a genuinely fresh Postgres/Redis volume** (`docker compose down`,
+  deleted `Docker/postgres_data/pgdata`, clean `target/` rebuild, `docker compose up -d`): all 19
+  migrations applied from empty in one run; the seeder logged
+  `🌱 Seeding realistic dev data...` then `✅ Dev data seeded: 4 trainers, 6 clients, 8 past weeks
+  + 3 future weeks of appointments.` on first boot; confirmed via direct SQL that generated data
+  is temporally sound (past appointments ranged 2026-06-08 to 2026-08-05, all before "today"
+  2026-08-08; future ones ranged 2026-08-10 to 2026-08-29, all after) and volume-realistic (109
+  appointments, 68 client-appointment rows, 19 payments, 16 room check-ins, 42 progress entries,
+  18 personal records). Restarted the backend a second time against the same volume and confirmed
+  the marker-email guard skipped seeding entirely (`🌱 Dev data already seeded ... - skipping`),
+  with row counts unchanged. Exercised the full flow via `curl`: logged in as `citva`, confirmed
+  `GET /api/appointment/available` and `GET /api/appointment/me` both return real, correctly-
+  shaped data; reserved a specific future available slot, confirmed it appeared in `/me`
+  immediately, then cancelled it and confirmed it reverted to zero clients; logged in as `ogi`,
+  confirmed `GET /api/appointment/without-trainer` returns real unassigned future slots,
+  self-assigned to one, confirmed it appeared in `GET /api/appointment/trainer/me`, then
+  unassigned and confirmed the trainer reverted to `null`. `mvn compile`, `npx tsc -b`, and
+  `npm run build` all clean.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -1561,6 +1709,25 @@ either upgrade session to pick up:
   the Claude-in-Chrome extension was checked again this round and still
   reports "not connected"; no `docs/browser-qa/` screenshots exist for any
   Phase 6 screen as a result - flagged explicitly, not skipped silently.
+- 2026-08-08: Phase 7 (`upgrade/claude-code` branch) - closed the last major
+  gap: the marketplace-style appointment/booking flow existed entirely on
+  the backend with zero frontend coverage, and the dev database only ever
+  had a handful of hand-seeded rows. Added `GET /api/appointment/me`
+  (CLIENT) and `GET /api/appointment/trainer/me` (TRAINER); three new
+  frontend screens (`ClientBookingPage`, `ClientAppointmentsPage`,
+  `TrainerAppointmentsPage`) mirroring the existing `payments`/`schedule`
+  feature module shape; and `DevDataSeeder`, a `@Profile("dev")`
+  `CommandLineRunner` that seeds ~110 appointments across 8 past + 3 future
+  weeks, consistent payment/session-tracking history, room check-ins, and
+  months of progress data, idempotent via a marker-trainer-email check. See
+  "Upgrade: Faza 7 decisions" above for the full rationale. Verified against
+  a genuinely fresh Postgres/Redis volume (all 19 migrations + seeder ran
+  cleanly, restart correctly skipped re-seeding, `mvn test` 61/61 green);
+  exercised the full booking and self-assign/unassign flow live via `curl`
+  and, this time with the Claude-in-Chrome extension actually connected,
+  via the real running frontend as both `citva` (CLIENT) and `ogi`
+  (TRAINER) - screenshots in `docs/browser-qa/phase7-*.jpg`. `mvn compile`,
+  `npx tsc -b`, and `npm run build` all clean.
 
 ## Upgrade: final summary
 
