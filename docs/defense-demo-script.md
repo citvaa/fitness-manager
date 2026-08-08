@@ -1,28 +1,47 @@
 # Vodič za demonstraciju na odbrani
 
-Ovaj dokument je operativni scenario za kratku (5-10 min) demonstraciju
-nadogradnje `fitness-manager` sistema (grana `upgrade/claude-code`) na
-odbrani diplomskog rada. Pokriva sva tri stuba nadogradnje: **live plan
-teretane**, **AI uvide za menadžera**, i **praćenje napretka klijenata**.
+Ovaj dokument je operativni scenario za demonstraciju cele nadogradnje
+`fitness-manager` sistema (grana `upgrade/claude-code`) na odbrani diplomskog
+rada - od samostalne registracije naloga do sve tri "wow" funkcionalnosti,
+preko administracije, trenerskog samouslužnog rasporeda i toka zakazivanja
+termina.
+
+**Realno ne staje sve u jednu kratku demonstraciju.** Zato je scenario
+podeljen na:
+
+- **CORE** - mora da se pokaže, ~10-12 minuta. Ovo je minimalni prikaz koji
+  dokazuje da je sistem end-to-end funkcionalan, ne samo da tri izolovane
+  "wow" funkcionalnosti radi.
+- **AKO IMA VREMENA / PITANJA** - dodatnih ~8-10 minuta materijala,
+  spreman za izvođenje ako komisija ima vremena ili konkretno pita o toku
+  zakazivanja, trenerskom rasporedu, ili detaljima administracije.
+
+Svaki korak ispod je obeležen sa **[CORE]** ili **[EKSTRA]** u naslovu.
 
 Pre odbrane, pročitaj i "Priprema pre odbrane" ispod - radi se jednom, dan
 ili sat vremena unapred, ne pred komisijom.
 
 ## Nalozi koji se koriste
 
-Sva tri naloga postoje na svakoj svežoj bazi (Flyway migracija
+Sva tri postojeća naloga postoje na svakoj svežoj bazi (Flyway migracija
 `V1.0017__set_known_dev_test_passwords.sql`, samo na `dev` profilu):
 
-| Email   | Lozinka       | Uloga   | Koristi se za                          |
-|---------|---------------|---------|-----------------------------------------|
-| `admin` | `password123` | MANAGER | Editor sala, live plan, AI uvidi        |
-| `ogi`   | `password123` | TRAINER | Unos mere/rekorda, "Moji klijenti"      |
-| `citva` | `password123` | CLIENT  | Read-only prikaz sopstvenog napretka    |
+| Email   | Lozinka       | Uloga   | Koristi se za                                          |
+|---------|---------------|---------|----------------------------------------------------------|
+| `admin` | `password123` | MANAGER | Administracija, editor sala, live plan, AI uvidi, uplate |
+| `ogi`   | `password123` | TRAINER | Moj raspored, unos mere/rekorda, "Moji klijenti", termini |
+| `citva` | `password123` | CLIENT  | Read-only napredak, zakazivanje, moji termini, moje uplate |
 
-Dev-seed podaci (`V1.0016`-`V1.0018`) već povezuju `ogi` (trener) i `citva`
-(klijent) kroz jedan zajednički termin, tako da je "Moji klijenti" popunjeno
-odmah bez ručne pripreme - i već postoji gym `FitPro Gym` sa 5 sala ("Sala za
+Realistični dev-seeder (`DevDataSeeder`, Faza 7) na svakom svežem pokretanju
+popuni bazu sa ~110 termina (8 nedelja istorije + 3 nedelje unapred), 4
+trenera, 6 klijenata (uključujući `ogi`/`citva`), uplatama, prijavama u sale
+i mesecima podataka o napretku - tako da svaki ekran ima realan sadržaj bez
+ručne pripreme podataka. Postoji i gym `FitPro Gym` sa 5 sala ("Sala za
 tegove", "Kardio zona", "Joga studio", "Svlačionica", "Recepcija").
+
+Za korak "Registracija novog naloga" **ne koristi se** postojeći nalog -
+kreira se potpuno novi nalog uživo, uz `manager+demo@fitpro.dev` (ili slično)
+kao email da se ne pomeša sa seed podacima.
 
 ## Priprema pre odbrane (uradi unapred, ne uživo)
 
@@ -35,30 +54,76 @@ tegove", "Kardio zona", "Joga studio", "Svlačionica", "Recepcija").
 3. Otvori **dva browser taba/prozora** unapred:
    - **Tab A**: prijavljen kao `admin`, na `/manager/floor-plan` (live plan).
    - **Tab B**: Swagger UI (`http://localhost:8088/swagger-ui/index.html`) ILI
-     terminal sa `curl` spreman za check-in komandu (vidi korak 3 ispod) - ovo
-     je "daljinski upravljač" za uživo promenu zauzetosti dok komisija
-     gleda Tab A.
-4. Po potrebi pribavi ID sale i ID klijenta unapred (da ne kucaš uživo):
-   `GET /api/gym/room` (kao `admin`) → zapamti ID sale "Sala za tegove";
-   `GET /api/trainer/me/clients` (kao `ogi`) → zapamti ID klijenta `citva`.
-   Na svežoj dev bazi ovo su tipično `roomId=1`, `clientId=1`, ali provjeri
-   uvek iznova - ID-jevi zavise od redosleda kreiranja podataka.
+     terminal sa `curl` spreman za check-in komandu (vidi korak "Live plan"
+     ispod) - ovo je "daljinski upravljač" za uživo promenu zauzetosti dok
+     komisija gleda Tab A. Isti tab/terminal se koristi i za registraciju
+     (otvaranje aktivacionog linka) i za booking-flow korake.
+4. Po potrebi pribavi ID-jeve unapred (da ne kucaš uživo):
+   - `GET /api/gym/room` (kao `admin`) → ID sale "Sala za tegove".
+   - `GET /api/trainer/me/clients` (kao `ogi`) → ID klijenta `citva`.
+   - `GET /api/appointment/without-trainer` (kao `ogi`) → ID bar jednog
+     budućeg termina bez trenera, za booking-flow deo.
+   Na svežoj dev bazi ovo su tipično `roomId=1`, `clientId=6` (poslednji
+   seed-ovani klijent je `citva`), ali provjeri uvek iznova - ID-jevi zavise
+   od redosleda kreiranja podataka i od toga koliko puta je seeder već
+   pokretan.
 5. Uveri se da AI uvidi već imaju keširan, svež odgovor (pozovi
    `GET /api/insights/manager` i `GET /api/progress/insight/client/{id}`
    jednom pre nego što komisija uđe) - prvi (necache-ovan) pozivi Claude API-ju
    traju par sekundi, drugi poziv unutar TTL-a je trenutan. Ne mora da bude
    "sveže" tokom demonstracije - keširan odgovor je i brži i pouzdaniji.
+6. Ako planiraš da uživo pokažeš i registraciju, unapred smisli i zapamti
+   koji email ćeš koristiti (npr. `demo.klijent@fitpro.dev`) - ako ga
+   pokušaš dvaput na istoj bazi, drugi pokušaj će vratiti grešku "korisnik
+   već postoji" (očekivano, ne bug).
 
 ## Scenario (redosled)
 
-### 1. Uvod i prijava (~1 min)
+### 0. Uvod i prijava [CORE] (~30s)
 
 Prijaviti se kao `admin` (ako Tab A već nije prijavljen, uradi to uživo -
 inače samo reci "već sam prijavljen kao menadžer"). Reci: *"Sistem
 razlikuje tri uloge - menadžer, trener i klijent - i svaka uloga vidi svoj
-deo aplikacije. Krenimo od menadžera."*
+deo aplikacije. Krenimo od toga kako nalog uopšte nastaje."*
 
-### 2. Editor sala (~1 min)
+### 1. Registracija i aktivacija novog naloga [CORE] (~1-1.5 min)
+
+Ovo demonstrira samostalni onboarding flow dodat u Fazi 6 - pre toga je
+jedini način da nalog postoji bio ručni SQL insert.
+
+1. U Tab A (`admin`), otvori `/manager/administracija` → tab "Klijenti" (ili
+   "Treneri"). Popuni formu sa novim email-om (npr.
+   `demo.klijent@fitpro.dev`) i klikni "Kreiraj".
+2. Odmah nakon kreiranja pojavljuje se **banner sa aktivacionim linkom** -
+   objasni: *"Ovo je namerno vidljivo samo u dev okruženju - u produkciji bi
+   ovaj link stigao na email, ali pravi mail server nije podešen u ovom
+   okruženju, pa je link ovde prikazan direktno."* Klikni dugme za
+   kopiranje linka.
+3. Otvori link u **trećem tabu** (ili incognito prozoru - ostavi Tab A i Tab
+   B netaknute) - vodi na `/register/complete?registration_key=...`. Postavi
+   lozinku (npr. `Demo1234!`), potvrdi.
+4. U tom trećem tabu, uloguj se sa novim nalogom da pokažeš da radi
+   kraj-do-kraja, pa ga zatvori - Tab A je i dalje prijavljen kao `admin`,
+   nastavi tamo na sledeći korak.
+
+**Ako komisija pita o zaboravljenoj lozinci**: `/forgot-password` i
+`/reset-password` postoje i radi identično (isti razlog za "vidljivo u
+dev-u" ne postoji ovde - reset link stvarno ide samo na email, pa bi
+uživo demo zahtevao ručan upit u bazu za `reset_key` kolonu). Bolje ostaviti
+ovo kao usmeno objašnjenje nego uživo klikanje, osim ako je terminal sa
+`psql` pripravan.
+
+### 2. MANAGER administracija - radno vreme teretane [CORE] (~1 min)
+
+Na istoj `/manager/administracija` stranici, pređi na tab "Radno vreme i
+praznici". Reci: *"Ovo je upsert - ako menadžer greškom unese pogrešno radno
+vreme za neki dan, drugi unos za isti dan ga prepisuje umesto da vrati
+grešku, jer ranije nije postojao endpoint za izmenu."* Promeni radno vreme za
+jedan dan (npr. nedelja) i sačuvaj - pokaži da se odmah ažuriralo u listi.
+
+*(Opciono, ako ima vremena: dodaj i jedan praznik da pokažeš i tu formu.)*
+
+### 3. Editor sala [CORE] (~1 min)
 
 Otvori `/manager/room-editor`. Pokaži postojeće sale na 2D planu, prevuci
 jednu salu (drag), pokaži da se pozicija menja uživo na canvas-u. Reci:
@@ -68,7 +133,7 @@ prevlačenje završi."* Ne moraš da praviš novu salu - samo pokaži da postoje
 reaguje na drag. Refresh stranice (F5) da pokažeš da je pozicija zaista
 sačuvana, ne samo lokalna.
 
-### 3. Live plan teretane - GLAVNI "wow" trenutak (~2-3 min)
+### 4. Live plan teretane - GLAVNI "wow" trenutak [CORE] (~2-3 min)
 
 Ovo je najefektniji deo - **osmišljen da se odigra pred komisijom u realnom
 vremenu, ne kao snimljen video**:
@@ -100,7 +165,7 @@ vremenu, ne kao snimljen video**:
    baze, ne samo u kodu - jedinstveni indeks u Postgresu odbija drugi upis
    čak i pri konkurentnom pokušaju."*
 
-### 4. AI uvidi za menadžera (~1-2 min)
+### 5. AI uvidi za menadžera [CORE] (~1-2 min)
 
 Pređi na `/manager/insights`. Pokaži narativ generisan modelom
 (`claude-haiku-4-5`) na osnovu stvarnih podataka o prijavama i uplatama.
@@ -110,29 +175,73 @@ cenu po terminu) i piše sažetak na srpskom."* Klikni "Regeneriši" da pokaže�
 da forsira novi Claude API poziv (nekoliko sekundi čekanja je normalno i
 očekivano - to je live poziv, ne trik).
 
-### 5. Praćenje napretka klijenata (~2 min)
+### 6. Praćenje napretka klijenata [CORE] (~2 min)
 
 Odjavi se, prijavi se kao `ogi` (TRAINER). Otvori `/trainer` - pokaži "Moji
-klijenti" (samo `citva`, jer je jedini klijent sa kojim `ogi` deli termin -
-reci da je ovo stvarna autorizaciona provera, ne samo UI filter: *"Trener ne
-može ni preko API-ja da pročita podatke klijenta kog nikad nije trenirao -
-vraća 403."*). Klikni na `citva`, unesi novu meru (npr. težina) kroz formu,
-pokaži da se grafik ažurira odmah bez reload-a. Unesi i lični rekord.
+klijenti" (uključuje `citva` i ostale klijente sa kojima `ogi` ima
+zajednički termin iz seed podataka - reci da je ovo stvarna autorizaciona
+provera, ne samo UI filter: *"Trener ne može ni preko API-ja da pročita
+podatke klijenta kog nikad nije trenirao - vraća 403."*). Klikni na
+`citva`, unesi novu meru (npr. težina) kroz formu, pokaži da se grafik
+ažurira odmah bez reload-a. Unesi i lični rekord.
 
 Odjavi se, prijavi se kao `citva` (CLIENT). Otvori `/client` i pokaži da
 klijent vidi iste podatke koje je trener upravo uneo - read-only, bez formi.
 Reci: *"Isti podaci, ali klijent nema mogućnost izmene - samo uvid."*
 
-### 6. Zaključak (~30s)
+### 7. Trenerski samouslužni raspored [EKSTRA] (~1-1.5 min)
 
-*"Sve tri funkcionalnosti - live plan, AI uvidi, praćenje napretka - su
-potpuno integrisane sa postojećim sistemom zakazivanja termina i uplata, bez
-narušavanja postojeće funkcionalnosti."*
+Odjavi se, prijavi se ponovo kao `ogi` (TRAINER) - u prethodnom koraku smo
+završili prijavljeni kao `citva`. Otvori `/trainer/raspored` ("Moj raspored").
+Reci: *"Ovo je Faza 6 - trener sam unosi svoje radno vreme, bez da menadžer
+mora da uradi to za njega."* Unesi novu smenu za budući datum unutar radnog
+vremena teretane. Pokaži da se odmah pojavljuje u listi.
+
+Ako komisija pita "šta ako trener pokuša da izmeni raspored drugog trenera":
+objasni da je to sprovedeno na nivou servisa (`403` ako pokuša da obriše
+tuđi unos), i da self-service DTO-ovi (`CreateOwnTrainerScheduleRequest`) ne
+sadrže `trainerId` polje uopšte - trener fizički ne može da pošalje tuđi ID,
+jer ga tip zahteva ne dozvoljava.
+
+*(Opciono: pokušaj unos van radnog vremena teretane ili van radnog vremena
+koji se poklapa sa nedeljom bez definisanog radnog vremena - pokazaće jasnu
+`400` grešku sa porukom, ne prazan `500`, zahvaljujući `GlobalExceptionHandler`
+dodatom u Fazi 6.)*
+
+### 8. Tok zakazivanja termina (booking flow) [EKSTRA] (~2-2.5 min)
+
+Ovo demonstrira "marketplace" model dodat u Fazi 7 - menadžer kreira slotove,
+klijenti ih rezervišu, treneri se sami dodeljuju.
+
+1. Odjavi se, prijavi se kao `citva` (CLIENT). Otvori `/client/zakazivanje` ("Zakaži
+   trening") - pokaži listu dostupnih termina sa slobodnim mestom. Rezerviši
+   jedan budući termin.
+2. Otvori `/client/moji-termini` ("Moji termini") - pokaži da se novi termin
+   odmah pojavio u "budući" tabeli.
+3. Odjavi se, prijavi se kao `ogi` (TRAINER). Otvori `/trainer/termini`
+   ("Moji termini") - pokaži sekciju "termini bez trenera" i samododeli se
+   na jedan od njih klikom na dugme. Reci: *"Trener se ovde sam prijavljuje
+   na slobodan termin - ne čeka da mu menadžer dodeli."*
+4. Vrati se na `citva` i otkaži termin rezervisan u koraku 1 (dugme
+   "Otkaži" je dostupno samo za buduće termine). Reci: *"Otkazivanje je
+   moguće samo do 24h pre termina - pokušaj otkazivanja termina koji počinje
+   za manje od 24h vraća jasnu grešku, ne prazan 500."*
+
+*(Ako ima još vremena: pokaži i da menadžer može ručno kreirati termin sa
+već dodeljenim trenerom/klijentima preko Swagger-a, kao kontrast prema
+samostalnom booking-u iznad.)*
+
+### 9. Zaključak [CORE] (~30s)
+
+*"Sistem sada pokriva ceo tok - od samostalne registracije, kroz
+administraciju od strane menadžera, do sve tri 'wow' funkcionalnosti i
+svakodnevnog korišćenja (zakazivanje, raspored, uplate) - sve integrisano sa
+postojećim sistemom, bez narušavanja postojeće funkcionalnosti."*
 
 ## Plan B - ako nešto ne radi na dan odbrane
 
-- **Nema interneta / Anthropic API ne radi**: AI uvidi (koraci 4 i deo
-  koraka 5) su jedini delovi koji zahtevaju spoljnu mrežu. Ako
+- **Nema interneta / Anthropic API ne radi**: AI uvidi (koraci 5 i deo
+  koraka 6) su jedini delovi koji zahtevaju spoljnu mrežu. Ako
   `GET /api/insights/manager` ili `GET /api/progress/insight/...` vrate
   grešku, prijaviti to otvoreno ("ovo zove eksterni Claude API, koji zavisi
   od internet konekcije") i pokazati unapred snimljene screenshotove iz
@@ -142,7 +251,7 @@ narušavanja postojeće funkcionalnosti."*
   `CLIENT_PROGRESS_INSIGHT_CACHE` 10 min TTL), stranica će prikazati
   keširan sadržaj čak i ako je mreža u tom trenutku nedostupna za NOVI
   poziv - samo nemoj klikati "Regeneriši" ako nisi siguran da mreža radi.
-- **WebSocket se ne poveže / veza padne uživo (korak 3)**: frontend sada
+- **WebSocket se ne poveže / veza padne uživo (korak 4)**: frontend sada
   prikazuje vidljiv baner ("Veza sa uživo prikazom je prekinuta, ponovno
   povezivanje...") umesto da tiho zamrzne prikaz - ako se to desi, reci
   otvoreno *"evo, ovo je tačno ponašanje koje želimo kad veza padne - sistem
@@ -155,7 +264,18 @@ narušavanja postojeće funkcionalnosti."*
 - **Zaboravljena lozinka/nalog ne radi**: sve tri lozinke su `password123`
   za `admin`/`ogi`/`citva` - ako login ne radi, provjeri da li je baza
   stvarno na `dev` Flyway profilu (`spring.profiles.active=dev`) - samo taj
-  profil učitava `V1.0017`.
+  profil učitava `V1.0017` i pokreće `DevDataSeeder`.
+- **Registracija (korak 1) - aktivacioni link ne radi ili nalog "već
+  postoji"**: ako je email već iskorišćen na ovoj bazi (npr. ponovljena
+  proba istog demo-a), koristi drugi email umesto da pokušavaš isti
+  ponovo - `findOrCreateUser` će vratiti postojećeg korisnika bez novog
+  `registrationKey`-a, pa banner neće prikazati koristan link.
+- **Booking flow (korak 8) - nema dostupnih termina bez trenera/sa slobodnim
+  mestom**: seeder namerno pravi samo deo budućih termina bez trenera
+  (~45%) i sa punim kapacitetom - ako baš svi vidljivi termini u trenutku
+  demonstracije ispadnu popunjeni/dodeljeni (retko, ali moguće nakon više
+  ranijih proba na istoj bazi), koristi Swagger da kreiraš novi termin
+  (`POST /api/appointment`) bez trenera i klijenata, pa nastavi odatle.
 - **Check-in vrati grešku umesto 409/201**: provjeri da li si stvarno prosledio
   ispravan `roomId`/`clientId` (pogledaj "Priprema", korak 4) - ID-jevi se
   menjaju ako je baza ranije korišćena za drugu demonstraciju.
@@ -163,8 +283,20 @@ narušavanja postojeće funkcionalnosti."*
 ## Tehnički podsetnik (za pitanja komisije)
 
 Detaljno obrazloženje svake netrivijalne odluke (šema, servisni sloj,
-frontend) je u `AGENTS.md`, sekcije "Upgrade: schema decisions", "Upgrade:
-service layer decisions", "Upgrade: frontend decisions", i finalni pregled
-u "Upgrade: final summary" - koristi ih kao referencu ako komisija pita
-"zašto baš tako", npr. zašto je soba pravougaonik a ne poligon, zašto
-occupancy ne dedupira dva signala, ili zašto je izabran `claude-haiku-4-5`.
+frontend, i Faza 6/7 dopune) je u `AGENTS.md`, sekcije "Upgrade: schema
+decisions", "Upgrade: service layer decisions", "Upgrade: frontend
+decisions", "Upgrade: Faza 6 decisions" (uključujući nastavke), "Upgrade:
+Faza 7 decisions", i finalni pregled u "Upgrade: final summary" - koristi ih
+kao referencu ako komisija pita "zašto baš tako", npr.:
+
+- zašto je soba pravougaonik a ne poligon,
+- zašto occupancy ne dedupira dva signala,
+- zašto je izabran `claude-haiku-4-5`,
+- zašto self-service raspored DTO nema `trainerId` polje,
+- zašto `GymScheduleServiceImpl.create` radi upsert a ne insert-only,
+- zašto je dev-seed podataka Java `CommandLineRunner` a ne Flyway migracija,
+- zašto rezervacija termina može da ode u negativan saldo preostalih termina
+  (postojeća, nedirnuta ponašanja backend-a - vidi "Upgrade: Faza 7
+  decisions"),
+- koja poznata ograničenja postoje i zašto nisu popravljena u ovoj sesiji
+  (sekcija "Known issues" u `AGENTS.md`).
