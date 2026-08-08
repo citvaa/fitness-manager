@@ -2,6 +2,8 @@ package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.mapper.AppointmentMapper;
+import com.example.demo.mapper.SessionMapper;
+import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.Session;
 import com.example.demo.model.user.Client;
@@ -46,6 +48,8 @@ class AppointmentMarketplaceServiceTest {
     @Mock ClientRepository clients;
     @Mock AppointmentRepository appointments;
     @Mock AppointmentMapper mapper;
+    @Mock SessionMapper sessionMapper;
+    @Mock RoomRepository rooms;
     @Mock GymScheduleRepository gymSchedules;
     @Mock TrainerScheduleRepository trainerSchedules;
     @Mock ClientSessionTrackingRepository trackings;
@@ -55,7 +59,7 @@ class AppointmentMarketplaceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AppointmentServiceImpl(sessions, trainers, clients, appointments, mapper, gymSchedules,
+        service = new AppointmentServiceImpl(sessions, trainers, clients, appointments, mapper, sessionMapper, rooms, gymSchedules,
                 trainerSchedules, trackings, notifications, clientAppointments);
         lenient().when(appointments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(mapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());

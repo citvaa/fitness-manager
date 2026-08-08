@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.SessionDTO;
 import com.example.demo.service.AppointmentService;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -26,6 +27,10 @@ public class AppointmentController {
         AppointmentDTO createdAppointment = appointmentService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
     }
+
+    @RoleRequired("MANAGER")
+    @GetMapping("/sessions")
+    public List<SessionDTO> getSessions() { return appointmentService.getSessions(); }
 
     @RoleRequired("MANAGER")
     @PostMapping("/{appointmentId}/add-trainer")

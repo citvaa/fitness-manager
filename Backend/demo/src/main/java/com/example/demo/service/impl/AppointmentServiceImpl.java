@@ -3,6 +3,8 @@ package com.example.demo.service.impl;
 import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
+import com.example.demo.mapper.SessionMapper;
+import com.example.demo.model.gym.Room;
 import com.example.demo.model.*;
 import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.model.schedule.TrainerSchedule;
@@ -13,6 +15,7 @@ import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.*;
 import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
+import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
@@ -51,6 +54,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final ClientRepository clientRepository;
     private final AppointmentRepository appointmentRepository;
     private final AppointmentMapper appointmentMapper;
+    private final SessionMapper sessionMapper;
+    private final RoomRepository roomRepository;
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
@@ -63,6 +68,8 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Session session = fetchSession(request.getSessionId());
         Trainer trainer = fetchTrainer(request.getTrainerId());
+        Room room = request.getRoomId() == null ? null : roomRepository.findById(request.getRoomId())
+                .orElseThrow(() -> new EntityNotFoundException("Room not found"));
 
         Appointment appointment = Appointment.builder()
                 .date(request.getDate())
@@ -70,6 +77,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .endTime(request.getEndTime())
                 .session(session)
                 .trainer(trainer)
+                .room(room)
                 .build();
 
         appointment.setClientAppointments(createClientAppointments(request.getClientIds(), appointment));
@@ -81,6 +89,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return appointmentDTO;
+    }
+
+    public List<com.example.demo.dto.SessionDTO> getSessions() {
+        return sessionRepository.findAll().stream().map(sessionMapper::toDto).toList();
     }
 
     @Transactional
@@ -111,7 +123,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
 
-        Set<ClientAppointment> clientAppointments = createClientAppointments(clientIds, appointment);
+        long newClients = clientIds.stream().filter(id -> appointment.getClientAppointments().stream()
+                .noneMatch(link -> link.getClient().getId().equals(id))).count();
+        if (appointment.getClientAppointments().size() + newClients > appointment.getSession().getMaxParticipants()) {
+            throw new IllegalStateException("Appointment capacity would be exceeded");
+        }
+        Set<Integer> missingIds = clientIds.stream().filter(id -> appointment.getClientAppointments().stream()
+                .noneMatch(link -> link.getClient().getId().equals(id))).collect(Collectors.toSet());
+        validateClientAvailability(missingIds, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime());
+        Set<ClientAppointment> clientAppointments = createClientAppointments(missingIds, appointment);
 
         appointment.getClientAppointments().addAll(clientAppointments);
         appointmentRepository.save(appointment);
@@ -124,7 +144,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
 
-        appointment.getClientAppointments().removeIf(clientAppointment -> clientAppointment.getClient().getId().equals(clientId));
+        boolean removed = appointment.getClientAppointments().removeIf(clientAppointment -> clientAppointment.getClient().getId().equals(clientId));
+        if (!removed) throw new EntityNotFoundException("Client is not assigned to appointment");
+        Client client = clientRepository.findById(clientId).orElseThrow(() -> new EntityNotFoundException("Client not found"));
+        decrementReservedAppointments(getOrCreateClientSessionTracking(client, appointment.getSession()));
 
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
     }
@@ -346,9 +369,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .map(clientId -> {
                     Client client = clientRepository.findById(clientId)
                             .orElseThrow(() -> new EntityNotFoundException("Client not found"));
-
-                    ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
-                    incrementReservedAppointments(tracking);
 
                     return createClientAppointment(client, appointment);
                 })
