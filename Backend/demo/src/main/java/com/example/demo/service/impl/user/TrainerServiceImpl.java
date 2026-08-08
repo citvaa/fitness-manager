@@ -83,8 +83,9 @@ public class TrainerServiceImpl implements TrainerService {
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         trainerScheduleRepository.deleteByTrainer(trainer);
-
+        Integer userId = trainer.getUser().getId();
         trainerRepository.delete(trainer);
+        userService.removeRole(userId, Role.TRAINER);
     }
 
     public List<TrainerDTO> getAll() {

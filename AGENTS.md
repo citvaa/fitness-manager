@@ -412,6 +412,22 @@ deliberately deferred to the following phase.
   gained the minimum list/update/delete operations required by the UI. Existing
   manager create routes remain intact, `TrainerScheduleDTO` now includes its
   existing entity date, and no migration was necessary.
+- **Payments are role-scoped views of appointment credits, not monetary
+  revenue.** Managers can list all Payment rows, optionally filter by client,
+  and record a package through the existing write contract; clients can only
+  read `/api/payment/me`, whose client identity is derived from the JWT. The UI
+  deliberately labels values as purchased appointments because Payment still
+  has no amount or currency columns.
+- **The daily calendar is manager-only.** Its aggregate payload contains every
+  appointment and its linked trainer/client identities, so exposing it to all
+  authenticated roles would exceed both trainer ownership and client self-data
+  boundaries. Managers receive a dedicated date-driven timeline; trainers keep
+  their narrower self-service schedule view.
+- **Deleting a domain profile also removes its matching role, not its User.**
+  Trainer and Client deletion now remove `TRAINER`/`CLIENT` through the existing
+  `UserService.removeRole` mechanism in the same transaction. The account and
+  any unrelated roles remain available until a manager explicitly deletes the
+  User from the separate user-administration tab.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -439,8 +455,8 @@ either upgrade session to pick up:
   unique constraint actually exists in the migrations, so entity and schema
   disagree; this has had no observed effect yet but is worth fixing carefully
   (with a new migration) before relying on it.
-- `CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
-  authenticated user (any role) can call it.
+- **Resolved in the Phase 6 continuation:** the aggregate daily calendar is
+  explicitly MANAGER-only and is consumed by the manager timeline screen.
 - Only Phase 2's explicit `ApiException` and database-integrity failures have a
   consistent JSON error shape; older unclassified exceptions still fall
   through to Spring Boot's default response.
@@ -517,6 +533,11 @@ either upgrade session to pick up:
   builds passed, and an isolated fresh database verified activation/login,
   schedule and holiday writes, own-schedule reads, and HTTP 403 on a cross-trainer
   self-service update attempt.
+- 2026-08-08: Phase 6 continuation (`upgrade/codex`). Added manager payment
+  history/filter/create and client self-payment history, restricted the global
+  daily calendar to managers and added its timeline UI, and made Trainer/Client
+  profile deletion transactionally remove the corresponding role while
+  preserving the underlying User account.
 
 ## Final upgrade summary
 
