@@ -1373,6 +1373,101 @@ material.
   self-assigned to one, confirmed it appeared in `GET /api/appointment/trainer/me`, then
   unassigned and confirmed the trainer reverted to `null`. `mvn compile`, `npx tsc -b`, and
   `npm run build` all clean.
+- **Undocumented-until-now addendum, backfilled during Faza 8**:
+  `db/dev-data/V1.0019__fix_dev_trainer_birth_year.sql` exists on this branch (a plain `UPDATE`
+  setting the seeded `ogi` trainer's `birth_year` from the `V1.0009` placeholder `0` to `1990`,
+  guarded on `birth_year = 0` so it's a no-op once a manager sets a real value) but was never
+  written up in this file when it was added - discovered while reading the migration directory
+  during Faza 8's fresh-volume verification. Same "don't edit an already-applied migration"
+  reasoning as `V1.0017`/`V1.0018`; looked up by email rather than a hardcoded id for the same
+  reason those two migrations do. Recorded here now purely so the migration count (19, not 18)
+  and its rationale aren't a mystery to a future reader - no behavior was changed by writing this
+  paragraph.
+
+## Upgrade: Faza 8 decisions
+
+Faza 8 (`upgrade/claude-code` branch) is a pure hardening/coverage pass, not a new-feature phase -
+its explicit brief was to bring Faza 6 (auth self-service, MANAGER administration) and Faza 7
+(booking flow, realistic seeder) up to the same bar Faza 5 already set for Faza 1-4: real test
+coverage, a demo script that actually covers the whole app, and a genuinely fresh-volume
+end-to-end check. Same spirit as every prior "Upgrade: ..." section - documenting the non-obvious
+decisions and findings as thesis comparison material, not just an internal note.
+
+- **44 new backend unit tests, same Mockito/no-live-dependencies approach Faza 5 established** -
+  `TrainerScheduleServiceImplTest` (self-service schedule create/unavailability resolved from the
+  JWT never the request body, gym-hours/overlap validation errors, the shared delete's
+  MANAGER-any/TRAINER-own-only ownership check), `ClientServiceImplTest`/`PaymentServiceImplTest`
+  (the newly-exposed `getAll()`/payment-history read endpoints), `AppointmentServiceImplTest` (the
+  Faza 7 marketplace flow - reserve/cancel including the 24h deadline, assign/unassign ownership,
+  available/without-trainer filtering, both "my appointments" endpoints), `GymScheduleServiceImplTest`
+  (the upsert-per-day fix), `RoleInterceptorTest` (the real interceptor against a real signed JWT
+  and reflection onto `CalendarController.getScheduleForDay` - the actual authorization gap fixed in
+  Faza 6), `GlobalExceptionHandlerTest`, and `DevDataSeederTest` (the idempotency guard, verified by
+  asserting a fully-mocked `run()` is a no-op once the marker trainer exists). No test attempts to
+  exercise the seeder against a real database - that's what the fresh-volume check below is for;
+  the unit test only proves the branching logic that makes re-running it safe.
+- **Found and fixed a real regression while writing these tests, not a pre-existing "known issue"
+  being picked up.** `AppointmentServiceImplTest`'s `getAvailable`/`getAllWithoutTrainer` tests
+  initially failed because two test `Appointment`s with all-null `BaseEntity` fields compared equal
+  under Mockito's equals-based `verify(never())` - the exact `BaseEntity.equals()` gap Faza 5
+  already documented (see "Known issues"), now hit a second time in new code. Fixed the same way
+  Faza 5's `RoomCheckInServiceImplTest` did: gave each test entity a distinct `version` so they
+  stop comparing equal - not a production code change, since `BaseEntity` itself is explicitly
+  still out of scope (see "Known issues").
+- **The bigger find: `GlobalExceptionHandler` silently downgrading every `AccessDeniedException` to
+  `400`, breaking `403` behavior Faza 6 had explicitly documented and verified.** Not found by a
+  test - found live, while manually re-verifying the exact `curl` scenario Faza 6's own commit
+  message described ("a second trainer account gets `403`... on deleting another trainer's
+  entry") during this phase's fresh-volume check below. `AccessDeniedException` is a
+  `RuntimeException`, and the bare-`RuntimeException` `400` handler Faza 6's *later* continuation
+  added (see "Known issues") has no special case for it - so from the moment that handler
+  shipped, every `AccessDeniedException` in the codebase (the schedule-ownership check, and
+  separately `TrainerClientAccessGuard`) was silently returning `400` instead of `403`, and nothing
+  caught it because neither of those two features' original `403` verification was ever re-run
+  after the handler landed. This is exactly the kind of regression a fixed test suite exists to
+  catch and Faza 6/7 didn't have one for these paths yet - fixed with an explicit
+  `@ExceptionHandler(AccessDeniedException.class)` returning `403` (Spring matches the more
+  specific handler over the `RuntimeException` one), plus a new regression test in
+  `GlobalExceptionHandlerTest`. Treated as an "I broke this indirectly, I fix it now" case per this
+  branch's established convention (see "Upgrade: final summary"), not deferred to "Known issues",
+  since it silently broke already-shipped, already-documented behavior rather than being a
+  pre-existing rough edge.
+- **`docs/defense-demo-script.md` rewritten, not just appended to.** The Faza 5 version only ever
+  covered the three "wow" pillars (room editor, live floor plan, AI insights, progress tracking) -
+  it predates Faza 6/7 entirely, so it had no registration, no administration, no trainer
+  self-service schedule, and no booking flow. Rewritten as a full walkthrough of all of it, with
+  every section explicitly marked **[CORE]** (must show) or **[EKSTRA]** (if time/questions allow)
+  instead of leaving that call for the day of the defense - the full walkthrough runs well past the
+  original 5-10 minute budget once registration, one administration action, and the booking flow
+  are added, so the core/extra split is the mechanism that keeps the defense itself from overrunning.
+- **Fresh-volume verification actually exercised every new surface, not just the three original
+  pillars** (`docker compose down`, deleted `Docker/postgres_data/pgdata`, clean `Backend/demo/target`
+  rebuild, `docker compose up -d`): all 19 migrations applied from empty in one run, the seeder
+  logged its usual success line, and the backend started with no manual database step. Exercised via
+  `curl` end-to-end: created a client through `POST /api/client`, extracted the real
+  `registrationKey` from the response (no database peek), called `POST /api/user/register`, and
+  logged in as the newly-activated account - the exact registration/activation loop the demo script
+  now opens with; upserted the Sunday gym-schedule row twice and confirmed the second call updated
+  the same row (`id` unchanged) rather than duplicating it; confirmed `GET /api/calendar` returns
+  `403` for CLIENT and `200` for MANAGER/TRAINER; ran the full booking flow (`citva` reserved a real
+  future available slot, appeared in `/me`, then cancelled it and reverted to zero clients; `ogi`
+  self-assigned to a real without-trainer slot, appeared in `/trainer/me`, then unassigned back to
+  `null`); round-tripped a trainer's own self-service schedule entry and confirmed the second-trainer
+  `403` case above (where the regression was actually found); checked a client into a room and
+  confirmed `GET /api/gym/occupancy` reflected it, then checked out and confirmed it reverted;
+  confirmed `GET /api/insights/manager` and `GET /api/progress/insight/me` both returned genuinely
+  Claude-generated Serbian prose grounded in real seeded data (not cached from a prior session - the
+  volume was freshly wiped). **Then repeated the registration, room-editor, live-floor-plan
+  WebSocket push, AI-insights, trainer-progress-entry, trainer-self-service-schedule, and full
+  booking-flow steps again through the actual running frontend** with the Claude-in-Chrome
+  extension connected - not just `curl` - confirming the on-screen activation-link banner, the
+  "Radno vreme i praznici" upsert reflected in the UI, the live floor-plan tile flipping color in
+  real time from a `curl` check-in with zero page reloads, the AI-insights "Regeneriši" narrative,
+  the trainer's chart/list updating without reload after a new measurement, "Moj raspored"'s date
+  picker and save round-trip, "Moji termini"'s self-assign/unassign moving an appointment between
+  the two lists, and the client's "Zakaži trening" → "Moji termini" → otkaži round-trip, all
+  rendering correctly with no console errors. `mvn test` (106/106, including the 44 new tests),
+  `mvn compile`, `npx tsc -b`, and `npm run build` all clean against this same fresh instance.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -1449,6 +1544,18 @@ either upgrade session to pick up:
   minimal scope, not deliberate REST-semantics decisions - a real 404/500
   split is a reasonable follow-up. See "Upgrade: Faza 6 decisions"
   (continued) for the full rationale and verification.
+  **Follow-up regression, fixed 2026-08-08** (`upgrade/claude-code` branch,
+  Faza 8): this same handler had silently downgraded every
+  `AccessDeniedException` (itself a `RuntimeException`) to `400` since the
+  day it was added - breaking the already-documented, already-verified
+  `403` behavior of `TrainerScheduleServiceImpl.deleteSchedule`'s ownership
+  check and `TrainerClientAccessGuard`, with nothing catching it because
+  neither was re-verified after this handler landed. Caught during Faza 8's
+  fresh-volume verification (a second trainer deleting another trainer's
+  schedule entry returned `400`, not `403`). Fixed with an explicit
+  `@ExceptionHandler(AccessDeniedException.class)` -> `403`, more specific
+  than the `RuntimeException` handler so Spring matches it first; see
+  "Upgrade: Faza 8 decisions" for the full write-up and verification.
 - ~~`pom.xml` sets `maven.test.skip=true`~~ **Fixed 2026-08-07** (`upgrade/
   claude-code` branch, thesis-defense-finalization session): removed the
   property; the backend now has real unit test coverage for all Phase 1-4
@@ -1769,42 +1876,95 @@ either upgrade session to pick up:
   endpoints and `login-refresh`; re-ran `mvn test` (61/61) against the
   normal short dev secret afterward to confirm no regression. See "Known
   issues" for the full write-up.
+- 2026-08-08: Faza 8, hardening/coverage pass for Faza 6-7 (`upgrade/
+  claude-code` branch) - no new features, per its explicit brief. Added 44
+  backend unit tests covering the Faza 6/7 code that had none yet
+  (self-service trainer schedule, the newly-exposed client/payment-history
+  reads, the calendar role guard, the full appointment marketplace flow, the
+  gym-schedule upsert fix, and the dev seeder's idempotency guard); rewrote
+  `docs/defense-demo-script.md` from a three-pillar-only script into a full
+  end-to-end walkthrough (registration/activation, one administration
+  action, the three existing pillars, trainer self-service scheduling, the
+  full booking flow) with every section marked CORE or EKSTRA since it no
+  longer fits a single 5-10 minute slot; and ran a genuinely fresh-volume
+  verification exercising all of the above via both `curl` and the real
+  running frontend (Claude-in-Chrome connected). That verification surfaced
+  a real regression - `GlobalExceptionHandler` had been silently downgrading
+  every `AccessDeniedException` to `400` since a later Faza 6 commit added
+  its bare-`RuntimeException` handler, breaking the already-documented
+  `403` behavior of the trainer-schedule ownership check and
+  `TrainerClientAccessGuard` with nothing catching it in the meantime. Fixed
+  with an explicit, more-specific `@ExceptionHandler(AccessDeniedException
+  .class)` plus a regression test; re-verified both `403` cases live after
+  the fix. Also backfilled a documentation gap found along the way: `db/
+  dev-data/V1.0019__fix_dev_trainer_birth_year.sql` existed on this branch
+  undocumented. See "Upgrade: Faza 8 decisions" above for the full write-up.
+  `mvn test` 106/106 green (61 pre-existing + 45 new, including the
+  regression test above), `mvn compile`, `npx tsc -b`, `npm run build` all
+  clean.
 
 ## Upgrade: final summary
 
-A consolidated overview of the whole `upgrade/claude-code` branch (Phases
-1-5, 2026-08-04 through 2026-08-07), written for later reference when
-writing the thesis itself - the "Upgrade: schema/service layer/frontend
-decisions" sections above remain the detailed record; this section is the
-short version plus the parts that only make sense once the whole arc is
-visible.
+A consolidated overview of the **whole** `upgrade/claude-code` branch (Faza 1 through Faza 8,
+2026-08-04 through 2026-08-08), written for later reference when writing the thesis itself - the
+"Upgrade: schema/service layer/frontend decisions" and "Upgrade: Faza 6/7/8 decisions" sections
+above remain the detailed record; this section is the short version plus the parts that only make
+sense once the whole arc is visible. (This section originally only covered Faza 1-5's three "wow"
+pillars - rewritten in Faza 8 to reflect the full scope once Faza 6/7 made the app end-to-end
+usable, not just a showcase of three isolated features.)
 
-**The three delivered features, end to end:**
+**Everything the system does, end to end, grouped by when it was built:**
 
-1. **Live gym floor plan.** `Gym`/`Room` (rectangle geometry, not polygon)
-   + `RoomCheckIn` in the data layer (Phase 1) → CRUD, check-in/check-out
-   with a DB-enforced "one active check-in per client" invariant, and
-   additive (non-deduplicated) occupancy computation combining manual
-   check-ins with in-progress appointments, broadcast over
-   `/topic/gym/occupancy` both event-driven and on a once-a-minute sweep
-   (Phase 2) → a drag/resize/rotate `react-konva` room editor and a
-   CSS-animated live occupancy view consuming that same WebSocket topic
-   (Phase 3) → a visible disconnect banner when the socket drops (Phase 5).
-2. **AI manager insights.** No new tables needed - aggregates existing
-   `RoomCheckIn`/`Payment`/`Appointment` history (Phase 1 data, Phase 2
-   service) into a Claude-generated Serbian-language narrative, cached 30
-   minutes with an explicit force-refresh endpoint, surfaced as its own
-   screen with a working "Regeneriši" button (Phase 3-4).
-3. **Client progress tracking.** `ClientProgressEntry` (fixed measurement
-   columns) + `ClientPersonalRecord` (free-text exercise) in the data layer
-   (Phase 1) → CRUD + an AI narrative summary, cached 10 minutes with
-   automatic eviction on new entries, gated by a real trainer-has-trained-
-   this-client authorization check (`TrainerClientAccessGuard`, added after
-   an initial gap - see the service-layer section) (Phase 2) → a shared
-   chart/list/narrative UI split into a trainer-editable screen and a
-   client-read-only screen (Phase 3-4).
+1. **Auth & accounts (baseline, then Faza 6).** Login/refresh with a 15-min access + 2h refresh
+   JWT pair (HS256, pinned explicitly - see "Known issues"); interceptor-based route protection
+   (`@RoleRequired` + `RoleInterceptor`), not Spring Security's filter chain. Faza 6 added the
+   self-service half that was missing entirely before it: registration completion from a
+   manager-issued `registrationKey` (`/register/complete`), forgot/reset-password
+   (`/forgot-password`/`/reset-password`, previously unreachable - see "Known issues"), and a
+   dev-only on-screen activation-link banner standing in for the unconfigured mail server.
+2. **MANAGER administration (Faza 6).** A tabbed `/manager/administracija` screen: generic user/
+   role management (Korisnici), trainer and client creation with the activation-link banner
+   (Treneri/Klijenti), and gym opening-hours-per-day (upserted, not insert-only) + holidays
+   (Radno vreme i praznici). Backed by newly-exposed `GET /api/trainer`/`GET /api/client` and new
+   `GET/POST /api/schedule/gym`, `GET /api/schedule/holiday` endpoints.
+3. **Live gym floor plan.** `Gym`/`Room` (rectangle geometry, not polygon) + `RoomCheckIn` in the
+   data layer (Faza 1) → CRUD, check-in/check-out with a DB-enforced "one active check-in per
+   client" invariant, and additive (non-deduplicated) occupancy computation combining manual
+   check-ins with in-progress appointments, broadcast over `/topic/gym/occupancy` both
+   event-driven and on a once-a-minute sweep (Faza 2) → a drag/resize/rotate `react-konva` room
+   editor and a CSS-animated live occupancy view consuming that same WebSocket topic (Faza 3) → a
+   visible disconnect banner when the socket drops (Faza 5).
+4. **AI manager insights.** No new tables needed - aggregates existing `RoomCheckIn`/`Payment`/
+   `Appointment` history (Faza 1 data, Faza 2 service) into a Claude-generated Serbian-language
+   narrative, cached 30 minutes with an explicit force-refresh endpoint, surfaced as its own
+   screen with a working "Regeneriši" button (Faza 3-4).
+5. **Client progress tracking.** `ClientProgressEntry` (fixed measurement columns) +
+   `ClientPersonalRecord` (free-text exercise) in the data layer (Faza 1) → CRUD + an AI narrative
+   summary, cached 10 minutes with automatic eviction on new entries, gated by a real
+   trainer-has-trained-this-client authorization check (`TrainerClientAccessGuard`, added after an
+   initial gap - see the service-layer section) (Faza 2) → a shared chart/list/narrative UI split
+   into a trainer-editable screen and a client-read-only screen (Faza 3-4).
+6. **Trainer self-service scheduling (Faza 6).** A trainer manages their own working hours/
+   unavailability (`/trainer/raspored`, `POST /api/schedule/trainer/me` + friends) with the
+   trainer resolved from the JWT - the request DTOs have no `trainerId` field at all, so the
+   vulnerable shape (writing another trainer's schedule) is unrepresentable, not just
+   permission-checked. A shared `DELETE /api/schedule/trainer/{id}` lets a MANAGER delete any
+   entry and a TRAINER only their own.
+7. **Appointment marketplace / booking flow (Faza 7).** MANAGER creates appointment slots
+   (optionally pre-assigned); CLIENT self-books/cancels (`/client/zakazivanje`,
+   `/client/moji-termini`, with a 24h cancellation deadline); TRAINER self-assigns/unassigns to
+   unassigned slots (`/trainer/termini`). New `GET /api/appointment/me` and
+   `GET /api/appointment/trainer/me` "my appointments" endpoints back the two history screens.
+8. **Payment history + gym-wide daily schedule (Faza 6 continuation).** `GET /api/payment`
+   (MANAGER, optional client filter) and `GET /api/payment/me` (CLIENT); a real authorization fix
+   for `CalendarController.getScheduleForDay` (previously reachable by any role including CLIENT,
+   now MANAGER/TRAINER only); a MANAGER "Dnevni raspored" screen and a CLIENT "Moje uplate" screen.
+9. **A realistic dev dataset (Faza 7).** `DevDataSeeder`, a `@Profile("dev")` `CommandLineRunner`
+   (not a Flyway migration, since it needs to be expressed relative to "now") seeding ~110
+   appointments across 8 past + 3 future weeks, consistent payment/session-tracking history, room
+   check-ins, and months of progress data - idempotent via a marker-trainer-email check.
 
-**Key technical decisions that cut across all three** (each justified in
+**Key technical decisions that cut across the three original "wow" pillars** (each justified in
 depth in its own section above - this is the index):
 - Rectangle-not-polygon room geometry, chosen specifically because it maps
   1:1 onto `react-konva`'s `Rect`.
@@ -1821,14 +1981,29 @@ depth in its own section above - this is the index):
 - A single full-snapshot WebSocket topic (not per-room, not deltas) for
   occupancy, trading payload size for a trivial "replace the whole list"
   client-side merge.
-- One added backend endpoint across the entire frontend phase
-  (`GET /api/trainer/me/clients`) - the frontend phases were otherwise built
-  entirely against the Phase 2 API surface without needing it to grow.
 
-**Known limitations, carried into the thesis writeup rather than fixed**
-(full detail in "Known issues" above; this is the subset most relevant to
-the three new features specifically, as opposed to pre-existing baseline
-issues):
+**Key technical decisions from Faza 6-8** (the app-usability half of the branch):
+- Request DTOs that make an authorization bug unrepresentable rather than just checked
+  (`CreateOwnTrainerScheduleRequest` has no `trainerId` field) - a stronger guarantee than a
+  runtime ownership check alone, used wherever a self-service endpoint was added.
+- `GymScheduleServiceImpl.create` and `GymServiceImpl.upsertGym` both upsert rather than
+  insert-only, for the same reason: neither entity ever had an update endpoint, so a typo would
+  otherwise be permanent.
+- A minimal `GlobalExceptionHandler` rather than a full REST exception taxonomy - deliberately
+  scoped to the exact problem observed (validation exceptions surfacing as content-less 500s),
+  with the trade-offs (EntityNotFoundException swept into 400, not a real 404) documented rather
+  than silently accepted. Faza 8 found and closed the one real gap this minimal scope left open -
+  see "Upgrade: Faza 8 decisions".
+- A Java `CommandLineRunner` seeder instead of a Flyway migration specifically because realistic
+  dev data needs to be expressed relative to "now" - a static SQL file's "now" is frozen at
+  write-time and would drift incorrect on every future run.
+- Every self-service/admin frontend screen added in Faza 6-7 reuses the existing
+  `extractErrorMessage(err, fallback)` pattern and the existing feature-module shape
+  (`{types,api}.ts` + one page per concern) rather than introducing new patterns - the frontend
+  architecture decided in Faza 3 held up unchanged through three more phases of screens.
+
+**Known limitations, carried into the thesis writeup rather than fixed** (full detail in "Known
+issues" above; this list spans the whole branch, not just the three original pillars):
 - Occupancy double-counts a client who is both manually checked in and on
   an in-progress appointment in the same room - a deliberate simplicity-
   over-exactness trade, not an oversight.
@@ -1837,26 +2012,41 @@ issues):
   is a schema change, out of scope for this branch.
 - Refresh has no equivalent on the progress-narrative screen (only manager
   insights got a force-refresh endpoint) - a reasonable but unbuilt
-  follow-up, per the Phase 4 rationale.
+  follow-up, per the Faza 4 rationale.
 - `BaseEntity`'s Lombok-generated `equals()` doesn't compare entity `id`
-  (found in Phase 5 while writing tests) - affects any code across the
-  whole codebase that puts same-type unsaved entities in a `HashSet`, not
-  specific to this branch's new code, but only surfaced now.
-- No CI pipeline runs `mvn test` automatically - it must be run manually,
-  and requires Postgres/Redis to be up first.
+  (found in Faza 5 while writing tests, hit again in Faza 8's new tests) -
+  affects any code across the whole codebase that puts same-type unsaved
+  entities in a `HashSet`, not specific to this branch's new code.
+- A client's appointment reservation can go negative against their
+  remaining-session balance, and a MANAGER removing a client from an
+  appointment doesn't refund their tracking counter (asymmetric with
+  client-initiated cancel, which does) - both pre-existing backend
+  behaviors, confirmed while building Faza 7's frontend, left untouched as
+  out of scope for a frontend-and-seeder phase.
+- `GlobalExceptionHandler` is not a complete REST exception taxonomy -
+  `EntityNotFoundException` still maps to 400 instead of a semantically
+  correct 404, and any genuinely unexpected `RuntimeException` (a real bug)
+  also reports as 400 instead of 500.
+- No CI pipeline runs `mvn test`/`tsc -b`/`npm run build` automatically -
+  all three must be run manually, and `mvn test` requires Postgres/Redis to
+  be up first.
 
-**What a comparison-study reader should take away**: every phase in this
-branch stayed inside its explicitly scoped task brief (data layer only,
-then service+API only, then frontend only, then the two placeholder screens
-+ one screen, then hardening-only) rather than opportunistically fixing
-adjacent pre-existing issues found along the way - each such issue was
-documented in "Known issues" instead. The one deliberate exception was
-fixing bugs *introduced by this branch's own code* immediately upon
-discovery (the login-refresh interceptor exclusion before Phase 3's
-frontend could depend on it, the trainer-client authorization gap right
-after Phase 2, the `SELECT DISTINCT`/`ORDER BY` Postgres bug in Phase 4's
-new endpoint, the stale `target/` Flyway conflict in Phase 5) - the
-distinction being "I broke this, I fix it now" versus "this was already
-broken, it's material for the next phase or the write-up."
+**What a comparison-study reader should take away**: every phase in this branch stayed inside its
+explicitly scoped task brief (data layer only, then service+API only, then frontend only, then
+placeholder screens, then hardening-only, then auth/admin, then booking/seeder, then
+tests/docs/verification-only) rather than opportunistically fixing adjacent pre-existing issues
+found along the way - each such issue was documented in "Known issues" instead. The one deliberate
+exception, repeated consistently across all eight phases, was fixing bugs *introduced by this
+branch's own code* immediately upon discovery: the login-refresh interceptor exclusion before
+Faza 3's frontend could depend on it, the trainer-client authorization gap right after Faza 2, the
+`SELECT DISTINCT`/`ORDER BY` Postgres bug in Faza 4's new endpoint, the stale `target/` Flyway
+conflict in Faza 5, the JWT HS256-pinning fix after Faza 7, and the `AccessDeniedException`-to-400
+regression found and fixed in Faza 8 - the distinction being "I broke this (directly or as a side
+effect of a later change to my own code), I fix it now" versus "this was already broken, it's
+material for the next phase or the write-up." Faza 8 is also the branch's one instance of a phase
+whose entire brief *was* "go back and verify/hardened everything already built" rather than adding
+new surface area - and it still found a real, previously-invisible regression, which is itself a
+data point for the thesis: dedicated hardening passes catch things incremental feature work does
+not, even on a branch that had already been "verified end-to-end" after every single prior phase.
 
 ## Imported Claude Cowork project instructions
