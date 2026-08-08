@@ -14,8 +14,14 @@ import com.example.demo.service.PaymentService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -42,8 +48,28 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentMapper.toDto(paymentRepository.save(payment));
     }
 
+    public List<PaymentDTO> getAll(Integer clientId) {
+        if (clientId != null) {
+            return paymentMapper.toDto(paymentRepository.findByClientIdOrderByPaymentDateDesc(clientId));
+        }
+        return paymentMapper.toDto(paymentRepository.findAllByOrderByPaymentDateDesc());
+    }
 
+    public List<PaymentDTO> getMyPayments() {
+        Client client = getAuthenticatedClient();
+        return paymentMapper.toDto(paymentRepository.findByClientIdOrderByPaymentDateDesc(client.getId()));
+    }
 
+    /** Same JWT->email->repository idiom used across the codebase (see AGENTS.md, "Upgrade: service layer decisions"). */
+    private Client getAuthenticatedClient() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+        String email = jwt.getClaim("email");
+        return clientRepository.findByUserEmail(email)
+                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+    }
 
     private void validatePaymentRequest(@NotNull CreatePaymentRequest request) {
         if (request.getPaidAppointments() <= 0) {

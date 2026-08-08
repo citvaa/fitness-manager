@@ -20,4 +20,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     /** Payments since a date - used for the AI manager-insights revenue-proxy aggregation. */
     List<Payment> findByPaymentDateAfter(LocalDate since);
+
+    List<Payment> findAllByOrderByPaymentDateDesc();
+
+    List<Payment> findByClientIdOrderByPaymentDateDesc(Integer clientId);
 }
