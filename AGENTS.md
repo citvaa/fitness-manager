@@ -497,7 +497,9 @@ deliberately deferred to the following phase.
   usable. The create contract now accepts an optional `roomId`, and a
   manager-only session-type read endpoint supplies the seeded session IDs so
   the frontend never hardcodes database identifiers. No schema change was
-  required because `Appointment.room` already existed.
+  required because `Appointment.room` already existed. The screen defaults to
+  tomorrow rather than today so its initial 09:00 slot is always a valid future
+  planning target, including when a manager opens the page late in the day.
 - **Manager roster changes preserve appointment credits.** The inherited helper
   decremented a client's remaining credits twice when staff added them and did
   not restore a credit on staff removal. The manager flow now adjusts each
