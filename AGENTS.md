@@ -1069,6 +1069,86 @@ material.
   spot-checked manually before the defense - the underlying API contracts
   every screen calls were verified directly as above.
 
+### Faza 6 decisions (continued) - payment history + calendar authorization fix
+
+Two items from the original Phase 6 brief were missed in the first pass and
+picked up in the same phase rather than deferred to a "Phase 7": payment
+history read access, and a real pre-existing authorization gap in
+`CalendarController`. Continuing the same section rather than opening a new
+one since these are the same task brief, just completed.
+
+- **`PaymentController` gains `GET /api/payment` (MANAGER, optional
+  `?clientId=` filter) and `GET /api/payment/me` (CLIENT self-service,
+  resolved from the JWT via the same `SecurityContextHolder` → `Jwt` →
+  `ClientRepository.findByUserEmail` idiom used everywhere else in this
+  codebase).** `POST /api/payment` (create) is unchanged. A single
+  `getAll(Integer clientId)` service method handles both "all payments" and
+  "payments for one client" - `clientId == null` means no filter - rather
+  than two separate service methods, since the two queries only differ in
+  whether a `WHERE client_id = ?` is applied and the controller-level
+  `@RoleRequired` split (MANAGER vs CLIENT) already fully separates the two
+  real use cases.
+- **`GET /api/session` added (MANAGER-only), not explicitly requested but
+  necessary for the "Plaćanja" screen's create-payment form to function at
+  all** - no endpoint existed to enumerate the seeded `Session` rows (see
+  the Domain model section: session *types* are seed-only, never created via
+  the API), so there was no way for a manager to pick a valid `sessionId`
+  without hardcoding magic numbers in the frontend. Same "minimal necessary
+  GET, documented" reasoning already used for gym-schedule/holiday earlier
+  in this phase. `SessionController`/`SessionService`/`SessionServiceImpl`
+  follow the existing thin-controller/service-interface/repository layering
+  even though the implementation is a one-line `findAll()` passthrough, for
+  consistency with the rest of the codebase rather than special-casing
+  "this one's too small to layer properly."
+- **`CalendarController.getScheduleForDay` fixed to `@RoleRequired({"MANAGER",
+  "TRAINER"})`, not MANAGER-only.** This was a real, previously-documented
+  authorization gap (see "Known issues"), not a style nitpick - any
+  authenticated user of any role, including CLIENT, could pull the full
+  gym-wide daily schedule (every appointment, every client/trainer on it).
+  TRAINER was included alongside MANAGER (rather than MANAGER-only) because
+  a gym-wide daily view is a legitimate operational tool for staff generally
+  - a trainer checking room/time conflicts or who else is working that day
+  isn't a scenario this codebase treats as manager-exclusive anywhere else
+  (e.g. `RoomController`'s read endpoints are open to all three roles).
+  CLIENT is excluded because this is *everyone's* schedule for the day, not
+  "my own appointments" - a materially different, broader disclosure than
+  what a client should see about other clients/trainers. Verified with
+  `curl` across all three seeded accounts: CLIENT `403`, MANAGER and TRAINER
+  both `200`.
+- **Frontend: `/manager/placanja` (Plaćanja), `/manager/dnevni-raspored`
+  (Dnevni raspored), and `/client/uplate` (Moje uplate)**, each a new
+  top-level nav entry rather than embedded in an existing screen - same
+  reasoning as TRAINER's "Moj raspored" getting its own nav entry earlier in
+  this phase: each is a primary, standalone concern (payment bookkeeping,
+  the gym-wide daily view, a client's own payment history), not a detail
+  panel of another screen.
+- **The payments feature duplicates a minimal `GET /api/client` call
+  (`getClientsForPicker`) instead of importing the admin feature's
+  `getClients`.** Consistent with this codebase's documented tolerance for
+  small duplication over cross-feature coupling (see the JWT-extraction
+  duplication note in "Upgrade: service layer decisions") - `features/`
+  folders in this frontend are otherwise self-contained, and introducing the
+  first cross-feature import for one list call wasn't judged worth the
+  coupling.
+- **Verified end-to-end via `curl` against the same running dev instance**
+  (backend restarted twice to pick up the payment/calendar changes and then
+  the `SessionController` addition): `GET /api/session` returns the three
+  seeded rows; created a payment and confirmed it appears in both
+  `GET /api/payment` and `GET /api/payment?clientId=`; confirmed
+  `GET /api/payment/me` as the `citva` CLIENT account returns only that
+  client's own payment and that the same account gets `403` on the
+  MANAGER-only `GET /api/payment`; confirmed `GET /api/calendar` returns
+  `403` for CLIENT and `200` for both MANAGER and TRAINER. `mvn compile`,
+  `npx tsc -b`, and `npm run build` all clean.
+- **Browser click-through QA was requested again this round and is still
+  not possible in this environment** - the Claude-in-Chrome extension
+  reported "not connected" both times it was checked (start of this phase
+  and again for this continuation). Screenshots for `docs/browser-qa/` were
+  **not captured** for any Phase 6 screen (registration, admin, moj
+  raspored, plaćanja, dnevni raspored) as a result. This is flagged
+  explicitly rather than silently skipped, per instruction - a manual
+  click-through before the defense is still outstanding.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -1077,9 +1157,15 @@ runtime behavior, and the goal of that session was a stable, unchanged-behavior
 baseline - not new features or behavior changes. They are fair game for
 either upgrade session to pick up:
 
-- `forgot-password`/`reset-password` endpoints are not excluded from
+- ~~`forgot-password`/`reset-password` endpoints are not excluded from
   `JwtInterceptor`/`RoleInterceptor`, effectively making them unreachable
-  without an existing valid JWT.
+  without an existing valid JWT.~~ **Fixed 2026-08-08** (`upgrade/claude-code`
+  branch, Phase 6): added `/api/user/forgot-password` and
+  `/api/user/reset-password` to the `excludePathPatterns` list for both
+  `JwtInterceptor` and `RoleInterceptor` in `WebConfig`, same fix pattern as
+  the `login-refresh` entry below. Verified with `curl`: called both
+  endpoints with no `Authorization` header at all and got `200` from each,
+  where they would previously have 401'd. See "Upgrade: Faza 6 decisions".
 - ~~`POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`~~
   **Fixed 2026-08-06** (`upgrade/claude-code` branch, frontend-upgrade
   session): added `/api/user/login-refresh` to the `excludePathPatterns` list
@@ -1101,11 +1187,22 @@ either upgrade session to pick up:
   unique constraint actually exists in the migrations, so entity and schema
   disagree; this has had no observed effect yet but is worth fixing carefully
   (with a new migration) before relying on it.
-- `UserController`'s `reset-password` mapping is missing a leading `/`
+- ~~`UserController`'s `reset-password` mapping is missing a leading `/`
   (`"reset-password"` instead of `"/reset-password"`) - verify the resolved
-  path before assuming it works as intended.
-- `CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
-  authenticated user (any role) can call it.
+  path before assuming it works as intended.~~ **Fixed 2026-08-08**
+  (`upgrade/claude-code` branch, Phase 6): changed to `"/reset-password"` for
+  consistency with every sibling `@PostMapping` in `UserController`. This was
+  cosmetic in practice (Spring resolved the relative path correctly against
+  the class-level mapping), not a functional bug - no behavior change, no
+  test to break. See "Upgrade: Faza 6 decisions".
+- ~~`CalendarController.getScheduleForDay` has no `@RoleRequired`, so any
+  authenticated user (any role) can call it.~~ **Fixed 2026-08-08**
+  (`upgrade/claude-code` branch, Phase 6 continuation): this one *was* a real
+  authorization gap, unlike the cosmetic mapping fix above - any CLIENT could
+  pull the full gym-wide daily schedule (every appointment, every trainer/
+  client on it). Added `@RoleRequired({"MANAGER", "TRAINER"})`. Verified with
+  `curl` across all three seeded roles: CLIENT now gets `403`, MANAGER and
+  TRAINER both get `200`. See "Upgrade: Faza 6 decisions" (continued).
 - No global exception handler - error responses aren't a consistent JSON
   shape yet.
 - ~~`pom.xml` sets `maven.test.skip=true`~~ **Fixed 2026-08-07** (`upgrade/
@@ -1347,6 +1444,27 @@ either upgrade session to pick up:
   and screenshots were not possible this session (Claude-in-Chrome extension
   not connected) and are noted as a follow-up spot-check before the defense.
   `mvn compile`, `npx tsc -b`, and `npm run build` all clean.
+- 2026-08-08: Phase 6 continuation (`upgrade/claude-code` branch) - picked up
+  two items missed from the original Phase 6 brief: payment history read
+  access (`GET /api/payment` with an optional `?clientId=` filter for
+  MANAGER, `GET /api/payment/me` for CLIENT self-service) plus the new
+  MANAGER "Plaćanja" screen and CLIENT "Moje uplate" screen; and a real
+  authorization gap in `CalendarController.getScheduleForDay`, which had no
+  `@RoleRequired` at all, now scoped to MANAGER/TRAINER and backing a new
+  MANAGER "Dnevni raspored" screen. Also added a small, not-explicitly-
+  requested `GET /api/session` (MANAGER) since the payments form had no way
+  to enumerate valid session ids otherwise. Struck through the
+  `reset-password` leading-slash and `forgot-password`/`reset-password`
+  interceptor-exclusion entries in "Known issues" as fixed (they were
+  actually resolved in the prior Phase 6 commit but the list wasn't updated
+  at the time), and added the `CalendarController` fix as a newly-struck
+  entry. See "Faza 6 decisions (continued)" above for full rationale.
+  Verified via `curl` (payment create/list/filter/self, calendar 403/200
+  across all three roles); `mvn compile`, `npx tsc -b`, `npm run build` all
+  clean. Browser click-through QA was requested again and is still blocked -
+  the Claude-in-Chrome extension was checked again this round and still
+  reports "not connected"; no `docs/browser-qa/` screenshots exist for any
+  Phase 6 screen as a result - flagged explicitly, not skipped silently.
 
 ## Upgrade: final summary
 
