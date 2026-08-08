@@ -15,6 +15,8 @@ import java.util.List;
 public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     List<Payment> findByPaymentDateBetween(LocalDate from, LocalDate to);
+    List<Payment> findAllByOrderByPaymentDateDescIdDesc();
+    List<Payment> findByClientIdOrderByPaymentDateDescIdDesc(Integer clientId);
 
     @Modifying
     @Query("DELETE FROM Payment p WHERE p.client.user = :user")

@@ -11,6 +11,7 @@ import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.service.PaymentService;
+import com.example.demo.service.security.AuthenticatedUserService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -27,6 +28,18 @@ public class PaymentServiceImpl implements PaymentService {
     private final ClientRepository clientRepository;
     private final SessionRepository sessionRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
+    private final AuthenticatedUserService authenticatedUserService;
+
+    public java.util.List<PaymentDTO> getAll(Integer clientId) {
+        java.util.List<Payment> payments = clientId == null
+                ? paymentRepository.findAllByOrderByPaymentDateDescIdDesc()
+                : paymentRepository.findByClientIdOrderByPaymentDateDescIdDesc(clientId);
+        return payments.stream().map(paymentMapper::toDto).toList();
+    }
+
+    public java.util.List<PaymentDTO> getOwn() {
+        return getAll(authenticatedUserService.client().getId());
+    }
 
     @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {

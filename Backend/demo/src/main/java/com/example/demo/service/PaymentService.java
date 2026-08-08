@@ -5,4 +5,6 @@ import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 
 public interface PaymentService {
     PaymentDTO create(CreatePaymentRequest request);
+    java.util.List<PaymentDTO> getAll(Integer clientId);
+    java.util.List<PaymentDTO> getOwn();
 }

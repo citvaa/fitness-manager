@@ -7,10 +7,8 @@ import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -18,6 +16,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
     private final PaymentService paymentService;
+
+    @RoleRequired("MANAGER")
+    @GetMapping
+    public List<PaymentDTO> getAll(@RequestParam(required = false) Integer clientId) {
+        return paymentService.getAll(clientId);
+    }
+
+    @RoleRequired("CLIENT")
+    @GetMapping("/me")
+    public List<PaymentDTO> getOwn() { return paymentService.getOwn(); }
 
     @RoleRequired("MANAGER")
     @PostMapping
