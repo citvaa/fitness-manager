@@ -27,6 +27,12 @@ public class TrainerController {
     }
 
     @RoleRequired("MANAGER")
+    @GetMapping
+    public ResponseEntity<List<TrainerDTO>> getAll() {
+        return ResponseEntity.ok(trainerService.getAll());
+    }
+
+    @RoleRequired("MANAGER")
     @GetMapping("/{id}")
     public ResponseEntity<TrainerDTO> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(trainerService.getById(id));

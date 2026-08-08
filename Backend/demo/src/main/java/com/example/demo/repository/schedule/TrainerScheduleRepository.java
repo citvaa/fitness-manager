@@ -36,4 +36,6 @@ public interface TrainerScheduleRepository extends JpaRepository<TrainerSchedule
     void deleteByTrainer(@Param("trainer") Trainer trainer);
 
     List<TrainerSchedule> findByTrainerIdAndDate(Integer trainerId, LocalDate date);
+
+    List<TrainerSchedule> findByTrainerIdOrderByDateAsc(Integer trainerId);
 }

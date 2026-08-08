@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 @AllArgsConstructor
@@ -16,6 +17,7 @@ import java.time.LocalTime;
 public class TrainerScheduleDTO {
     private Integer id;
     private TrainerDTO trainer;
+    private LocalDate date;
     private LocalTime startTime;
     private LocalTime endTime;
     private WorkStatus status;

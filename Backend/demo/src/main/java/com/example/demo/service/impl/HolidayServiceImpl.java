@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -29,5 +30,9 @@ public class HolidayServiceImpl implements HolidayService {
 
     public boolean isGymClosedOn(LocalDate date) {
         return holidayRepository.existsByDate(date);
+    }
+
+    public List<HolidayDTO> getAll() {
+        return holidayMapper.toDTO(holidayRepository.findAllByOrderByDateAsc());
     }
 }

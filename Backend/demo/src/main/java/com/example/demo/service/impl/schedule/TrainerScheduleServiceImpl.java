@@ -11,16 +11,23 @@ import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.service.HolidayService;
 import com.example.demo.service.schedule.TrainerScheduleService;
+import com.example.demo.service.params.request.schedule.CreateOwnTrainerScheduleRequest;
+import com.example.demo.service.params.request.schedule.CreateOwnTrainerUnavailabilityRequest;
 import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -46,16 +53,57 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
 
     @Transactional
     public void createUnavailability(@NotNull CreateTrainerUnavailabilityRequest request) {
-        Integer trainerId = request.getTrainerId();
-        LocalDate startDate = request.getStartDate();
-        LocalDate endDate = request.getEndDate();
-        WorkStatus status = request.getStatus();
+        Trainer trainer = trainerRepository.findById(request.getTrainerId())
+                .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+        saveUnavailabilityRange(trainer, request.getStartDate(), request.getEndDate(), request.getStatus());
+    }
 
+    @Transactional
+    public TrainerScheduleDTO createMySchedule(@NotNull CreateOwnTrainerScheduleRequest request) {
+        Trainer trainer = getAuthenticatedTrainer();
+
+        validateScheduleRequest(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateGymHours(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateTrainerAvailability(trainer.getId(), request.getDate(), request.getStartTime(), request.getEndTime());
+
+        TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, request.getDate(), request.getStartTime(), request.getEndTime());
+        return trainerScheduleMapper.toDto(trainerScheduleRepository.save(trainerSchedule));
+    }
+
+    @Transactional
+    public void createMyUnavailability(@NotNull CreateOwnTrainerUnavailabilityRequest request) {
+        Trainer trainer = getAuthenticatedTrainer();
+        saveUnavailabilityRange(trainer, request.getStartDate(), request.getEndDate(), request.getStatus());
+    }
+
+    public List<TrainerScheduleDTO> getSchedule(Integer trainerId) {
+        return trainerScheduleMapper.toDto(trainerScheduleRepository.findByTrainerIdOrderByDateAsc(trainerId));
+    }
+
+    public List<TrainerScheduleDTO> getMySchedule() {
+        Trainer trainer = getAuthenticatedTrainer();
+        return trainerScheduleMapper.toDto(trainerScheduleRepository.findByTrainerIdOrderByDateAsc(trainer.getId()));
+    }
+
+    @Transactional
+    public void deleteSchedule(Integer id) {
+        TrainerSchedule schedule = trainerScheduleRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Trainer schedule entry not found"));
+
+        if (!isManager()) {
+            Trainer trainer = getAuthenticatedTrainer();
+            if (!schedule.getTrainer().getId().equals(trainer.getId())) {
+                throw new AccessDeniedException("You may only delete your own schedule entries");
+            }
+        }
+
+        trainerScheduleRepository.delete(schedule);
+    }
+
+    private void saveUnavailabilityRange(Trainer trainer, LocalDate startDate, LocalDate endDate, WorkStatus status) {
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("Start date cannot be after end date");
         }
-
-        Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
 
         LocalDate currentDate = startDate;
         while (!currentDate.isAfter(endDate)) {
@@ -71,7 +119,25 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         }
     }
 
+    /** Same JWT->email->repository idiom used across the codebase (see AGENTS.md, "Upgrade: service layer decisions"). */
+    private Trainer getAuthenticatedTrainer() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+        String email = jwt.getClaim("email");
+        return trainerRepository.findByUserEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Trainer not found for the logged-in user!"));
+    }
 
+    private boolean isManager() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            return false;
+        }
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        return roles != null && roles.contains("MANAGER");
+    }
 
     private void validateScheduleRequest(LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         if (startTime.isAfter(endTime)) {
