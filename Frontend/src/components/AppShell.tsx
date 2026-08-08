@@ -57,9 +57,7 @@ export function AppShell() {
                 <i>↗</i> Praćenje napretka
               </NavLink>
               {session.activeRole === "TRAINER" && (
-                <NavLink to="/app/schedules">
-                  <i>▦</i> Moj raspored
-                </NavLink>
+                <><NavLink to="/app/appointments"><i>◫</i> Moji termini</NavLink><NavLink to="/app/schedules"><i>▦</i> Moj raspored</NavLink></>
               )}
               {session.activeRole === "CLIENT" && (
                 <NavLink to="/app/payments"><i>¤</i> Moje uplate</NavLink>

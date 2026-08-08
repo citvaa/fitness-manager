@@ -18,6 +18,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
 
     List<Appointment> findByTrainerIdAndDate(Integer trainerId, LocalDate date);
 
+    List<Appointment> findByTrainerIdOrderByDateDescStartTimeDesc(Integer trainerId);
+
     List<Appointment> findByStartTimeBetweenAndDate(LocalTime startTime, LocalTime startTime2, LocalDate date);
 
     @EntityGraph(attributePaths = {
@@ -31,4 +33,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
             LocalDate date, LocalTime nowInclusive, LocalTime nowExclusive);
 
     boolean existsByTrainerIdAndClientAppointmentsClientId(Integer trainerId, Integer clientId);
+
+    List<Appointment> findDistinctByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(Integer clientId);
 }

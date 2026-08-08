@@ -34,6 +34,8 @@ public interface AppointmentService {
 
     AppointmentDTO unassign(Integer id);
 
+    List<AppointmentDTO> getMyAppointments();
+
     List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date);
 
     Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date);

@@ -90,4 +90,10 @@ public class AppointmentController {
     public ResponseEntity<AppointmentDTO> unassign(@PathVariable Integer id) {
         return ResponseEntity.ok(appointmentService.unassign(id));
     }
+
+    @RoleRequired({"TRAINER", "CLIENT"})
+    @GetMapping("/me")
+    public ResponseEntity<List<AppointmentDTO>> getMine() {
+        return ResponseEntity.ok(appointmentService.getMyAppointments());
+    }
 }

@@ -30,6 +30,7 @@ const SchedulesPage = lazy(() =>
 );
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const DailyCalendarPage = lazy(() => import("./pages/DailyCalendarPage").then((m) => ({ default: m.DailyCalendarPage })));
+const AppointmentsPage = lazy(() => import("./pages/AppointmentsPage").then((m) => ({ default: m.AppointmentsPage })));
 function ProtectedShell() {
   const session = useAuthStore((s) => s.session);
   const location = useLocation();
@@ -142,6 +143,7 @@ export default function App() {
         />
         <Route path="calendar" element={<ManagerOnly><Suspense fallback={loading("Učitavanje kalendara…")}><DailyCalendarPage /></Suspense></ManagerOnly>} />
         <Route path="payments" element={<PaymentAccess><Suspense fallback={loading("Učitavanje uplata…")}><PaymentsPage /></Suspense></PaymentAccess>} />
+        <Route path="appointments" element={<ProgressOnly><Suspense fallback={loading("Učitavanje termina…")}><AppointmentsPage /></Suspense></ProgressOnly>} />
         <Route
           path="progress"
           element={

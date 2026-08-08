@@ -131,7 +131,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     public List<AppointmentDTO> getAvailable() {
         return appointmentRepository.findAll().stream()
+                .filter(this::isFuture)
                 .filter(appointment -> appointment.getClientAppointments().size() < appointment.getSession().getMaxParticipants())
+                .sorted(java.util.Comparator.comparing(Appointment::getDate).thenComparing(Appointment::getStartTime))
                 .map(appointmentMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -145,6 +147,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         if (appointment.getClientAppointments().size() >= appointment.getSession().getMaxParticipants()) {
             throw new RuntimeException("No available spots for this appointment!");
+        }
+
+        if (!isFuture(appointment)) {
+            throw new IllegalArgumentException("Only future appointments can be reserved!");
+        }
+        if (appointment.getClientAppointments().stream().anyMatch(link -> link.getClient().getId().equals(client.getId()))) {
+            throw new IllegalStateException("Client is already registered for this appointment!");
         }
 
         ClientAppointment clientAppointment = createClientAppointment(client, appointment);
@@ -182,7 +191,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     public List<AppointmentDTO> getAllWithoutTrainer() {
         return appointmentRepository.findAll().stream()
+                .filter(this::isFuture)
                 .filter(appointment -> appointment.getTrainer() == null)
+                .sorted(java.util.Comparator.comparing(Appointment::getDate).thenComparing(Appointment::getStartTime))
                 .map(appointmentMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -190,6 +201,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO assign(Integer appointmentId) {
         Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
+        if (!isFuture(trainerAppointment.getSecond())) {
+            throw new IllegalArgumentException("Only future appointments can be assigned!");
+        }
+        if (trainerAppointment.getSecond().getTrainer() != null) {
+            throw new IllegalStateException("Appointment already has an assigned trainer!");
+        }
         trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
@@ -197,11 +214,34 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO unassign(Integer appointmentId) {
         Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
+        if (!isFuture(trainerAppointment.getSecond())) {
+            throw new IllegalArgumentException("Only future appointments can be unassigned!");
+        }
         if (!trainerAppointment.getFirst().equals(trainerAppointment.getSecond().getTrainer())) {
             throw new RuntimeException("Trainer is not assigned to this appointment!");
         }
         trainerAppointment.getSecond().setTrainer(null);
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+    }
+
+    public List<AppointmentDTO> getMyAppointments() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Unauthorized access!");
+        }
+        String email = jwt.getClaim("email");
+        if (jwt.getClaimAsStringList("roles").contains("TRAINER")) {
+            Trainer trainer = trainerRepository.findByUserEmail(email)
+                    .orElseThrow(() -> new AccessDeniedException("Trainer profile not found"));
+            return appointmentMapper.toDto(appointmentRepository.findByTrainerIdOrderByDateDescStartTimeDesc(trainer.getId()));
+        }
+        Client client = clientRepository.findByUserEmail(email)
+                .orElseThrow(() -> new AccessDeniedException("Client profile not found"));
+        return appointmentMapper.toDto(appointmentRepository.findDistinctByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(client.getId()));
+    }
+
+    private boolean isFuture(Appointment appointment) {
+        return LocalDateTime.of(appointment.getDate(), appointment.getStartTime()).isAfter(LocalDateTime.now());
     }
 
     public List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date) {
