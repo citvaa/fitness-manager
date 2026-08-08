@@ -88,10 +88,18 @@ public class TrainerServiceImpl implements TrainerService {
     public void delete(Integer id) {
         Trainer trainer = trainerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        Integer userId = trainer.getUser().getId();
 
         trainerScheduleRepository.deleteByTrainer(trainer);
 
         trainerRepository.delete(trainer);
+
+        // Deleting the Trainer domain row doesn't touch the User account or its roles on its
+        // own (see AGENTS.md "Upgrade: Faza 6 decisions" - addRole/removeRole are the only thing
+        // that manage the roles set) - without this, the account would be left with a dangling
+        // TRAINER role and no matching domain row, the same class of gap the admin UI already
+        // works around on the create/assign side.
+        userService.removeRole(userId, Role.TRAINER);
     }
 
     public List<TrainerDTO> getAll() {
