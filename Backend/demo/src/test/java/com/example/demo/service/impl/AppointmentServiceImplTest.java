@@ -38,6 +38,7 @@ import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -404,6 +405,133 @@ class AppointmentServiceImplTest {
         when(appointmentMapper.toDto(anyList())).thenReturn(List.of(new AppointmentDTO(), new AppointmentDTO()));
 
         assertThat(service.getAll()).hasSize(2);
+    }
+
+    // ---------- addClients / removeClient (regression - MANAGER slot management, Faza 9) ----------
+    // These two methods existed since Faza 2 but had no frontend caller until Faza 9 gave them
+    // one, which is when this real, pre-existing gap was actually noticed. See AGENTS.md
+    // ("Upgrade: Faza 9 decisions").
+
+    @Test
+    void removeClient_refundsTheClientsSessionTrackingLikeCancelDoes() {
+        Client client = Client.builder().id(5).build();
+        Session session = session(3);
+        ClientAppointment toRemove = ClientAppointment.builder().id(1).client(client).build();
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(setOf(toRemove)).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        ClientSessionTracking tracking = ClientSessionTracking.builder()
+                .client(client).session(session).remainingAppointments(2).reservedAppointments(1).build();
+        when(clientSessionTrackingRepository.findByClientAndSession(client, session)).thenReturn(Optional.of(tracking));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.removeClient(10, 5);
+
+        assertThat(appointment.getClientAppointments()).isEmpty();
+        // The bug: this refund never happened before - the client's credit stayed permanently
+        // "spent" even though a MANAGER, not the client, removed them from the appointment.
+        assertThat(tracking.getReservedAppointments()).isEqualTo(0);
+        assertThat(tracking.getRemainingAppointments()).isEqualTo(3);
+        verify(clientSessionTrackingRepository).save(tracking);
+    }
+
+    @Test
+    void removeClient_doesNotTouchTrackingWhenClientWasNeverOnTheAppointment() {
+        Session session = session(3);
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(new HashSet<>()).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.removeClient(10, 999);
+
+        verifyNoInteractions(clientSessionTrackingRepository);
+    }
+
+    @Test
+    void addClients_rejectsWhenItWouldExceedSessionCapacity() {
+        Session session = session(1);
+        ClientAppointment existing = ClientAppointment.builder().id(1).client(Client.builder().id(1).build()).build();
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(setOf(existing)).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.addClients(10, Set.of(2)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("capacity");
+
+        verify(appointmentRepository, never()).save(any());
+        verifyNoInteractions(clientSessionTrackingRepository);
+    }
+
+    @Test
+    void addClients_ignoresClientsAlreadyOnTheAppointmentInsteadOfDoubleBookingThem() {
+        Client alreadyBooked = Client.builder().id(1).build();
+        Session session = session(5);
+        ClientAppointment existing = ClientAppointment.builder().id(1).client(alreadyBooked).build();
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(setOf(existing)).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        // Re-adding the same already-booked client (id 1) must be a no-op, not a second charge.
+        service.addClients(10, Set.of(1));
+
+        assertThat(appointment.getClientAppointments()).hasSize(1);
+        verifyNoInteractions(clientSessionTrackingRepository, clientRepository);
+    }
+
+    @Test
+    void addClients_incrementsTrackingExactlyOncePerNewClient() {
+        // Regression for a second, adjacent bug found while writing the test above:
+        // createClientAppointments() used to increment tracking itself AND ALSO call
+        // createClientAppointment(), which increments again - double-charging every client added
+        // via addClients() (and create()'s initial clientIds). See AGENTS.md
+        // ("Upgrade: Faza 9 decisions").
+        Client newClient = Client.builder().id(2).build();
+        Session session = session(5);
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(new HashSet<>()).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(clientRepository.findById(2)).thenReturn(Optional.of(newClient));
+        when(clientSessionTrackingRepository.findByClientAndSession(newClient, session)).thenReturn(Optional.empty());
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.addClients(10, Set.of(2));
+
+        ArgumentCaptor<ClientSessionTracking> captor = ArgumentCaptor.forClass(ClientSessionTracking.class);
+        verify(clientSessionTrackingRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getReservedAppointments()).isEqualTo(1);
+        assertThat(captor.getValue().getRemainingAppointments()).isEqualTo(-1);
+    }
+
+    @Test
+    void addClients_addsOnlyTheNewClientsWhenMixedWithAlreadyBookedOnes() {
+        Client alreadyBooked = Client.builder().id(1).build();
+        Client newClient = Client.builder().id(2).build();
+        Session session = session(5);
+        // Distinct version so this pre-existing entry and the freshly-built ClientAppointment
+        // don't collide in the HashSet under BaseEntity's id-less equals() (see "Known issues").
+        ClientAppointment existing = ClientAppointment.builder().id(1).client(alreadyBooked).build();
+        existing.setVersion(1);
+        Appointment appointment = Appointment.builder().id(10).session(session)
+                .clientAppointments(setOf(existing)).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(clientRepository.findById(2)).thenReturn(Optional.of(newClient));
+        when(clientSessionTrackingRepository.findByClientAndSession(newClient, session)).thenReturn(Optional.empty());
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.addClients(10, Set.of(1, 2));
+
+        assertThat(appointment.getClientAppointments()).hasSize(2);
+        verify(clientRepository, never()).findById(1);
+        verify(clientSessionTrackingRepository).save(any(ClientSessionTracking.class));
     }
 
     private HashSet<ClientAppointment> setOf(ClientAppointment... items) {

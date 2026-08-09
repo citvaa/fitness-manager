@@ -1249,9 +1249,12 @@ material.
   assigned). Two real behavioral quirks confirmed directly in the service code, not assumed: (1)
   `reserve()`/`addClients()` increment `ClientSessionTracking.reservedAppointments` unconditionally
   with no floor check against `remainingAppointments` - a client can reserve into negative
-  balance; (2) the MANAGER-only `removeClient()` does not decrement tracking at all (asymmetric
-  with client-initiated `cancel()`, which does refund it) - both are pre-existing backend
-  behavior, left untouched per this phase's frontend-and-seeder-only scope.
+  balance; (2) ~~the MANAGER-only `removeClient()` does not decrement tracking at all (asymmetric
+  with client-initiated `cancel()`, which does refund it)~~ **fixed in Faza 9** - both were
+  pre-existing backend behavior, left untouched at the time per this phase's frontend-and-seeder-
+  only scope; (2) stayed a real gap until Faza 9's manager slot-management UI actually called
+  `removeClient()` for the first time and the missing refund became visible - see "Upgrade: Faza 9
+  decisions" for the fix. (1) is still open.
 - **No "my appointments" endpoint existed for either role - added the minimal pair the brief
   anticipated**, `GET /api/appointment/me` (CLIENT) and `GET /api/appointment/trainer/me`
   (TRAINER), both resolving the caller from the JWT with the exact same
@@ -1629,6 +1632,76 @@ non-obvious decisions as thesis comparison material.
   `GET /api/progress/entry/client/{id}`), and is additionally covered by the new unit tests above -
   functionally exercised, just not via a literal second browser click on "Obriši" once the first
   attempt's dialog had already frozen that tab.
+
+### Faza 9 follow-up: three real `AppointmentServiceImpl` bugs found via targeted regression testing
+
+A separate, later pass over this same phase's brief - specifically told to write regression tests
+for `removeClient()`'s missing tracking refund and `addClients()`'s missing capacity/duplicate
+checks - found and fixed those two, plus a third, adjacent bug the regression tests for the second
+one surfaced as a side effect. All three live in `AppointmentServiceImpl` and predate this branch's
+Faza 9 work entirely; Faza 9 is simply the first phase to give `addClients()`/`removeClient()` a
+real UI caller, which is what made them observable in practice rather than only in the source.
+
+- **`removeClient()` now refunds the client's `ClientSessionTracking` the same way `cancel()`
+  does.** Previously, a MANAGER removing a client from an appointment (`DELETE /api/appointment/
+  {id}/remove-client`) permanently consumed that client's session credit with no way to get it
+  back - the client-initiated `cancel()` path already refunded correctly (see the Faza 7
+  write-up above), but the MANAGER-initiated removal never did. Fixed by looking up the specific
+  `ClientAppointment` being removed (rather than a blind `removeIf`), and - only if a match was
+  actually found - calling the exact same `getOrCreateClientSessionTracking` +
+  `decrementReservedAppointments` pair `cancel()` already uses. No-op (no tracking touched at all)
+  when the given `clientId` was never on the appointment, matching `cancel()`'s analogous
+  "nothing to refund" case.
+- **`addClients()` now enforces session capacity and filters out already-assigned clients before
+  doing anything else.** Previously it had no capacity check at all (a MANAGER could add clients
+  past `Session.maxParticipants`, silently breaking the "N/M (popunjeno)" invariant every other
+  screen relies on) and no duplicate guard (re-adding an already-assigned client would create a
+  second `ClientAppointment` for the same client/appointment pair and double-charge their session
+  tracking). Fixed by computing the already-assigned client id set up front, filtering the
+  requested `clientIds` against it *before* any capacity math or tracking work, then rejecting the
+  whole call with `IllegalArgumentException` (→ `400` via the existing `GlobalExceptionHandler`,
+  with a message naming the current count and the capacity) if the *new* clients alone would push
+  the appointment over capacity. Re-adding an already-assigned client is now a clean no-op rather
+  than an error, matching how idempotent "add" operations behave elsewhere in this codebase (e.g.
+  `UserService.addRole` is the one counter-example that *does* throw for an already-present role -
+  a deliberate difference here, since silently ignoring a duplicate client is harmless while a
+  silently-ignored duplicate role grant could mask a real caller mistake).
+- **A third, previously undiscovered bug found while writing the regression test for the capacity
+  fix above, not something the task asked about directly**: `createClientAppointments()` (the
+  plural helper used by both `create()`'s initial `clientIds` and `addClients()`) incremented
+  `ClientSessionTracking` itself *and then* called `createClientAppointment()` (singular, used
+  directly by `reserve()`), which increments the same tracking row *again* - every client attached
+  to an appointment via `create()` or `addClients()` was silently double-charged
+  (`reservedAppointments +2` / `remainingAppointments -2` for what should have been one booking),
+  while clients who self-booked via `reserve()` were charged correctly (it never went through the
+  plural helper). This is exactly the kind of bug a fixed-value regression test catches and manual
+  QA does not, since manually eyeballing "the client got added to the appointment" looks correct
+  either way - only asserting the tracking row's exact resulting numbers exposed it. Fixed by
+  removing the duplicate increment from `createClientAppointments()` and letting it delegate
+  entirely to `createClientAppointment()` for both the lookup-or-create and the increment.
+- **Five new regression tests in `AppointmentServiceImplTest`** cover all three fixes:
+  `removeClient_refundsTheClientsSessionTrackingLikeCancelDoes`,
+  `removeClient_doesNotTouchTrackingWhenClientWasNeverOnTheAppointment`,
+  `addClients_rejectsWhenItWouldExceedSessionCapacity`,
+  `addClients_ignoresClientsAlreadyOnTheAppointmentInsteadOfDoubleBookingThem`,
+  `addClients_addsOnlyTheNewClientsWhenMixedWithAlreadyBookedOnes`, and
+  `addClients_incrementsTrackingExactlyOncePerNewClient` (the double-increment regression). Hit
+  the documented `BaseEntity.equals()` gap a fourth time while writing the "mixed" test (two
+  `ClientAppointment`s with all-null `BaseEntity` fields compared equal in a `HashSet`) - worked
+  around with a distinct `setVersion(...)` per entity, same pattern Faza 5/8/9 have all already
+  used rather than fixing `BaseEntity` itself.
+- **Verified live against the same fresh Postgres/Redis volume** used for this pass's full-suite
+  run (`docker compose down`, deleted `Docker/postgres_data/pgdata`, `docker compose up -d`, clean
+  `target/` rebuild - the full-suite run had first hit the documented stale-`target/` Flyway
+  conflict and, after clearing it, the documented Flyway checksum-drift-against-a-stale-volume
+  issue; both resolved the same standard way those "Known issues"/prior-phase entries describe):
+  `mvn test` **146/146 green** (140 prior + 6 new). Created a real `INDIVIDUAL` (max 1) appointment
+  via `POST /api/appointment`, added `citva` via `POST /{id}/add-clients?clientIds=1` (succeeded),
+  attempted to add a second client and got a real `400` ("Adding 1 client(s) would exceed this
+  appointment's capacity of 1 (currently 1 booked)"), re-posted the same already-assigned
+  `clientIds=1` and got a clean no-op success (not an error, not a duplicate), then removed the
+  client via `DELETE /{id}/remove-client?clientId=1` and confirmed the appointment reverted to zero
+  clients. `mvn compile` clean.
 
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
@@ -2083,6 +2156,20 @@ either upgrade session to pick up:
   the client's "Moji termini"/booking-capacity view; a trainer-edited progress-entry note appeared
   immediately on the client's read-only progress screen with no edit controls present there.
   Screenshots in `docs/browser-qa/phase9-*.jpg`.
+- 2026-08-09: Faza 9 follow-up (`upgrade/claude-code` branch) - a targeted regression-testing pass
+  over `AppointmentServiceImpl.removeClient()`/`addClients()` found and fixed three real,
+  previously undiscovered bugs, all pre-existing (not introduced by this branch's own Faza 9 work,
+  which is simply the first phase to give these two methods a real UI caller): `removeClient()`
+  never refunded the removed client's `ClientSessionTracking` (asymmetric with `cancel()`, which
+  does); `addClients()` had no session-capacity check and no already-assigned-client filter
+  (could silently exceed `maxParticipants` or double-book/double-charge a client); and a third bug
+  the capacity fix's own regression test surfaced as a side effect -
+  `createClientAppointments()` was double-incrementing session tracking for every client passed
+  through `create()`'s initial `clientIds` or `addClients()`. Added six regression tests
+  (`mvn test` 146/146 green, 140 prior + 6 new); verified live against a fresh Postgres/Redis
+  volume via `curl` (capacity-exceeded now `400`s with a real message, re-adding an already-
+  assigned client is a clean no-op, removing a client reverts the appointment to zero clients).
+  See "Upgrade: Faza 9 decisions" → "Faza 9 follow-up" for the full write-up.
 
 ## Upgrade: final summary
 
@@ -2200,12 +2287,19 @@ issues" above; this list spans the whole branch, not just the three original pil
   (found in Faza 5 while writing tests, hit again in Faza 8's new tests) -
   affects any code across the whole codebase that puts same-type unsaved
   entities in a `HashSet`, not specific to this branch's new code.
-- A client's appointment reservation can go negative against their
-  remaining-session balance, and a MANAGER removing a client from an
-  appointment doesn't refund their tracking counter (asymmetric with
-  client-initiated cancel, which does) - both pre-existing backend
-  behaviors, confirmed while building Faza 7's frontend, left untouched as
-  out of scope for a frontend-and-seeder phase.
+- A client's appointment reservation can still go negative against their
+  remaining-session balance (`reserve()`/`addClients()` have no floor check) -
+  confirmed while building Faza 7's frontend, left untouched as out of scope
+  for that phase. The sibling issue noted alongside it back then - a MANAGER
+  removing a client via `removeClient()` not refunding their tracking counter,
+  asymmetric with client-initiated `cancel()` - **was fixed in Faza 9**, once
+  the new manager slot-management UI actually exercised that code path for
+  the first time and made the gap visible. Faza 9 also fixed a second,
+  previously undiscovered bug in the same area: `addClients()` had no
+  session-capacity check and no already-assigned-client filter, and a
+  separate helper (`createClientAppointments`) was double-incrementing
+  session tracking for every client passed to `create()`'s initial
+  `clientIds` or to `addClients()`. See "Upgrade: Faza 9 decisions".
 - `GlobalExceptionHandler` is not a complete REST exception taxonomy -
   `EntityNotFoundException` still maps to 400 instead of a semantically
   correct 404, and any genuinely unexpected `RuntimeException` (a real bug)

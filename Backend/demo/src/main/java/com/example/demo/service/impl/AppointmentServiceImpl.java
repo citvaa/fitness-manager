@@ -116,7 +116,27 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
 
-        Set<ClientAppointment> clientAppointments = createClientAppointments(clientIds, appointment);
+        // Filter out clients already on this appointment before doing anything else - otherwise
+        // re-adding an already-assigned client would double-charge their session tracking and
+        // silently double-count them against capacity below. See AGENTS.md ("Upgrade: Faza 9
+        // decisions" - the removeClient/addClients regression found after Faza 9 first gave this
+        // method a real UI caller).
+        Set<Integer> alreadyAssigned = appointment.getClientAppointments().stream()
+                .map(clientAppointment -> clientAppointment.getClient().getId())
+                .collect(Collectors.toSet());
+        Set<Integer> newClientIds = clientIds.stream()
+                .filter(id -> !alreadyAssigned.contains(id))
+                .collect(Collectors.toSet());
+
+        int capacity = appointment.getSession().getMaxParticipants();
+        int currentCount = appointment.getClientAppointments().size();
+        if (currentCount + newClientIds.size() > capacity) {
+            throw new IllegalArgumentException("Adding " + newClientIds.size()
+                    + " client(s) would exceed this appointment's capacity of " + capacity
+                    + " (currently " + currentCount + " booked)");
+        }
+
+        Set<ClientAppointment> clientAppointments = createClientAppointments(newClientIds, appointment);
 
         appointment.getClientAppointments().addAll(clientAppointments);
         appointmentRepository.save(appointment);
@@ -129,7 +149,19 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
 
-        appointment.getClientAppointments().removeIf(clientAppointment -> clientAppointment.getClient().getId().equals(clientId));
+        Optional<ClientAppointment> toRemove = appointment.getClientAppointments().stream()
+                .filter(clientAppointment -> clientAppointment.getClient().getId().equals(clientId))
+                .findFirst();
+
+        // Refund the client's session tracking exactly the way cancel() does - a MANAGER removing
+        // a client must not leave their session credit permanently "spent" with no way to get it
+        // back. See AGENTS.md ("Upgrade: Faza 9 decisions") - this was a real, previously
+        // undiscovered gap, not new behavior.
+        if (toRemove.isPresent()) {
+            appointment.getClientAppointments().remove(toRemove.get());
+            ClientSessionTracking tracking = getOrCreateClientSessionTracking(toRemove.get().getClient(), appointment.getSession());
+            decrementReservedAppointments(tracking);
+        }
 
         return appointmentMapper.toDto(appointmentRepository.save(appointment));
     }
@@ -331,13 +363,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             return Collections.emptySet();
         }
 
+        // createClientAppointment(client, appointment) below already looks up (or creates) the
+        // tracking row and increments it - this method must NOT also increment before delegating
+        // to it, or every client passed through create()'s initial clientIds or addClients()
+        // gets double-charged (reservedAppointments +2 / remainingAppointments -2 for one booking).
+        // A real, previously undiscovered bug found while writing regression tests for the
+        // addClients()/removeClient() tracking bugs below - see AGENTS.md
+        // ("Upgrade: Faza 9 decisions").
         return clientIds.stream()
                 .map(clientId -> {
                     Client client = clientRepository.findById(clientId)
                             .orElseThrow(() -> new EntityNotFoundException("Client not found"));
-
-                    ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
-                    incrementReservedAppointments(tracking);
 
                     return createClientAppointment(client, appointment);
                 })
