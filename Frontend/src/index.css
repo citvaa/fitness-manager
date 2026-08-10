@@ -38,7 +38,8 @@ body {
  * CSS at all; those are addressed per-input via the `lang="sr-Latn-RS"` attribute instead (see
  * AGENTS.md "Upgrade: manager-testing fixes").
  */
-input[type='date'] {
+input[type='date'],
+input[type='time'] {
   color-scheme: dark;
 }
 

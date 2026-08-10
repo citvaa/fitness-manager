@@ -1,6 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { isAxiosError } from 'axios'
 import { createHoliday, getGymSchedule, getHolidays, upsertGymScheduleDay } from './api'
 import type { DayOfWeek, GymScheduleDTO, HolidayDTO } from './types'
+
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err) && typeof err.response?.data?.message === 'string') {
+    return err.response.data.message
+  }
+  return fallback
+}
 
 const DAYS: { value: DayOfWeek; label: string }[] = [
   { value: 'MONDAY', label: 'Ponedeljak' },
@@ -30,6 +38,7 @@ export function GymScheduleHolidaysTab() {
   const [holidayDescription, setHolidayDescription] = useState('')
   const [creatingHoliday, setCreatingHoliday] = useState(false)
   const [holidayError, setHolidayError] = useState<string | null>(null)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
 
   async function reload() {
     setLoading(true)
@@ -55,10 +64,22 @@ export function GymScheduleHolidaysTab() {
 
   async function saveDay(day: DayOfWeek) {
     setSavingDay(day)
+    setScheduleError(null)
     try {
       const { start, end } = drafts[day]
       await upsertGymScheduleDay({ day, startTime: `${start}:00`, endTime: `${end}:00` })
       await reload()
+    } catch (err) {
+      setScheduleError(extractErrorMessage(err, 'Čuvanje radnog vremena nije uspelo.'))
+      // Revert this day's draft back to the currently saved value - the input must not keep
+      // showing the rejected (e.g. overlapping) entry.
+      const current = scheduleByDay[day]
+      setDrafts((prev) => ({
+        ...prev,
+        [day]: current
+          ? { start: current.openingTime.slice(0, 5), end: current.closingTime.slice(0, 5) }
+          : prev[day],
+      }))
     } finally {
       setSavingDay(null)
     }
@@ -90,6 +111,7 @@ export function GymScheduleHolidaysTab() {
           Unos po danu je "upsert" - ponovno čuvanje istog dana ažurira postojeće radno vreme
           umesto da javi grešku (videti AGENTS.md "Upgrade: Faza 6 decisions").
         </p>
+        {scheduleError && <p className="mb-3 text-xs text-red-400">{scheduleError}</p>}
         {loading ? (
           <p className="text-sm text-slate-500">Učitavanje...</p>
         ) : (
