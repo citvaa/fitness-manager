@@ -1,6 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { createClient, getClients } from './api'
-import { ActivationLinkBanner } from './ActivationLinkBanner'
 import type { ClientDTO } from './types'
 
 /**
@@ -15,7 +14,6 @@ export function ClientsTab() {
   const [email, setEmail] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null)
 
   async function reload() {
     setLoading(true)
@@ -34,11 +32,9 @@ export function ClientsTab() {
     e.preventDefault()
     setCreating(true)
     setCreateError(null)
-    setLastCreatedKey(null)
     try {
-      const created = await createClient(email)
+      await createClient(email)
       setEmail('')
-      setLastCreatedKey(created.user.registrationKey)
       await reload()
     } catch {
       setCreateError('Kreiranje klijenta nije uspelo - proveri da email već ne postoji.')
@@ -74,11 +70,6 @@ export function ClientsTab() {
           </button>
         </div>
         {createError && <p className="mt-3 text-xs text-red-400">{createError}</p>}
-        {lastCreatedKey && (
-          <div className="mt-3">
-            <ActivationLinkBanner registrationKey={lastCreatedKey} />
-          </div>
-        )}
       </form>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">

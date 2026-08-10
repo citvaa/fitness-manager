@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import { UsersTab } from './UsersTab'
+import { ManagersTab } from './ManagersTab'
 import { TrainersTab } from './TrainersTab'
 import { ClientsTab } from './ClientsTab'
 import { GymScheduleHolidaysTab } from './GymScheduleHolidaysTab'
 import { AppointmentsTab } from './AppointmentsTab'
 
-type Tab = 'users' | 'trainers' | 'clients' | 'schedule' | 'appointments'
+type Tab = 'users' | 'managers' | 'trainers' | 'clients' | 'schedule' | 'appointments'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'users', label: 'Korisnici' },
+  { key: 'managers', label: 'Menadžeri' },
   { key: 'trainers', label: 'Treneri' },
   { key: 'clients', label: 'Klijenti' },
   { key: 'schedule', label: 'Radno vreme i praznici' },
@@ -50,6 +52,7 @@ export function AdminPage() {
       </div>
 
       {tab === 'users' && <UsersTab />}
+      {tab === 'managers' && <ManagersTab />}
       {tab === 'trainers' && <TrainersTab />}
       {tab === 'clients' && <ClientsTab />}
       {tab === 'schedule' && <GymScheduleHolidaysTab />}

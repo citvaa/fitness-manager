@@ -1,6 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { createTrainer, deleteTrainer, getTrainers, updateTrainer } from './api'
-import { ActivationLinkBanner } from './ActivationLinkBanner'
 import { TrainerScheduleManager } from './TrainerScheduleManager'
 import type { EmploymentStatus, TrainerDTO } from './types'
 
@@ -25,7 +24,6 @@ export function TrainersTab() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null)
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
@@ -47,11 +45,9 @@ export function TrainersTab() {
     e.preventDefault()
     setCreating(true)
     setCreateError(null)
-    setLastCreatedKey(null)
     try {
-      const created = await createTrainer(form)
+      await createTrainer(form)
       setForm(EMPTY_FORM)
-      setLastCreatedKey(created.user.registrationKey)
       await reload()
     } catch {
       setCreateError('Kreiranje trenera nije uspelo - proveri da email već ne postoji.')
@@ -104,6 +100,7 @@ export function TrainersTab() {
             Datum zaposlenja
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={form.employmentDate}
               onChange={(e) => setForm((f) => ({ ...f, employmentDate: e.target.value }))}
@@ -143,11 +140,6 @@ export function TrainersTab() {
           {creating ? 'Kreiranje...' : 'Kreiraj trenera'}
         </button>
         {createError && <p className="mt-3 text-xs text-red-400">{createError}</p>}
-        {lastCreatedKey && (
-          <div className="mt-3">
-            <ActivationLinkBanner registrationKey={lastCreatedKey} />
-          </div>
-        )}
       </form>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -169,6 +161,7 @@ export function TrainersTab() {
                     />
                     <input
                       type="date"
+              lang="sr-Latn-RS"
                       value={editForm.employmentDate}
                       onChange={(e) =>
                         setEditForm((f) => ({ ...f, employmentDate: e.target.value }))
