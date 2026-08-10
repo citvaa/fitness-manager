@@ -89,6 +89,10 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public UserDTO create(@NotNull CreateUserRequest request) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Korisnik sa ovim email-om već postoji");
+        }
+
         String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
@@ -102,6 +106,13 @@ public class UserServiceImpl implements UserService {
                 .userRoles(new HashSet<>())
                 .build();
 
+        // Save first, send the activation email only once the row actually exists - the email
+        // send is @Async/fire-and-forget, so sending it before save() meant a save() failure
+        // (e.g. a duplicate-email constraint violation slipping past the check above under a
+        // race) still resulted in a delivered activation email for a user that was never
+        // persisted.
+        User savedUser = userRepository.save(user);
+
         ActivationEmailData emailData = ActivationEmailData.builder()
                 .registrationKey(registration_key)
                 .registrationKeyValidity(DateTimeUtil.formatTime(registration_key_validity))
@@ -109,7 +120,6 @@ public class UserServiceImpl implements UserService {
                 .build();
         emailService.sendActivationEmail(request.getEmail(), emailData);
 
-        User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
     }
 
@@ -252,6 +262,13 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void addRole(Integer id, Role role) {
+        // Only an ADMIN may grant the MANAGER role - an ordinary MANAGER managing MANAGER
+        // membership would let any manager mint arbitrary new managers. Checked here (not just
+        // hidden in the frontend) since this is also directly reachable via the API.
+        if (role == Role.MANAGER && !isCurrentUserAdmin()) {
+            throw new AccessDeniedException("Samo ADMIN korisnik može dodeliti MANAGER rolu.");
+        }
+
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Korisnik nije pronađen"));
 
@@ -274,6 +291,12 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void removeRole(Integer id, Role role) {
+        // Same ADMIN-only gate as addRole above - an ordinary MANAGER must not be able to strip
+        // MANAGER from anyone (including themselves) either.
+        if (role == Role.MANAGER && !isCurrentUserAdmin()) {
+            throw new AccessDeniedException("Samo ADMIN korisnik može oduzeti MANAGER rolu.");
+        }
+
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Korisnik nije pronađen"));
 
@@ -307,6 +330,21 @@ public class UserServiceImpl implements UserService {
         }
         String email = jwt.getClaim("email");
         return email != null && email.equals(user.getEmail());
+    }
+
+    /** Same JWT idiom as {@link #isCurrentlyAuthenticatedUser} - reads the caller's roles
+     * straight from the JWT's "roles" claim rather than re-querying the DB. Used to gate
+     * MANAGER-role grant/revoke to ADMIN callers only (see addRole/removeRole above). */
+    private boolean isCurrentUserAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            return false;
+        }
+        Object roles = jwt.getClaim("roles");
+        if (!(roles instanceof java.util.List<?> roleList)) {
+            return false;
+        }
+        return roleList.stream().anyMatch(r -> Role.ADMIN.name().equals(String.valueOf(r)));
     }
 
     @Transactional

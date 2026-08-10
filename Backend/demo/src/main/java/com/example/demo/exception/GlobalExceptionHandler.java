@@ -1,6 +1,7 @@
 package com.example.demo.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -47,6 +48,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    /**
+     * {@link DataIntegrityViolationException} wraps every unique/FK constraint violation the
+     * database itself rejects (e.g. a duplicate email slipping past an application-level
+     * pre-check under a race, or any other unique-constraint clash). Without this explicit,
+     * more-specific handler it fell into {@link #handleRuntimeException} below - since
+     * DataIntegrityViolationException is NOT a RuntimeException subtype directly reachable by
+     * name matching there, Spring's default error handling took over instead and returned the
+     * raw JDBC/Hibernate exception message straight to the client (constraint name, table name,
+     * SQL state - meaningless and leaky to an end user). Mapped to 409 (Conflict) with a generic,
+     * user-facing message rather than surfacing the underlying SQL error.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation mapped to 409: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("Već postoji unos sa ovim podacima"));
     }
 
     /**
