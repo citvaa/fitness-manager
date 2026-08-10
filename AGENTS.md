@@ -40,12 +40,21 @@ Codex CLI. They must start from identical context. Concretely, that means:
 
 ## Running locally
 
-1. Copy `.env.example` to `.env` and fill in `MAIL_USERNAME`, `MAIL_PASSWORD`
-   (a Gmail **App Password**, not the account password), and `JWT_SECRET`
-   (>= 32 characters - the app fails to start otherwise). Spring Boot does
-   not load `.env` files itself; export these as real environment variables
-   before starting the app (IDE run-configuration env vars, or
-   `set -a; source .env; set +a` in bash / equivalent in PowerShell).
+1. Copy `.env.example` to `.env` (repo root) and fill in `MAIL_USERNAME`,
+   `MAIL_PASSWORD` (a Gmail **App Password**, not the account password), and
+   `JWT_SECRET` (>= 32 characters - the app fails to start otherwise). As of
+   the `me.paulschwarz:spring-dotenv` dependency (see "Upgrade: dev-tooling
+   decisions" below), the app loads this `.env` file automatically - no
+   manual export/`source` step is needed for `MAIL_USERNAME`/`MAIL_PASSWORD`/
+   `JWT_SECRET`/any other `${...}`-placeholder-bound variable in
+   `application.yaml`. **Exception**: `ANTHROPIC_API_KEY` is read via
+   `System.getenv(...)` directly in `AnthropicConfig`/`ClaudeInsightServiceImpl`
+   (it has no `${...}` placeholder in `application.yaml` at all), which a
+   pure-JVM `.env` loader cannot populate - see "Upgrade: dev-tooling
+   decisions" for why. If you need the AI insights/progress-narrative
+   endpoints to work, still export `ANTHROPIC_API_KEY` manually (IDE
+   run-configuration env var, or `set -a; source .env; set +a` in bash /
+   equivalent in PowerShell) before starting the app.
 2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
    - Postgres on host port `8877` (mapped to container `5432`), db `fm`,
      user `fm_dbuser` / password `password`
@@ -1703,6 +1712,68 @@ real UI caller, which is what made them observable in practice rather than only 
   client via `DELETE /{id}/remove-client?clientId=1` and confirmed the appointment reverted to zero
   clients. `mvn compile` clean.
 
+## Upgrade: dev-tooling decisions
+
+A small, deliberately non-functional infrastructure change (`upgrade/claude-code` branch): the
+backend now loads the repo-root `.env` file automatically, so `./mvnw spring-boot:run`/
+`mvnw.cmd spring-boot:run` works with nothing manually exported first. No `application.yaml`
+behavior change - the existing `${MAIL_USERNAME}`/`${MAIL_PASSWORD}`/`${JWT_SECRET}` placeholders
+are unchanged; they're just resolved from a new property source now.
+
+- **`me.paulschwarz:spring-dotenv` (v4.0.0) added to `Backend/demo/pom.xml`.** Chosen as the
+  standard, minimal-footprint way to do this in a Spring Boot app - it registers a
+  `EnvironmentPostProcessor`/`ApplicationRunListener` that reads a `.env` file into the Spring
+  `Environment` early in startup, before `${...}` placeholders in `application.yaml` are resolved.
+  No code changes to any existing class were needed for `MAIL_USERNAME`/`MAIL_PASSWORD`/
+  `JWT_SECRET` - they already went through `${...}` placeholders, which now resolve from `.env`
+  the same way they'd resolve from a real exported environment variable.
+- **Where the library actually reads its own config from was a real surprise worth recording**:
+  despite `me.paulschwarz:spring-dotenv`'s own naming suggesting `SPRINGDOTENV_DIRECTORY`/
+  `springdotenv.directory` as a system-property or env-var override (a reasonable first guess,
+  and what a websearch of the project's README surfaces), decompiling the actual 4.0.0 jar
+  (`DotenvConfigProperties.loadProperties()`) showed it instead reads a plain `.properties` file
+  literally named `.env.properties` **on the classpath** - i.e. `directory=`/`filename=` keys in
+  a file the app ships with, not an env var read at JVM startup (which would be a chicken-and-egg
+  problem anyway: you can't use an env var to tell a tool how to load env vars before any exist).
+  Verified this by decompiling the jar with `javap -c` rather than trusting the first plausible-
+  looking web result, after the first attempt (an `environmentVariables` block in the
+  `spring-boot-maven-plugin` config, guessing at `SPRINGDOTENV_DIRECTORY`) demonstrably failed -
+  the app still 500'd on `JwtUtil`'s constructor with no `JWT_SECRET` resolved.
+- **`Backend/demo/src/main/resources/.env.properties`** (new, committed - it has no secrets, only
+  a relative path) contains a single `directory=../..` line, pointing spring-dotenv two
+  directories up from `Backend/demo` (the module's own working directory when run via `mvnw`) to
+  the repo root, where the real `.env` lives (per the existing `.env.example`/`README.md`
+  instructions - unchanged by this session, `.env` still lives at the repo root, not inside
+  `Backend/demo`).
+- **`ANTHROPIC_API_KEY` is a known, permanent exception, not a bug in this change.**
+  `AnthropicConfig`/`ClaudeInsightServiceImpl` both call `System.getenv("ANTHROPIC_API_KEY")`
+  directly - a raw JVM/OS-level environment lookup, not a Spring `${...}` placeholder bound to
+  anything in `application.yaml` (confirmed: `ANTHROPIC_API_KEY` does not appear in
+  `application.yaml`/`application-dev.yaml` at all). `System.getenv()` reads the process's real
+  environment snapshot taken at JVM startup; no pure-Java library (spring-dotenv or otherwise) can
+  retroactively inject into it without unsafe reflection against `ProcessEnvironment` internals
+  (fragile, JDK-version-dependent, and blocked by the module system on modern JDKs) - which would
+  be a wildly disproportionate hack for what this session was scoped as ("infrastrukturna dopuna,
+  ne funkcionalna izmena"). Switching those two call sites to a Spring-injected
+  `@Value("${anthropic.api.key}")` (with a matching `application.yaml` entry) would fix this
+  cleanly, but that's a real code change to existing classes' behavior, not the config-only change
+  this task asked for - left as a documented follow-up, not silently patched. Until then,
+  `ANTHROPIC_API_KEY` still needs a manual export (or an IDE run-configuration env var) exactly as
+  before this change, for anyone testing the AI insights/progress-narrative endpoints locally.
+- **Verified with a real clean-environment run, not just a compile check**: confirmed the current
+  shell had none of `MAIL_USERNAME`/`MAIL_PASSWORD`/`JWT_SECRET`/`ANTHROPIC_API_KEY` set
+  (`env | grep ...` empty), started `mvnw.cmd spring-boot:run` from `Backend/demo/` with only the
+  repo-root `.env` present, and got a clean `Started FitnessManagerApplication` with Tomcat up on
+  `8088` - no manual export, no `.env` sourced in that shell at all. `POST /api/user/login` with
+  the seeded `admin`/`password123` account returned a real signed JWT (proving `JWT_SECRET`
+  resolved correctly from `.env`, not from a stale/leftover environment variable). Confirmed the
+  documented exception is real, not theoretical: `GET /api/insights/manager` with that same token
+  returned `{"message":"ANTHROPIC_API_KEY is not set..."}` under the exact same clean-environment
+  conditions, and the startup log logged `AnthropicConfig`'s own "not set" warning - consistent
+  with the `System.getenv()` explanation above. `mvn test` **146/146 green** (no regression - none
+  of the new test classes exercise `AnthropicConfig`/`ClaudeInsightServiceImpl`'s real
+  `System.getenv()` path, they mock the Claude client). `mvn compile` clean.
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -2170,6 +2241,19 @@ either upgrade session to pick up:
   volume via `curl` (capacity-exceeded now `400`s with a real message, re-adding an already-
   assigned client is a clean no-op, removing a client reverts the appointment to zero clients).
   See "Upgrade: Faza 9 decisions" → "Faza 9 follow-up" for the full write-up.
+- 2026-08-10: Dev-tooling infra change (`upgrade/claude-code` branch), no functional/behavior
+  change to any existing endpoint. Added `me.paulschwarz:spring-dotenv` so the backend auto-loads
+  the repo-root `.env` file - `MAIL_USERNAME`/`MAIL_PASSWORD`/`JWT_SECRET` (and anything else bound
+  to a `${...}` placeholder in `application.yaml`) now resolve without exporting env vars manually
+  first. `application.yaml` itself is unchanged, as scoped. Found and documented one real,
+  permanent exception: `ANTHROPIC_API_KEY` is read via raw `System.getenv(...)` in
+  `AnthropicConfig`/`ClaudeInsightServiceImpl`, not through any Spring placeholder, so no
+  `.env`-loading library can populate it without unsafe JVM reflection - still needs a manual
+  export for the AI endpoints. See "Upgrade: dev-tooling decisions" above for the full rationale,
+  including the wrong-first-guess/decompile-to-verify detour on how the library actually locates
+  its config. Verified with a genuinely clean shell (no `MAIL_*`/`JWT_SECRET`/`ANTHROPIC_API_KEY`
+  set) starting cleanly off `.env` alone, a real JWT-signed login, the documented
+  `ANTHROPIC_API_KEY` exception reproduced live, and `mvn test` 146/146 green.
 
 ## Upgrade: final summary
 
