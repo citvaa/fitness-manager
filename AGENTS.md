@@ -42,10 +42,10 @@ Codex CLI. They must start from identical context. Concretely, that means:
 
 1. Copy `.env.example` to `.env` and fill in `MAIL_USERNAME`, `MAIL_PASSWORD`
    (a Gmail **App Password**, not the account password), and `JWT_SECRET`
-   (>= 32 characters - the app fails to start otherwise). Spring Boot does
-   not load `.env` files itself; export these as real environment variables
-   before starting the app (IDE run-configuration env vars, or
-   `set -a; source .env; set +a` in bash / equivalent in PowerShell).
+   (>= 32 characters - the app fails to start otherwise). The
+   `springboot3-dotenv` dependency automatically exposes every value from the
+   repository-root `.env` file to Spring's existing `${...}` placeholders for
+   local development; real process environment variables retain precedence.
 2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
    - Postgres on host port `8877` (mapped to container `5432`), db `fm`,
      user `fm_dbuser` / password `password`
