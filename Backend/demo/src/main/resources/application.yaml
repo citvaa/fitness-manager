@@ -78,3 +78,9 @@ app:
     secret: ${JWT_SECRET}
     accessTokenExpiration: 900000
     refreshTokenExpiration: 7200000
+
+  # Anthropic (Claude) API key used by AnthropicConfig/ClaudeInsightServiceImpl for the AI
+  # manager-insights and client-progress-narrative features. Empty default (not a hard failure at
+  # startup, see AnthropicConfig) - those two endpoints fail at call time instead if unset.
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}

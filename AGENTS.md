@@ -41,20 +41,16 @@ Codex CLI. They must start from identical context. Concretely, that means:
 ## Running locally
 
 1. Copy `.env.example` to `.env` (repo root) and fill in `MAIL_USERNAME`,
-   `MAIL_PASSWORD` (a Gmail **App Password**, not the account password), and
-   `JWT_SECRET` (>= 32 characters - the app fails to start otherwise). As of
-   the `me.paulschwarz:spring-dotenv` dependency (see "Upgrade: dev-tooling
-   decisions" below), the app loads this `.env` file automatically - no
-   manual export/`source` step is needed for `MAIL_USERNAME`/`MAIL_PASSWORD`/
-   `JWT_SECRET`/any other `${...}`-placeholder-bound variable in
-   `application.yaml`. **Exception**: `ANTHROPIC_API_KEY` is read via
-   `System.getenv(...)` directly in `AnthropicConfig`/`ClaudeInsightServiceImpl`
-   (it has no `${...}` placeholder in `application.yaml` at all), which a
-   pure-JVM `.env` loader cannot populate - see "Upgrade: dev-tooling
-   decisions" for why. If you need the AI insights/progress-narrative
-   endpoints to work, still export `ANTHROPIC_API_KEY` manually (IDE
-   run-configuration env var, or `set -a; source .env; set +a` in bash /
-   equivalent in PowerShell) before starting the app.
+   `MAIL_PASSWORD` (a Gmail **App Password**, not the account password),
+   `JWT_SECRET` (>= 32 characters - the app fails to start otherwise), and
+   `ANTHROPIC_API_KEY`. As of the `me.paulschwarz:spring-dotenv` dependency
+   (see "Upgrade: dev-tooling decisions" below), the app loads this `.env`
+   file automatically - no manual export/`source` step is needed for any of
+   the four, all now bound via `${...}` placeholders in `application.yaml`
+   (`app.anthropic.api-key: ${ANTHROPIC_API_KEY:}`, added in the "Follow-up:
+   ANTHROPIC_API_KEY moved off System.getenv" entry - it originally bypassed
+   Spring entirely via a raw `System.getenv(...)` call, which no `.env`
+   loader could populate; that gap is closed now).
 2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
    - Postgres on host port `8877` (mapped to container `5432`), db `fm`,
      user `fm_dbuser` / password `password`
@@ -1774,6 +1770,47 @@ are unchanged; they're just resolved from a new property source now.
   of the new test classes exercise `AnthropicConfig`/`ClaudeInsightServiceImpl`'s real
   `System.getenv()` path, they mock the Claude client). `mvn compile` clean.
 
+### Follow-up: ANTHROPIC_API_KEY moved off System.getenv, closing the exception above
+
+The exception documented above turned out not to need the "wildly disproportionate hack" it was
+originally weighed against - the actual fix is the same one-line pattern `MAIL_USERNAME`/
+`JWT_SECRET` already used, just not yet applied to this one variable.
+
+- **`app.anthropic.api-key: ${ANTHROPIC_API_KEY:}` added to both `application.yaml` and
+  `application-dev.yaml`**, next to the existing `app.jwt.secret: ${JWT_SECRET}` block, following
+  the exact same naming convention (`app.<feature>.<property>`). The `:` default means an unset
+  key resolves to an empty string rather than failing property binding at startup - preserving the
+  original "must not crash app startup" requirement from `AnthropicConfig`'s own javadoc.
+- **`AnthropicConfig`**: replaced the `System.getenv("ANTHROPIC_API_KEY")` presence check with a
+  `@Value("${app.anthropic.api-key:}") private String apiKey` field, and replaced
+  `AnthropicOkHttpClient.fromEnv()` (which reads the raw OS env var *inside the SDK itself*,
+  bypassing Spring/`.env` entirely - the real reason the exception existed) with
+  `AnthropicOkHttpClient.builder().apiKey(apiKey).build()`, passing the Spring-resolved value
+  explicitly. This was the part easy to miss: fixing only the `@PostConstruct` warning log would
+  have left the actual client still silently reading the unpopulated OS env var via `fromEnv()`.
+- **`ClaudeInsightServiceImpl`**: same swap, `@Value("${app.anthropic.api-key:}") private String
+  apiKey` field replacing the `System.getenv(...)` blank-check before the Claude call - the
+  `IllegalStateException` message and call-time-not-startup-time failure semantics are unchanged,
+  only where the value comes from.
+- **No test changes needed.** Neither `ManagerInsightsServiceImplTest` nor
+  `ClientProgressInsightServiceImplTest` (the two existing consumers) construct
+  `ClaudeInsightServiceImpl` directly - both mock the `ClaudeInsightService` interface - so the new
+  `@Value` field (uninitialized in a plain `new ClaudeInsightServiceImpl(mockClient)` outside a
+  Spring context) was never exercised by any existing unit test either way.
+- **Verified with a genuinely clean shell** (confirmed empty via `env | grep -E
+  "MAIL_USERNAME|MAIL_PASSWORD|JWT_SECRET|ANTHROPIC_API_KEY"` first) starting `mvnw.cmd
+  spring-boot:run` from `Backend/demo/` with only the repo-root `.env` present: clean startup, no
+  `AnthropicConfig` "not set" warning in the log this time (unlike the prior verification above),
+  logged in as `admin`/`password123` for a real JWT, then called `GET /api/insights/manager` with
+  it and got back a genuine Claude-generated Serbian-language narrative
+  (`"insightText":"U poslednjih 30 dana, teretana je zabeležila..."`, grounded in real seeded
+  check-in/payment numbers, with a real `generatedAt` timestamp) - not the previous
+  `{"message":"ANTHROPIC_API_KEY is not set..."}` error. `mvn test` **146/146 green**, `mvn
+  compile` clean. (Hit and cleared the unrelated, already-documented stale-`target/`
+  `Found more than one migration with version 1.0012` Flyway conflict once during this
+  verification - see "Known issues" - a leftover from a previous session's build artifacts, not
+  caused by this change; resolved the standard way, `rm -rf target` before rebuilding.)
+
 ## Known issues (intentionally not fixed in the baseline-hygiene session)
 
 These were found during the repo-hygiene pass that produced `baseline-v1`.
@@ -2254,6 +2291,23 @@ either upgrade session to pick up:
   its config. Verified with a genuinely clean shell (no `MAIL_*`/`JWT_SECRET`/`ANTHROPIC_API_KEY`
   set) starting cleanly off `.env` alone, a real JWT-signed login, the documented
   `ANTHROPIC_API_KEY` exception reproduced live, and `mvn test` 146/146 green.
+- 2026-08-10: Follow-up to the dev-tooling change above (`upgrade/claude-code` branch) - closed the
+  `ANTHROPIC_API_KEY` exception rather than leaving it as a permanent limitation. Added
+  `app.anthropic.api-key: ${ANTHROPIC_API_KEY:}` to `application.yaml`/`application-dev.yaml`
+  (same convention as the existing `app.jwt.secret`), and swapped `AnthropicConfig`/
+  `ClaudeInsightServiceImpl`'s raw `System.getenv("ANTHROPIC_API_KEY")` calls for a Spring
+  `@Value("${app.anthropic.api-key:}")`-injected field. The part that actually mattered:
+  `AnthropicConfig`'s client bean was built via `AnthropicOkHttpClient.fromEnv()`, which reads the
+  OS env var again *inside the SDK itself* - fixing only the startup warning log would have left
+  the real client still bypassing Spring/`.env`; replaced with
+  `AnthropicOkHttpClient.builder().apiKey(apiKey).build()`, passing the Spring-resolved value
+  explicitly. See "Upgrade: dev-tooling decisions" → "Follow-up: ANTHROPIC_API_KEY moved off
+  System.getenv" for the full write-up. Verified with a genuinely clean shell (`.env` present,
+  nothing manually exported): `GET /api/insights/manager` returned a real Claude-generated
+  Serbian-language narrative grounded in real seeded data, not the previous "not set" error; no
+  code/test changes needed for the two existing consumers (`ManagerInsightsServiceImplTest`/
+  `ClientProgressInsightServiceImplTest` both mock the `ClaudeInsightService` interface, never
+  construct the impl directly). `mvn test` 146/146 green, `mvn compile` clean.
 
 ## Upgrade: final summary
 

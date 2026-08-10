@@ -6,6 +6,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.example.demo.service.ai.ClaudeInsightService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.stream.Collectors;
@@ -28,9 +29,12 @@ public class ClaudeInsightServiceImpl implements ClaudeInsightService {
 
     private final AnthropicClient anthropicClient;
 
+    @Value("${app.anthropic.api-key:}")
+    private String apiKey;
+
     @Override
     public String generate(String systemPrompt, String userPrompt) {
-        if (System.getenv("ANTHROPIC_API_KEY") == null || System.getenv("ANTHROPIC_API_KEY").isBlank()) {
+        if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("ANTHROPIC_API_KEY is not set - cannot call the Claude API for AI insights.");
         }
 
