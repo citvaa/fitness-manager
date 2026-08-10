@@ -119,6 +119,7 @@ export function ManagerPaymentsPage() {
             Datum uplate
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}

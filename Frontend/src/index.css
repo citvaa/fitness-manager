@@ -30,6 +30,19 @@ body {
 }
 
 /*
+ * The browser's native calendar-picker icon on <input type="date"> defaults to a dark glyph
+ * that's invisible against this app's dark inputs (bg-slate-950/900) - `color-scheme: dark`
+ * tells the browser to render its native form-control chrome (icon + the date/time popup
+ * itself) in light-on-dark instead. This is the one part of a date input's native UI that CSS
+ * can actually restyle - the empty-value segment placeholders (dd/mm/yyyy) are not exposed to
+ * CSS at all; those are addressed per-input via the `lang="sr-Latn-RS"` attribute instead (see
+ * AGENTS.md "Upgrade: manager-testing fixes").
+ */
+input[type='date'] {
+  color-scheme: dark;
+}
+
+/*
  * Breathing glow for room tiles at/near capacity on the live floor plan
  * (LiveFloorPlanPage). A custom keyframe rather than Tailwind's
  * `animate-pulse` because that one fades the whole tile's opacity, which

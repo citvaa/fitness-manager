@@ -29,6 +29,7 @@ export function DailySchedulePage() {
       <div className="mb-4">
         <input
           type="date"
+              lang="sr-Latn-RS"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-brand-500"

@@ -166,6 +166,7 @@ export function GymScheduleHolidaysTab() {
             Datum
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={holidayDate}
               onChange={(e) => setHolidayDate(e.target.value)}

@@ -173,6 +173,7 @@ export function AppointmentsTab() {
             Datum
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={form.date}
               onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
@@ -268,6 +269,7 @@ export function AppointmentsTab() {
             Filtriraj po datumu
             <input
               type="date"
+              lang="sr-Latn-RS"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
               className="mt-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none focus:border-brand-500"

@@ -84,6 +84,7 @@ export function RecordForm({ clientId, onCreated }: { clientId: number; onCreate
         Datum
         <input
           type="date"
+              lang="sr-Latn-RS"
           required
           value={recordDate}
           onChange={(e) => setRecordDate(e.target.value)}

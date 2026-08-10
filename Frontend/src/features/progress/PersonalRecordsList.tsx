@@ -122,6 +122,7 @@ export function PersonalRecordsList({
                     Datum
                     <input
                       type="date"
+              lang="sr-Latn-RS"
                       value={editForm.recordDate}
                       onChange={(e) => setEditForm((f) => ({ ...f, recordDate: e.target.value }))}
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-brand-500"

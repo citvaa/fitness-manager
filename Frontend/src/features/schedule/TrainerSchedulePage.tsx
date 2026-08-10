@@ -116,6 +116,7 @@ export function TrainerSchedulePage() {
               Datum
               <input
                 type="date"
+              lang="sr-Latn-RS"
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -165,6 +166,7 @@ export function TrainerSchedulePage() {
                 Od datuma
                 <input
                   type="date"
+              lang="sr-Latn-RS"
                   required
                   value={unavailStart}
                   onChange={(e) => setUnavailStart(e.target.value)}
@@ -175,6 +177,7 @@ export function TrainerSchedulePage() {
                 Do datuma
                 <input
                   type="date"
+              lang="sr-Latn-RS"
                   required
                   value={unavailEnd}
                   onChange={(e) => setUnavailEnd(e.target.value)}

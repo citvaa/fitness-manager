@@ -112,6 +112,7 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
           <div className="flex flex-wrap gap-2">
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -147,6 +148,7 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
           <div className="flex flex-wrap gap-2">
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={unavailStart}
               onChange={(e) => setUnavailStart(e.target.value)}
@@ -154,6 +156,7 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
             />
             <input
               type="date"
+              lang="sr-Latn-RS"
               required
               value={unavailEnd}
               onChange={(e) => setUnavailEnd(e.target.value)}

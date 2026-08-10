@@ -63,6 +63,7 @@ export function EntryForm({ clientId, onCreated }: { clientId: number; onCreated
         Datum
         <input
           type="date"
+              lang="sr-Latn-RS"
           required
           value={entryDate}
           onChange={(e) => setEntryDate(e.target.value)}
