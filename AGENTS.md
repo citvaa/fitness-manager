@@ -2,10 +2,9 @@
 
 ## Purpose of this repository
 
-`fitness-manager` is a Spring Boot backend for managing a gym: clients, trainers,
-appointments/schedules, payments, and notifications. It is the foundation of a
-Master's thesis (diplomski rad). There is currently no frontend (the
-`Frontend/` folder is an empty placeholder).
+`fitness-manager` is a full-stack gym-management app: a Spring Boot backend
+plus a React/TypeScript frontend (`Frontend/`) covering gym operations, a live
+floor plan, AI insights, and client progress. It is a Master's thesis foundation.
 
 **This exact state of the repository (tagged `baseline-v1`) is the fixed
 starting point for a comparison study.** Two separate AI-upgrade sessions will
@@ -24,7 +23,8 @@ Codex CLI. They must start from identical context. Concretely, that means:
   architecture, make an architectural decision, or change a convention - in
   every session, not just this one. Don't wait to be asked.** Stale docs are
   worse than no docs for a comparison study where both sides read the same
-  source of truth.
+  source of truth. Keep this file lean; detailed upgrade rationale and
+  verification history lives in `docs/decision-log.md`.
 
 ## Tech stack
 
@@ -37,6 +37,8 @@ Codex CLI. They must start from identical context. Concretely, that means:
 - Spring Mail (Gmail SMTP) + Thymeleaf for HTML email templates
 - WebSocket/STOMP for real-time notifications
 - MapStruct for entity<->DTO mapping, Lombok, springdoc-openapi (Swagger UI)
+- Anthropic Messages API, pinned model `claude-haiku-4-5-20251001`
+- React 19, TypeScript, Vite, Zustand, react-konva, STOMP, Recharts, axios
 
 ## Running locally
 
@@ -89,6 +91,19 @@ Every entity is also `@Audited` (Hibernate Envers).
 - **TrainerSchedule** - a trainer's status (`WORKING`/`HOLIDAY`/`SICK_LEAVE`/
   `VACATION`) for a given date and time range.
 - **Holiday** - a gym-wide non-working date.
+- **Gym** - audited single-installation configuration with branding/contact
+  data and IANA timezone.
+- **Room** - belongs to Gym; capacity and rotated-rectangle geometry
+  (`posX`/`posY`/`width`/`height`/`rotationDegrees`).
+- **RoomCheckIn** - historical manual check-in/out. A DB partial unique index
+  permits one active check-in per client globally. Occupancy adds manual and
+  in-progress appointment counts without deduplication.
+- **ClientProgressEntry/ClientPersonalRecord** - fixed-column body measurements
+  and free-text exercise records with fixed units.
+- **Payment** has no amount/currency; manager “revenue” is a purchased-
+  appointment-count proxy.
+- **Appointment** optionally belongs to Room and has no persisted status or
+  cancellation timestamp.
 
 ## Auth flow (read this before touching security-adjacent code)
 
@@ -110,10 +125,9 @@ Every entity is also `@Audited` (Hibernate Envers).
     any authenticated user regardless of role** (e.g. `CalendarController`).
   - Both are registered in `config/web/WebConfig` with an identical
     exclude-list (register/login/swagger). Note that `forgot-password` and
-    `reset-password` are *not* in that exclude list, which looks like a bug
-    (a user who forgot their password by definition has no valid JWT to
-    present) - flagged here rather than silently fixed, since fixing it
-    changes runtime auth behavior and this session is hygiene-only.
+   exclude-list covering register, login, login-refresh, forgot-password,
+   reset-password, and Swagger. Password recovery and refresh therefore do
+   not require a valid access token.
 - `SecurityConfig`'s `SecurityFilterChain` permits `/api/**` (and
   swagger/websocket paths) via `authorizeHttpRequests(...).permitAll()` and
   otherwise requires authentication via its own `oauth2ResourceServer` JWT
@@ -166,9 +180,9 @@ an intentional design choice.
 ## Caching
 
 Redis via Spring Cache, one global `RedisCacheConfiguration` (10 min TTL,
-JSON serialization) in `config/cache/RedisConfig`. Currently only
-`TrainerServiceImpl` actually uses caching (`TRAINER_CACHE`); no other
-service caches anything.
+JSON serialization) in `config/cache/RedisConfig`. `TRAINER_CACHE` uses the
+default TTL; `managerInsights` uses six hours and `clientProgressInsights`
+uses one hour per client, with explicit refresh/eviction.
 
 ## Conventions
 
@@ -187,529 +201,23 @@ service caches anything.
 - `@Slf4j` logging throughout; scheduler/notification logs use an
   emoji-prefixed style (`🔥`/`✅`/`❌`) as an established (if unusual)
   convention - match it in that area rather than "fixing" it to plain text.
-- No global `@ControllerAdvice`/exception handler exists; unhandled service
-  exceptions currently fall through to Spring Boot's default error response.
+- `ApiExceptionHandler` preserves explicit statuses, maps database conflicts
+  to 409 and access denial to 403, then broadly maps other runtime failures to
+  400 with a `{"message":"..."}` body.
 - **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*`)
   - their checksums are locked once applied. If schema changes are needed,
   add a new `V1.00XX__*.sql` file. Dev-only seed data lives in the separate
   `db/dev-data/` location, only loaded on the `dev` profile.
 
-## Upgrade: schema decisions
+## Known issues
 
-Phase 1 of the upgrade is deliberately limited to Flyway migrations, JPA
-entities, repositories, DTOs, and MapStruct mappers. No services, controllers,
-WebSocket wiring, LLM calls, or frontend code are part of this phase.
+Only currently open items belong here; resolved history is in `docs/decision-log.md`.
 
-- **Gym remains a real table in a single-installation product.** One row is
-  expected per deployed installation, but a normal audited entity preserves
-  versioning and enables a future settings endpoint. Besides name/address it
-  stores contact details, logo URL, hex brand color, and IANA timezone. The
-  timezone belongs to the installation because appointment and insight logic
-  must not depend on the server's local timezone.
-- **Room geometry uses rotated rectangles.** `posX`, `posY`, `width`, `height`,
-  and `rotationDegrees` map directly to a `react-konva` rectangle and keep
-  validation, editing, and future overlap calculations simple. Polygons would
-  require ordered point persistence and substantially more frontend/backend
-  geometry logic without a current requirement for irregular room shapes. A
-  future polygon table can be added alongside these columns if needed.
-- **Appointment-to-Room is optional.** Existing appointments have no room and
-  scheduling can reasonably create an unassigned appointment, just as trainer
-  assignment is currently optional. A later service layer may enforce room
-  assignment for selected workflows without making this migration breaking.
-  `AppointmentDTO` exposes only a lightweight `RoomSummaryDTO` (id, name, type,
-  capacity), not the complete room geometry/configuration, because appointment
-  lists are frequent and do not need the heavier floor-plan representation.
-- **Manual occupancy has an explicit event entity.** Current planned occupancy
-  combines appointments in progress (derived from existing appointment/client
-  data) with optional `RoomCheckIn` rows. Keeping check-in/check-out timestamps
-  preserves attendance history for later analytics instead of storing only a
-  mutable current-room state. A null `checkedOutAt` denotes an active check-in;
-  partial indexes support active occupancy and active-client lookups. A unique
-  partial index on `client_id WHERE checked_out_at IS NULL` enforces the domain
-  rule that a client can physically occupy only one room at a time across the
-  entire gym, rather than one active check-in per room.
-- **Body measurements use fixed numeric columns.** Weight, body-fat percentage,
-  waist, chest, hip, thigh, and arm measurements cover the expected thesis
-  scope and remain directly queryable/chartable. This follows the project's
-  typed relational model and MapStruct conventions. JSON/EAV would be more
-  flexible but would weaken validation and complicate aggregation; adding a
-  future measurement requires an additive migration by design.
-- **Exercises are free text, not a catalog.** A catalog would require its own
-  lifecycle, seed data, normalization rules, and administration UI, none of
-  which is needed for per-client progress tracking. `exerciseName` therefore
-  stays free text and can later be supplemented by an optional catalog foreign
-  key without removing historical names.
-- **Record units are a fixed enum.** `KG`, `LB`, `REPS`, `SECONDS`, `MINUTES`,
-  `METERS`, and `KM` cover strength and endurance records while preventing
-  inconsistent unit strings. The database mirrors the Java enum with a check
-  constraint, following existing enum conventions.
-- **All new audited schema is explicit.** Migrations `V1.0011`-`V1.0014` create
-  the gym/room/check-in and progress tables, add nullable `appointment.room_id`,
-  and create matching Envers audit tables. `appointment_aud.room_id` is added
-  in the same additive audit migration because `ddl-auto` is disabled.
-
-## Upgrade: service layer decisions
-
-Phase 2 exposes the Phase 1 data model through REST services and the existing
-STOMP broker. No schema migration was needed for this phase.
-
-- **Floor-plan writes are manager-only; reads are authenticated.** `MANAGER`
-  owns Gym/Room create, update, and delete operations. `MANAGER`, `TRAINER`,
-  and `CLIENT` can read the gym and rooms because the floor plan is normal
-  operational information. The API preserves the single-installation rule by
-  rejecting a second Gym row, and refuses to delete a Gym until its rooms are
-  removed. Room geometry and positive capacity/dimension validation are
-  performed before persistence so callers get a useful 4xx response instead
-  of only a database constraint error.
-- **Manual check-in is a staff operation.** `MANAGER` and `TRAINER` can check a
-  client in or out; all three roles can read current occupancy. Clients cannot
-  create their own attendance history. The service checks for an existing
-  active check-in and also translates a race against the database's global
-  unique partial index into HTTP 409 with an explicit message.
-- **Occupancy is a source-labelled sum.** Each room payload contains
-  `manualCheckIns`, `scheduledParticipants`, and `totalOccupancy`. Scheduled
-  participants are client-appointment links for appointments whose
-  `[startTime,endTime)` contains the current time. The total intentionally adds
-  both sources rather than attempting identity de-duplication: a manual
-  check-in is independent attendance evidence and current appointment rows do
-  not declare that check-in is their attendance record. Consumers can display
-  the two source counts if this conservative sum exceeds capacity. All current
-  time calculations use the Gym's IANA timezone.
-- **Live occupancy reuses the existing broker.** Snapshots are sent to
-  `/topic/gym/occupancy` after check-in/check-out and every 60 seconds so
-  appointment boundary changes appear without a write event. The message is
-  the same `OccupancySnapshotResponse` returned by REST: `generatedAt` plus an
-  ordered list of per-room source counts, capacity, and total. Sharing one
-  representation keeps polling and STOMP clients consistent.
-- **Claude calls use a pinned fast model.** Both insight features call the
-  Anthropic Messages API directly with `ANTHROPIC_API_KEY` and pinned model ID
-  `claude-haiku-4-5-20251001`. Anthropic's current model documentation describes
-  Haiku 4.5 as its fastest current model and the least expensive current tier,
-  which fits short narrative summaries. Pinning avoids silent behavior changes
-  from an alias. The app may start without a key for non-AI development, but AI
-  endpoints return HTTP 503; they never return mocked text.
-- **AI caches have workload-specific TTLs.** Manager insights use Redis cache
-  `managerInsights` with a six-hour TTL because they aggregate a 30-day window
-  and are relatively expensive; `force=true` bypasses and replaces the entry.
-  Client narratives use `clientProgressInsights` with a one-hour TTL per client
-  and are evicted on every progress-entry or personal-record create/update/delete.
-  These explicit regions override the existing global ten-minute TTL without
-  changing `TRAINER_CACHE` behavior.
-- **Manager revenue insight is currently a documented proxy.** `Payment` stores
-  the number of paid appointments but no price, currency, or monetary amount.
-  The prompt therefore supplies payment count and paid appointment units and
-  explicitly forbids Claude from inventing monetary revenue. True revenue
-  analytics requires a future additive payment-price schema decision.
-- **Progress ownership uses existing appointment relationships.** There is no
-  trainer-client assignment table. A trainer may CRUD and summarize progress
-  only when at least one existing appointment links that trainer to that client.
-  Clients have read-only access to their own entries, records, and cached AI
-  summary. This avoids granting every trainer access to every client's health-
-  adjacent data while preserving the current data model.
-- **Phase 2 introduces consistent feature error responses.** `ApiException` and
-  `ApiExceptionHandler` return timestamp/status/error/message JSON for explicit
-  API failures, including not-found, invalid geometry, ownership violations,
-  duplicate check-ins, missing AI configuration, and upstream Claude errors.
-  A database-integrity fallback returns HTTP 409. Existing unclassified runtime
-  exceptions still use Spring Boot's default response.
-
-## Upgrade: frontend decisions
-
-Phase 3 introduces the first frontend under `Frontend/`, focused on
-authentication and the manager floor-plan experience. AI-insights UI is
-deliberately deferred to the following phase.
-
-- **React 19 + TypeScript + Vite remain the frontend foundation.** The room
-  schema was explicitly designed around React canvas tooling, Vite's default
-  port `5173` already matches the backend CORS configuration, and a client-side
-  SPA is the simplest fit for a live operational dashboard backed entirely by
-  the existing Spring REST/STOMP API. No backend CORS change is required.
-- **State is split by lifetime, with no general-purpose global server cache.**
-  Zustand owns the small durable auth/session state; page-local React state
-  owns editor forms and fetched floor-plan data. This avoids introducing a
-  larger query-state abstraction for the handful of endpoints in this phase.
-  Axios is the single REST client and centralizes bearer injection, pre-expiry
-  refresh, one shared in-flight refresh request, and a single 401 retry.
-  A session timer also refreshes one minute before JWT expiry even while the
-  UI is idle; protected API requests perform the same check as a fallback.
-- **Tokens use browser local storage for this thesis-scale SPA.** It provides
-  session persistence across refreshes and allows the frontend to use the
-  backend's existing bearer-token contract without a backend cookie change.
-  The accepted trade-off is exposure to successful XSS; the UI does not render
-  untrusted HTML and a production hardening phase should prefer HttpOnly secure
-  cookies if the backend auth contract is changed accordingly.
-- **Login treats the backend `email` field as an identifier string.** Existing
-  dev accounts include the username-like value `admin`, so the login control
-  uses `type="text"` with `inputMode="email"` instead of native `type="email"`;
-  otherwise browser constraint validation prevents the seeded manager login
-  before the request reaches the backend.
-- **Multi-role users choose an active area.** All roles from the JWT remain
-  available in a role switcher; the last valid active role persists with the
-  session. `MANAGER` enters the live plan, while `TRAINER` and `CLIENT` enter
-  the Phase 4 placeholder. This is less surprising than silently imposing a
-  fixed role priority and preserves access to every area granted by the JWT.
-- **Visual styling is purpose-built CSS rather than a component kit.** The
-  defense's central artifact is a spatial canvas, so a generic dashboard kit
-  would contribute substantial unused surface and a recognizable stock look.
-  A small tokenized CSS system provides the dark botanical/lime GymOS identity,
-  responsive shell, motion, and accessible focus/error states with less bundle
-  and tighter control over the live-plan presentation.
-- **The plan uses a fixed 1000x620 logical coordinate system.** Both editor and
-  live view scale that surface to the available viewport while persisting only
-  logical coordinates, so dragging/resizing on one screen does not rewrite the
-  layout for another resolution. React-Konva provides editor transforms;
-  ordinary positioned DOM elements render the live view because CSS transitions
-  produce smoother occupancy color/count motion and keep room content accessible.
-  Konva `Layer` children are emitted through a single array expression because
-  literal JSX whitespace becomes an invalid text node in React-Konva and can
-  prevent the canvas from rendering under React 19.
-- **Live state is REST-first, then STOMP snapshots.** The page fetches
-  `GET /api/gym/occupancy` for deterministic initial render, subscribes to
-  `/topic/gym/occupancy`, and replaces its complete snapshot on each message.
-  The STOMP client reconnects automatically; no parallel frontend polling is
-  added because the backend already broadcasts appointment-boundary changes
-  every minute.
-- **The dev profile seeds a complete demonstration floor plan.** Dev migration
-  `V1.0016__insert_demo_floor_plan.sql` creates one branded Gym and five rooms
-  only after the production schema migrations and only when no Gym row already
-  exists, so an established developer database is never given a second Gym.
-  Production receives no sample
-  location data, while a fresh local database opens immediately into a useful
-  defense-ready plan that remains fully editable through the manager UI.
-
-### Upgrade Phase 4 UI decisions
-
-- **AI narratives are rendered as safe plain-text paragraphs.** Manager and client-progress prompts explicitly prohibit Markdown syntax and request blank-line-separated plain text; responses are split on line breaks and displayed as React text nodes rather than interpreted as HTML or Markdown. This preserves readable formatting while maintaining the Phase 3 rule that the SPA does not render untrusted markup. Both screens expose the backend generation timestamp and model, and only role-authorized trainer/manager views expose force regeneration.
-
-- **Trainer client discovery mirrors progress ownership.** A small GET /api/trainer/clients endpoint returns distinct lightweight client summaries only for clients linked to the authenticated trainer through an appointment. The progress UI uses this list as its sole selector source, so it cannot invite navigation to arbitrary client IDs.
-- **Progress visualization uses one shared role-aware page and Recharts.** Trainer and client areas share chart, record-list, and narrative presentation so equivalent data cannot drift visually; write forms and force-refresh controls are rendered only in trainer mode. Seven typed measurement series share one responsive line chart, with null values connected so partially completed measurements remain useful.
-
-- **Client progress stays backend-enforced read-only.** Client mode calls only the existing `/api/client/progress` self endpoints, never accepts a client ID, and renders neither measurement/record forms nor force regeneration. This duplicates the backend boundary in the UI without treating hidden controls as authorization.
-
-### Upgrade Phase 6 decisions
-
-- **Invite activation remains email-first with an explicit demo escape hatch.**
-  The public completion screen accepts the registration key from the activation
-  URL and never creates an account by itself. After a manager creates a user,
-  trainer, or client profile, the administration UI shows the complete link in
-  a clearly labelled dev/demo modal with copy/open actions. The modal states
-  that production delivery is email-only; this keeps the real invite contract
-  visible while allowing a defense environment without working SMTP credentials.
-- **Administration separates accounts from domain profiles.** One manager page
-  uses tabs for paginated/searchable User accounts, Trainer profiles, and Client
-  profiles. Email is shown on every profile row, while roles and activation
-  state remain account concerns. Thin list and Client CRUD endpoints were added
-  because the baseline services already exposed the data but the controllers
-  could not support a usable administration UI.
-- **Operational calendars share one role-aware surface.** Managers see weekly
-  gym opening hours, holidays, a trainer selector, and the selected trainer's
-  shifts. Trainers enter the same visual language through “Moj raspored” but
-  receive only `/me` data and controls. The backend derives the trainer ID from
-  the JWT for every self-service write and checks ownership again for update and
-  delete, so a changed URL or request body cannot target another trainer.
-- **Schedule reads and edits are additive API capabilities, not a schema
-  redesign.** Gym schedules, holidays, trainers, clients, and trainer schedules
-  gained the minimum list/update/delete operations required by the UI. Existing
-  manager create routes remain intact, `TrainerScheduleDTO` now includes its
-  existing entity date, and no migration was necessary.
-- **Payments are role-scoped views of appointment credits, not monetary
-  revenue.** Managers can list all Payment rows, optionally filter by client,
-  and record a package through the existing write contract; clients can only
-  read `/api/payment/me`, whose client identity is derived from the JWT. The UI
-  deliberately labels values as purchased appointments because Payment still
-  has no amount or currency columns.
-- **The daily calendar is manager-only.** Its aggregate payload contains every
-  appointment and its linked trainer/client identities, so exposing it to all
-  authenticated roles would exceed both trainer ownership and client self-data
-  boundaries. Managers receive a dedicated date-driven timeline; trainers keep
-  their narrower self-service schedule view.
-- **Deleting a domain profile also removes its matching role, not its User.**
-  Trainer and Client deletion now remove `TRAINER`/`CLIENT` through the existing
-  `UserService.removeRole` mechanism in the same transaction. The account and
-  any unrelated roles remain available until a manager explicitly deletes the
-  User from the separate user-administration tab.
-- **Serbian operational dates explicitly request Latin script.** Schedule and
-  holiday labels use the `sr-Latn-RS` locale instead of relying on the browser's
-  default script for `sr-RS`, preventing Cyrillic weekday/month abbreviations
-  from appearing inside the otherwise Latin-script interface.
-- **Phase 6 uses a deliberately broad validation fallback, with authorization
-  kept distinct.** The existing `ApiException` and database-integrity handlers
-  retain their specific statuses, while otherwise-unclassified
-  `RuntimeException`s return HTTP 400 with a minimal `{message}` body. This
-  includes `IllegalArgumentException`, `EntityNotFoundException`, and genuine
-  unexpected runtime failures such as a null dereference; the coarse
-  classification matches the comparison scope and is not presented as a
-  complete production exception taxonomy. A later regression pass added the
-  required more-specific `AccessDeniedException` handler, so appointment
-  ownership/profile failures now return HTTP 403 instead of being swallowed by
-  this 400 fallback. Frontend error banners prefer the server message and use
-  their generic status fallback only when the response has no textual message.
-
-### Upgrade Phase 7 decisions
-
-- **Appointments keep the existing marketplace model and add one self-scoped
-  history endpoint.** `GET /api/appointment/me` serves both `TRAINER` and
-  `CLIENT`, derives the domain profile from the authenticated JWT email, and
-  returns the full past/future list ordered newest-first. No profile id is
-  accepted from the caller. The frontend separates upcoming and historical
-  rows, while trainers additionally see future unassigned slots and clients see
-  future non-full slots. Marketplace queries now exclude past start times.
-- **Future-only actions are enforced on both sides.** Trainers may assign or
-  unassign only future appointments and cannot take an already assigned slot.
-  Clients cannot reserve a past or duplicate appointment. Client cancellation
-  retains the baseline service rule requiring at least 24 hours of notice; the
-  UI disables that action inside the deadline and explains it, while the
-  backend remains authoritative.
-- **The demo dataset is application-seeded and relative to startup date.** A
-  dev-profile `ApplicationRunner` uses JDBC inside one transaction after Flyway
-  has completed. It adds three activated trainers, five activated clients,
-  seven-day gym hours, one upcoming maintenance holiday, trainer work shifts,
-  eight weeks of past and four weeks of future appointments, payments, room
-  check-in history, and seven biweekly measurement points plus three personal
-  records per demo client. Existing Phase 3 Gym/Room seed data is reused rather
-  than duplicated. JDBC is deliberate here: this is demo-fixture generation,
-  not business workflow, and direct batched relational inserts avoid paid email
-  notifications and hundreds of service-level side effects at every dev start.
-- **Idempotence uses a known activated trainer account as the dataset marker.**
-  If `marko.trener@momentum.demo` exists, the runner skips the entire dataset;
-  otherwise all inserts succeed or roll back together. This preserves developer
-  edits and prevents duplicates on restart. It intentionally does not attempt a
-  partial repair if someone manually deletes part of the fixture; removing the
-  marker opts into a fresh all-or-nothing seed on an otherwise clean database.
-- **Cancelled appointments cannot be represented historically by the current
-  schema.** `Appointment` and `ClientAppointment` have no status/cancellation
-  timestamp. A cancellation is therefore represented only by removal of the
-  client link, so the seeder creates realistic occupied and open historical
-  slots but cannot label former reservations as cancelled without an additive
-  audited schema migration. Phase 7 does not invent that larger lifecycle.
-- **JWT signing is explicitly HS256.** JJWT previously selected HS384
-  automatically when a valid secret happened to exceed 47 bytes, while Spring's
-  resource-server decoder accepts HS256; bearer requests then failed with 401.
-  Both access and refresh token generation now pin HS256, matching the documented
-  auth contract for every allowed secret length.
-
-### Upgrade Phase 9 decisions
-
-- **Manager appointment operations use a dedicated screen backed by the daily
-  calendar snapshot.** The manager creates a slot and then manages its trainer
-  and roster in one date-scoped surface. This keeps the Phase 6 read-only daily
-  timeline intact while making the previously backend-only marketplace source
-  usable. The create contract now accepts an optional `roomId`, and a
-  manager-only session-type read endpoint supplies the seeded session IDs so
-  the frontend never hardcodes database identifiers. No schema change was
-  required because `Appointment.room` already existed. The screen defaults to
-  tomorrow rather than today so its initial 09:00 slot is always a valid future
-  planning target, including when a manager opens the page late in the day.
-- **Manager roster changes preserve appointment credits.** The inherited helper
-  decremented a client's remaining credits twice when staff added them and did
-  not restore a credit on staff removal. The manager flow now adjusts each
-  tracking row exactly once, rejects capacity overflow and scheduling overlap,
-  and treats adding an already-linked client as idempotent.
-- **Progress correction reuses the existing ownership-protected API.** PUT and
-  DELETE already existed for both measurements and personal records, so Phase 9
-  adds trainer-only edit/delete controls and pre-populated forms without a new
-  backend contract. Client progress remains read-only. Every mutation reloads
-  entries, records, charts and the cache-backed narrative state immediately.
-- **Manual occupancy stays on the live plan and is available to both staff
-  roles.** The live route is now accessible to MANAGER and TRAINER, with a small
-  room/client check-in form beside the existing WebSocket-driven snapshot. A
-  narrow staff-only occupancy-client endpoint supplies selector options instead
-  of exposing manager account administration to trainers. Check-in/out uses the
-  existing REST mutations; the existing `/topic/gym/occupancy` full snapshot is
-  still the sole real-time update mechanism.
-- **Phase 9 service tests emphasize security-sensitive state transitions.**
-  Mockito coverage now exercises login success/failure, valid registration,
-  password-reset key lifecycle, role add/remove, Trainer and Client profile
-  ownership cleanup, and GymSchedule/Holiday CRUD boundaries. These remain fast
-  unit tests with mocked repositories/email/JWT boundaries; browser QA covers
-  the cross-role operational flows.
-
-## Known issues (intentionally not fixed in the baseline-hygiene session)
-
-These were found during the repo-hygiene pass that produced `baseline-v1`.
-They are documented here rather than fixed because fixing them changes
-runtime behavior, and the goal of that session was a stable, unchanged-behavior
-baseline - not new features or behavior changes. They are fair game for
-either upgrade session to pick up:
-
-- **Resolved in Phase 6:** `forgot-password` and `reset-password` are public in
-  both interceptor registrations, and the reset mapping now consistently uses
-  `/reset-password` with a leading slash.
-- `POST /api/user/login-refresh` is also not excluded from `JwtInterceptor`,
-  so refreshing requires a currently-valid access token - unusual for a
-  refresh endpoint, whose point is normally to work *after* expiry. **Resolved
-  in Phase 3:** `/api/user/login-refresh` is now excluded from both custom
-  interceptors and accepts a valid refresh token without an access token.
-- Refresh tokens have no rotation and no server-side revocation.
-- `AuditorAwareImpl` always returns empty (see Audit section above) -
-  `createdBy`/`updatedBy` are effectively dead columns.
-- `TrainerSchedule.date` is annotated `unique = true` at the entity level
-  (`model/schedule/TrainerSchedule.java`), which would incorrectly allow only
-  one trainer total to have a schedule row on any given date - it should
-  almost certainly be a composite `(trainer_id, date)` constraint. No DB-level
-  unique constraint actually exists in the migrations, so entity and schema
-  disagree; this has had no observed effect yet but is worth fixing carefully
-  (with a new migration) before relying on it.
-- **Resolved in the Phase 6 continuation:** the aggregate daily calendar is
-  explicitly MANAGER-only and is consumed by the manager timeline screen.
-- Phase 2's explicit `ApiException`, database-integrity failures, and Spring
-  Security `AccessDeniedException`s have structured status-bearing JSON
-  responses. Other runtime failures use Phase 6's coarse HTTP 400 `{message}`
-  fallback rather than a complete production exception taxonomy.
-- **Resolved in the final hardening phase:** `maven.test.skip` was removed and
-  focused upgrade-service tests now run by default with `mvn test`. The suite
-  uses mocked repositories and a fake Claude boundary, so it needs neither
-  infrastructure nor network/API budget.
-- `application.yaml` and `application-dev.yaml` duplicate almost every
-  property instead of the dev file overriding only what differs (currently
-  just `flyway.locations`) - keep both in sync manually until this is
-  restructured.
-- The Gmail account used for `MAIL_USERNAME` had its app password committed
-  in git history (now moved to an env var, but the old value is still
-  recoverable from history) - **the app password must be rotated in the
-  Gmail account**, this repo change alone does not invalidate it.
-
-## Session log
-
-- 2026-08-03: Repo-hygiene baseline pass (`chore/repo-hygiene` -> `main`,
-  tagged `baseline-v1`). Merged the already-diverged `feature/notification`
-  work into `main` (it turned out `origin/main` already had it via a merged
-  PR; only the local `main` ref was stale). Moved Gmail/JWT secrets to env
-  vars (`.env.example`), added CORS config (`app.cors.allowed-origins`,
-  default `http://localhost:5173`), removed the dead-code `"/**"` permitAll
-  entry from `SecurityConfig` and documented the real (interceptor-based)
-  authorization model above, enabled Postgres volume persistence in
-  `docker-compose.yaml` and fixed Redis auth (`--requirepass`, since the
-  official image ignores `REDIS_PASSWORD`), added root `.gitignore` and this
-  file. No functional/behavioral changes beyond those explicitly listed here.
-- 2026-08-04: Upgrade Phase 1 data layer (`upgrade/codex`). Added `Gym`, `Room`,
-  `RoomCheckIn`, `ClientProgressEntry`, and `ClientPersonalRecord` entities with
-  repositories, DTOs, MapStruct mappers, an optional `Appointment.room` link,
-  and Flyway migrations `V1.0011`-`V1.0014`, including matching Envers tables.
-  No service, controller, WebSocket, LLM, or frontend code was added.
-- 2026-08-04: Clarified shared requirements after Phase 1: the database now
-  enforces one active room check-in per client globally (`V1.0015`), and
-  appointments expose a lightweight `RoomSummaryDTO` instead of full room
-  geometry. These are product requirements for subsequent phases.
-- 2026-08-05: Upgrade Phase 2 service/API layer (`upgrade/codex`). Added
-  manager-controlled Gym/Room CRUD, staff check-in/check-out, timezone-aware
-  combined occupancy REST/STOMP snapshots, cached Anthropic-backed manager and
-  client-progress narratives, and trainer-owned/client-self progress APIs.
-  Added no frontend or schema migrations.
-- 2026-08-06: Upgrade Phase 3 frontend preparation (`upgrade/codex`). Made
-  `POST /api/user/login-refresh` a public auth endpoint in both custom
-  interceptor registrations so silent refresh continues after access-token
-  expiry.
-- 2026-08-06: Upgrade Phase 3 manager frontend (`upgrade/codex`). Added the
-  React/Vite auth and multi-role shell, React-Konva room editor, animated
-  REST/STOMP live occupancy plan, and dev-only Momentum Fitness floor-plan seed.
-- 2026-08-06: Phase 3 browser QA (`upgrade/codex`). Installed a Playwright MCP
-  browser runtime and changed the login identifier control so the seeded
-  `admin` manager account can submit through native browser validation.
-- 2026-08-07: Phase 4 AI text formatting fix (`upgrade/codex`). Updated both
-  Anthropic system prompts to require blank-line-separated plain text without
-  Markdown syntax, preserving the frontend's safe React-text rendering. Forced
-  real Claude regeneration for manager and trainer progress insights and
-  captured browser QA screenshots confirming that `#` and `**` are absent.
-- 2026-08-07: Final defense hardening (`upgrade/codex`). Enabled Maven tests and
-  added focused coverage for Gym/Room invariants, occupancy source summation and
-  the global active-check-in guard, trainer-client ownership, and AI cache
-  hit/forced-refresh behavior using a fake Claude service. Added explicit live
-  loading/disconnection states and a branded favicon, plus the committed
-  `docs/defense-demo-script.md` runbook. A destructive fresh-volume rehearsal
-  applied all 16 Flyway migrations and verified seeded logins, five demo rooms,
-  live check-in/checkout with duplicate HTTP 409, API-created trainer schedule
-  and appointment, trainer-owned progress writes, client read-only visibility,
-  and the expected HTTP 503 AI response when no Anthropic key is configured.
-- 2026-08-08: Upgrade Phase 6 (`upgrade/codex`). Added public invite activation,
-  forgot-password and reset-password screens; manager administration for user,
-  trainer, and client records with an explicitly labelled demo activation link;
-  gym hours and holiday management; manager trainer-schedule oversight; and
-  JWT-derived trainer self-service schedule routes/UI. Backend and frontend
-  builds passed, and an isolated fresh database verified activation/login,
-  schedule and holiday writes, own-schedule reads, and HTTP 403 on a cross-trainer
-  self-service update attempt.
-- 2026-08-08: Phase 6 continuation (`upgrade/codex`). Added manager payment
-  history/filter/create and client self-payment history, restricted the global
-  daily calendar to managers and added its timeline UI, and made Trainer/Client
-  profile deletion transactionally remove the corresponding role while
-  preserving the underlying User account.
-- 2026-08-08: Upgrade Phase 7 (`upgrade/codex`). Added JWT-scoped trainer/client
-  appointment history, trainer self-assignment marketplace and client booking/
-  cancellation UI, plus an idempotent relative dev seeder with a defense-ready
-  operational dataset. A fresh-volume rehearsal applied all 17 migrations,
-  generated past/future data, verified restart idempotence, and completed live
-  client reserve/cancel and trainer assign/own-list flows.
-- 2026-08-08: Phase 6/7 completion hardening (`upgrade/codex`). Added focused
-  tests for trainer self-service ownership, Client CRUD, payment scoping,
-  manager-only calendar access, appointment marketplace actions and self-scoped
-  history. Fixed the broad runtime handler's `AccessDeniedException` regression
-  with an explicit HTTP 403 handler and MVC test. Rewrote the defense runbook as
-  a complete activation-to-booking scenario. A destructive fresh-volume run
-  cleaned stale Maven output, applied all 17 production/dev migrations, started
-  backend and frontend, and verified activation/login, manager holiday creation,
-  five-room live occupancy check-in/out, seeded progress, trainer self-service,
-  client reserve/cancel, trainer assign/unassign, live forbidden response, and
-  unchanged fixture counts after backend restart. Runtime AI calls returned the
-  intentional HTTP 503 because this verification environment had no
-  `ANTHROPIC_API_KEY`; fake-Claude automated tests remained green.
-
-## Final upgrade summary (Phases 1-7)
-
-The upgrade now covers the full usable application lifecycle, not only its three
-original demonstration pillars. **Phase 1** added the migration-driven, audited
-Gym/Room/check-in and client-progress data model: one real installation row,
-rotated-rectangle room geometry, an optional appointment-room link, historical
-manual check-ins with one globally active room per client, typed body metrics,
-and free-text personal records with fixed units. **Phase 2** exposed that model
-through manager-controlled floor-plan CRUD, staff check-in/out, timezone-aware
-REST/STOMP occupancy snapshots, trainer-owned/client-self progress APIs, and
-pinned Claude Haiku narratives with purpose-specific Redis TTLs. Manager
-“revenue” remains an explicitly labelled purchased-appointment proxy because
-Payment has no amount or currency.
-
-**Phases 3 and 4** introduced the React 19/TypeScript/Vite SPA, durable multi-role
-JWT sessions with refresh, a responsive React-Konva room editor, animated live
-occupancy, manager insight presentation, and a shared Recharts progress view.
-AI text is rendered as plain React text rather than HTML/Markdown, trainer client
-discovery follows the same appointment-history ownership rule as the backend,
-and clients receive read-only self-scoped progress screens. The frontend stores
-bearer tokens in local storage as a documented thesis-scale trade-off.
-
-**Phase 5** hardened the three pillars with focused repository/service tests, a
-fake Claude boundary, explicit loading/disconnection UI, a defense runbook, and
-the first destructive fresh-volume rehearsal. **Phase 6** completed public
-invite activation and password recovery, manager account/Trainer/Client CRUD,
-weekly gym hours and holidays, manager schedule oversight, JWT-derived trainer
-self-service shifts/absence, role-scoped payment history, and a manager-only
-aggregate daily calendar. Deleting a domain profile removes only its matching
-role, while the underlying User and unrelated roles remain.
-
-**Phase 7** completed the trainer/client booking lifecycle: one JWT-scoped
-`/api/appointment/me` history endpoint, future-only client marketplace
-reservation with a 24-hour cancellation deadline, and trainer self-assignment/
-unassignment of future unassigned slots. A transactional dev `ApplicationRunner`
-creates a date-relative, defense-ready dataset and uses one known trainer email
-as an all-or-nothing idempotence marker. Cancellation history cannot be retained
-because the inherited schema represents cancellation by deleting the
-ClientAppointment link and has no status/timestamp column.
-
-The final completion pass extends automated coverage to Phase 6/7 security and
-business flows and makes Spring Security `AccessDeniedException` consistently
-return HTTP 403 ahead of the broad RuntimeException-to-400 fallback. The final
-defense runbook follows activation, manager operations, all three wow pillars,
-trainer self-service, and client/trainer booking in one role-labelled scenario,
-with core/time-permitting branches and a plan B for every external dependency.
-
-The implementation deliberately retains the baseline's interceptor-based REST
-authorization, stateless non-rotating refresh tokens, explicit Flyway/Envers
-migrations, single-installation Gym assumption, browser-local token storage, and
-the remaining known issues above. AI endpoints require a real
-`ANTHROPIC_API_KEY` and return HTTP 503 rather than fabricated text when it is
-absent; automated tests fake only the Claude boundary. Fresh-volume verification
-requires a clean Maven output directory as well as an empty database volume so
-deleted/renamed resource artifacts cannot survive in `target/classes` and appear
-to Flyway as duplicate migrations.
-
-
-
+- Refresh tokens have no rotation or server-side revocation.
+- `AuditorAwareImpl` cannot identify interceptor-authenticated users, so `createdBy`/`updatedBy` remain empty.
+- `TrainerSchedule.date` has incorrect entity-level `unique = true`; schema has no matching constraint. It should be `(trainer_id, date)`.
+- Broad runtime handling reports not-found cases and bugs as 400 instead of a complete 404/500 taxonomy.
+- `application.yaml` and `application-dev.yaml` duplicate nearly every property.
+- A Gmail App Password remains recoverable from Git history and must be rotated.
+- `BaseEntity` equality ignores subclass IDs, so distinct unsaved entities can compare equal in sets.
+- Appointment reservation/roster addition can reduce remaining session credits below zero.
