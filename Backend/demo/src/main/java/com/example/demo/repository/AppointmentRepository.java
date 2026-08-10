@@ -1,8 +1,12 @@
 package com.example.demo.repository;
 
 import com.example.demo.model.Appointment;
+import com.example.demo.model.user.Trainer;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -11,6 +15,13 @@ import java.util.List;
 
 @Repository
 public interface AppointmentRepository extends JpaRepository<Appointment, Integer> {
+
+    /** Unassigns a trainer from every appointment they're on - used before deleting a Trainer
+     * row (see UserServiceImpl.delete()), since Appointment.trainer is nullable and a deleted
+     * trainer must not leave a dangling FK reference behind. */
+    @Modifying
+    @Query("UPDATE Appointment a SET a.trainer = null WHERE a.trainer = :trainer")
+    void clearTrainer(@Param("trainer") Trainer trainer);
     boolean existsByClientAppointmentsClientIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(Integer clientId,
                                                                                                          LocalDate date,
                                                                                                          LocalTime endTime,

@@ -3,6 +3,7 @@ package com.example.demo.repository.user;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientAppointment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,14 @@ import java.util.List;
 @Repository
 public interface ClientAppointmentRepository extends JpaRepository<ClientAppointment, Integer> {
     List<ClientAppointment> findByClientIdAndAppointmentDate(Integer clientId, LocalDate date);
+
+    /** Bulk JPQL delete rather than loading+deleting entities - see UserServiceImpl.delete() for
+     * why (BaseEntity's id-less equals()/hashCode() corrupts Hibernate's cascade traversal over
+     * these Set-typed collections when an Appointment's own bidirectional clientAppointments
+     * collection gets pulled in; a bulk delete never touches Java object equality). */
+    @Modifying
+    @Query("DELETE FROM ClientAppointment ca WHERE ca.client = :client")
+    void deleteByClient(@Param("client") Client client);
 
     /**
      * Whether a trainer has ever actually trained a client - derived from shared appointment

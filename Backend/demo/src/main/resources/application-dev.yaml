@@ -66,6 +66,9 @@ app:
   registration-key-validity-minutes: 10
   reset-key-validity-minutes: 10
 
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+
   email:
     activation-template: email/activation-email.html
     reset-password-template: email/reset-password-email.html

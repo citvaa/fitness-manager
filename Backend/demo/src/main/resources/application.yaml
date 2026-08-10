@@ -65,6 +65,12 @@ app:
   registration-key-validity-minutes: 10
   reset-key-validity-minutes: 10
 
+  # Base frontend origin the activation/reset-password email links point to (see
+  # ActivationEmailData/ForgetPasswordEmailData and the two email templates). Change to the real
+  # frontend domain in production - never leave it as the localhost dev default.
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+
   # Frontend origin(s) allowed to call this API with credentials (see
   # config.web.CorsConfig). Change to the real frontend domain in production.
   cors:

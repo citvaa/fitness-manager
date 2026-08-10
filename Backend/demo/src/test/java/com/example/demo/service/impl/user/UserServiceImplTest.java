@@ -3,10 +3,18 @@ package com.example.demo.service.impl.user;
 import com.example.demo.config.core.AppConfig;
 import com.example.demo.enums.Role;
 import com.example.demo.mapper.user.UserMapper;
+import com.example.demo.model.user.Client;
 import com.example.demo.model.user.User;
 import com.example.demo.model.user.UserRole;
+import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.PaymentRepository;
+import com.example.demo.repository.gym.RoomCheckInRepository;
+import com.example.demo.repository.progress.ClientPersonalRecordRepository;
+import com.example.demo.repository.progress.ClientProgressEntryRepository;
+import com.example.demo.repository.schedule.TrainerScheduleRepository;
+import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
+import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.user.UserRepository;
 import com.example.demo.repository.user.UserRoleRepository;
@@ -23,9 +31,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
@@ -63,7 +76,21 @@ class UserServiceImplTest {
     @Mock
     private ClientRepository clientRepository;
     @Mock
+    private ClientSessionTrackingRepository clientSessionTrackingRepository;
+    @Mock
+    private ClientAppointmentRepository clientAppointmentRepository;
+    @Mock
+    private RoomCheckInRepository roomCheckInRepository;
+    @Mock
+    private ClientProgressEntryRepository clientProgressEntryRepository;
+    @Mock
+    private ClientPersonalRecordRepository clientPersonalRecordRepository;
+    @Mock
     private PaymentRepository paymentRepository;
+    @Mock
+    private AppointmentRepository appointmentRepository;
+    @Mock
+    private TrainerScheduleRepository trainerScheduleRepository;
     @Mock
     private EmailService emailService;
 
@@ -72,7 +99,10 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new UserServiceImpl(userRepository, userMapper, passwordEncoder, appConfig, jwtUtil,
-                userRoleRepository, trainerRepository, clientRepository, paymentRepository, emailService);
+                userRoleRepository, trainerRepository, clientRepository, clientSessionTrackingRepository,
+                clientAppointmentRepository, roomCheckInRepository, clientProgressEntryRepository,
+                clientPersonalRecordRepository, paymentRepository, appointmentRepository,
+                trainerScheduleRepository, emailService);
     }
 
     @Test
@@ -147,9 +177,56 @@ class UserServiceImplTest {
     }
 
     @Test
+    void delete_clearsClientDependentsBeforeBulkDeletingClientAndUser() {
+        // Regression test for the "Obriši" (delete) bug - see AGENTS.md "Upgrade: manager-testing
+        // fixes". A client's clientSessionTrackings/clientAppointments must be cleared via bulk
+        // JPQL delete (deleteByClient) before the Client/User rows themselves go, or the DB FK
+        // constraint (or, when attempted via JPA cascade instead, a deeper pre-existing
+        // BaseEntity equals()/hashCode() bug) blocks the whole delete.
+        User user = User.builder().id(1).email("client@gym.com").build();
+        Client client = Client.builder().id(9).user(user).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+        when(trainerRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.empty());
+
+        service.delete(1);
+
+        verify(clientSessionTrackingRepository).deleteByClient(client);
+        verify(clientAppointmentRepository).deleteByClient(client);
+        verify(roomCheckInRepository).deleteByClient(client);
+        verify(clientProgressEntryRepository).deleteByClient(client);
+        verify(clientPersonalRecordRepository).deleteByClient(client);
+        verify(paymentRepository).deleteByUser(user);
+        verify(clientRepository).deleteByUser(user);
+        verify(userRoleRepository).deleteByUser(user);
+        verify(userRepository).deleteUser(user);
+        // The entity-level delete(User) must stay unused - it cascades over the eagerly-loaded
+        // userRoles collection and hits the equals()/hashCode() bug this fix works around.
+        verify(userRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_detachesTrainerFromAppointmentsBeforeDeletingTrainer() {
+        User user = User.builder().id(2).email("trainer@gym.com").build();
+        com.example.demo.model.user.Trainer trainer =
+                com.example.demo.model.user.Trainer.builder().id(5).user(user).build();
+        when(userRepository.findById(2)).thenReturn(Optional.of(user));
+        when(clientRepository.findByUserEmail("trainer@gym.com")).thenReturn(Optional.empty());
+        when(trainerRepository.findByUserEmail("trainer@gym.com")).thenReturn(Optional.of(trainer));
+
+        service.delete(2);
+
+        verify(appointmentRepository).clearTrainer(trainer);
+        verify(trainerScheduleRepository).deleteByTrainer(trainer);
+        verify(trainerRepository).delete(trainer);
+        verify(userRepository).deleteUser(user);
+    }
+
+    @Test
     void requestPasswordReset_setsResetKeyAndSendsEmailWhenUserExists() {
         User user = User.builder().id(1).email("a@gym.com").build();
         when(appConfig.getResetKeyValidityMinutes()).thenReturn(30);
+        when(appConfig.getFrontend()).thenReturn(new AppConfig.Frontend());
         when(userRepository.findByEmail("a@gym.com")).thenReturn(Optional.of(user));
 
         service.requestPasswordReset("a@gym.com");
@@ -233,5 +310,54 @@ class UserServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(userRoleRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeRole_rejectsManagerRemovingOwnManagerRole() {
+        UserRole existing = new UserRole();
+        existing.setRole(Role.MANAGER);
+        User user = User.builder().id(1).email("admin@gym.com").userRoles(new HashSet<>(java.util.List.of(existing))).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "admin@gym.com")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            assertThatThrownBy(() -> service.removeRole(1, Role.MANAGER))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            verify(userRoleRepository, never()).delete(any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void removeRole_allowsManagerRemovingAnotherUsersManagerRole() {
+        UserRole existing = new UserRole();
+        existing.setRole(Role.MANAGER);
+        User user = User.builder().id(2).email("other@gym.com").userRoles(new HashSet<>(java.util.List.of(existing))).build();
+        when(userRepository.findById(2)).thenReturn(Optional.of(user));
+
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "admin@gym.com")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            service.removeRole(2, Role.MANAGER);
+
+            verify(userRoleRepository).delete(existing);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 }

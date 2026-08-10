@@ -1,7 +1,11 @@
 package com.example.demo.repository.gym;
 
 import com.example.demo.model.gym.RoomCheckIn;
+import com.example.demo.model.user.Client;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -18,4 +22,11 @@ public interface RoomCheckInRepository extends JpaRepository<RoomCheckIn, Intege
 
     /** All check-ins (open or closed) since a point in time - used for the AI manager-insights aggregation. */
     List<RoomCheckIn> findByCheckedInAtAfter(LocalDateTime since);
+
+    /** Bulk JPQL delete - used before deleting a Client, since RoomCheckIn.client is not one of
+     * Client's cascade=ALL collections (see UserServiceImpl.delete()) and would otherwise block
+     * the Client row with an FK violation. */
+    @Modifying
+    @Query("DELETE FROM RoomCheckIn rc WHERE rc.client = :client")
+    void deleteByClient(@Param("client") Client client);
 }
