@@ -9,6 +9,13 @@ const PX_PER_UNIT = 20 // rendering scale: 1 geometry unit ("meter") = 20px on c
 const CANVAS_WIDTH = 900
 const CANVAS_HEIGHT = 600
 
+// Smallest a room may be resized to (in geometry units/"meters") - small enough for a real
+// closet-sized room, but large enough that the name label (e.g. "Recepcija") and the live-view
+// occupancy count rendered on top of the rectangle always stay inside its bounds instead of
+// spilling out. See AGENTS.md ("Upgrade: manager-testing fixes").
+const MIN_ROOM_WIDTH_UNITS = 4
+const MIN_ROOM_HEIGHT_UNITS = 2.5
+
 const DEFAULT_COLOR = '#2f83fb'
 
 function RoomShape({
@@ -65,8 +72,8 @@ function RoomShape({
             onChange({
               posX: node.x() / PX_PER_UNIT,
               posY: node.y() / PX_PER_UNIT,
-              width: Math.max(0.5, (node.width() * scaleX) / PX_PER_UNIT),
-              height: Math.max(0.5, (node.height() * scaleY) / PX_PER_UNIT),
+              width: Math.max(MIN_ROOM_WIDTH_UNITS, (node.width() * scaleX) / PX_PER_UNIT),
+              height: Math.max(MIN_ROOM_HEIGHT_UNITS, (node.height() * scaleY) / PX_PER_UNIT),
               rotationDegrees: node.rotation(),
             })
           }}
@@ -86,7 +93,10 @@ function RoomShape({
           rotateEnabled
           flipEnabled={false}
           boundBoxFunc={(oldBox, newBox) =>
-            newBox.width < 15 || newBox.height < 15 ? oldBox : newBox
+            newBox.width < MIN_ROOM_WIDTH_UNITS * PX_PER_UNIT ||
+            newBox.height < MIN_ROOM_HEIGHT_UNITS * PX_PER_UNIT
+              ? oldBox
+              : newBox
           }
         />
       )}
