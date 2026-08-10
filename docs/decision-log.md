@@ -2261,3 +2261,151 @@ new surface area - and it still found a real, previously-invisible regression, w
 data point for the thesis: dedicated hardening passes catch things incremental feature work does
 not, even on a branch that had already been "verified end-to-end" after every single prior phase.
 
+## Upgrade: manager-testing round 2 decisions
+
+A second round of manual MANAGER-area testing (2026-08-10, after the "manager-testing fixes" round
+that produced commits 2148675/72403c3), plus one new architectural requirement (a super-admin
+hierarchy) and a larger/more realistic `DevDataSeeder`. All seven items below were verified live
+against a running backend+frontend during this session, not just compiled/reasoned about - see
+each item for how.
+
+1. **Time-picker icon invisible.** The round-1 fix (`input[type='date'] { color-scheme: dark }` in
+   `index.css`) only covered `<input type="date">`, not `<input type="time">` (used in
+   `GymScheduleHolidaysTab`). Extended the same selector to `input[type='time']`. Mechanically
+   identical to the already-shipped date fix; not independently visually re-confirmed this session
+   since no browser automation tool was available (see "what could not be visually verified"
+   below).
+
+2. **Gym-schedule overlap error not surfaced, input not reverted.** `GymScheduleHolidaysTab.saveDay`
+   had no `catch` at all - a rejected (overlapping) save left the draft input showing the failed
+   value with no error message. Added the same `extractErrorMessage(err, fallback)` idiom used
+   elsewhere in the frontend, plus resetting that day's draft back to the currently-saved
+   `openingTime`/`closingTime` on failure. **Verified live** via the real backend API: `POST
+   /api/schedule/gym` with Friday hours overlapping Thursday's overnight close (`Thursday
+   06:00-02:00`, tried `Friday 01:00-22:00`) returned `400` with a message naming both conflicting
+   days, and a follow-up `GET` confirmed Friday's stored row was untouched (`02:30-22:00`,
+   unchanged) - exactly the state the new frontend code reverts its draft to.
+
+3. **Date-input placeholder ("dd.mm.gggg"-shaped) still ugly despite `lang="sr-Latn-RS"`.**
+   Investigated the real cause: Chromium's native `<input type="date">` derives its empty-state
+   segment placeholder format from the browser/OS UI language, not the page's `lang` attribute (an
+   HTML5 form-control quirk, not a CSS reachability gap - there is no `placeholder`-attribute or
+   CSS hook into it either). Firefox does honor `lang` for this, which is presumably why the
+   round-1 fix looked correct without a live check in Chrome/Edge. **This is a confirmed, real
+   limitation, not a "fixed" claim** - no code change was made for this item beyond documenting it
+   (see AGENTS.md "Known issues" for the accepted alternative: hide the native placeholder while
+   unfocused-and-empty and show a custom "dd.mm.gggg" label instead, left unbuilt because it needs
+   visual confirmation this session had no browser tooling to provide).
+4. **`UserServiceImpl.create()` sent the activation email before `save()`.** Since
+   `EmailService.sendActivationEmail` is `@Async` (see `AsyncEmailServiceImpl`), a `save()` failure
+   after the send call still resulted in a delivered activation email for a user that was never
+   persisted. Fixed: added an explicit `findByEmail` pre-check (throws `IllegalArgumentException`
+   -> `400` "Korisnik sa ovim email-om već postoji") and moved the email send to strictly after
+   `save()` succeeds.
+   - **(a) Audit of every other `emailService`/`notificationService` call site** in
+     `service.impl/**` (done via a dedicated read-only sweep): no other instance of the
+     send-before-save pattern exists. `UserServiceImpl.requestPasswordReset` (save then send),
+     `AppointmentServiceImpl.create` (save then notify), and both `RoomCheckInServiceImpl`
+     check-in/check-out paths (save then broadcast) are all already correctly ordered.
+     `NotificationServiceImpl`/`NotificationScheduler`/`OccupancyScheduler` are pure read-then-
+     broadcast paths with no save of their own to order against.
+   - **(b) `DataIntegrityViolationException` was falling into the generic `RuntimeException`
+     handler and leaking the raw JDBC/Hibernate error message** (constraint name, table name, SQL
+     state) straight to the client whenever a unique/FK constraint was violated at the DB level
+     (e.g. a race past the new `findByEmail` pre-check). Added a dedicated
+     `@ExceptionHandler(DataIntegrityViolationException.class)` mapping to `409` with a generic
+     Serbian message ("Već postoji unos sa ovim podacima").
+   - **Verified live, including the actual race**: firing 6 concurrent `POST /api/user` requests
+     for the same new email produced one `201`, four clean `400`s ("Korisnik sa ovim email-om već
+     postoji" - caught by the pre-check), and **one real `409`** ("Već postoji unos sa ovim
+     podacima" - the new `DataIntegrityViolationException` handler actually firing on a genuine DB
+     constraint hit that slipped past the pre-check under the race). Also verified the
+     duplicate-email path never sends an email: creating a duplicate produced no
+     `AsyncEmailServiceImpl` log line, while a control creation of a genuinely new address did log
+     `"Sending email in thread: SimpleAsyncTaskExecutor-1"` - confirming the log-absence check was
+     meaningful, not just silence from an unrelated cause.
+5. **Seed room ("Recepcija") below the room editor's 4m x 2.5m minimum, visually overflowing.**
+   The round-1 fix (commit 72403c3) only prevents *new* shrinking below the floor in the editor UI
+   - it does nothing for rooms already smaller than that. Added a new dev-data migration,
+   `V1.0021__enforce_minimum_room_size.sql` (an `UPDATE room SET width = 4.0 WHERE width < 4.0`
+   plus the equivalent for `height`/2.5, not an `INSERT` - it must repair rows on databases that
+   already ran the original seed migration and were then manually resized through the UI, not just
+   seed a fresh database). Applies automatically on next backend start against any existing
+   database (Flyway runs it once, tracked in `flyway_schema_history`) - no manual action needed
+   from whoever is testing this, beyond restarting the backend once. **Verified live** two ways:
+   (1) the actual real dev database's `Recepcija` row measured 7x4 (already at/above the floor) at
+   the time this was tested - the room this session found no longer needed fixing, though the gap
+   the migration targets is real and it is defensive against it regardless; (2) proved the
+   migration's exact `UPDATE` logic on that same database inside a transaction that was rolled back
+   afterward - manually shrank `Recepcija` to `2x1.5`, ran the two `UPDATE` statements, confirmed
+   the row became `4x2.5`, then `ROLLBACK` to leave the real data unchanged.
+6. **New architectural requirement: a super-admin hierarchy.** Previously any `MANAGER` could
+   grant/revoke `MANAGER` on any account. Added `Role.ADMIN` as a fourth enum value, **additive**
+   to `MANAGER` (never held alone) - chosen over replacing `MANAGER` because the existing `admin`
+   seed account still needs ordinary `MANAGER`-gated admin-area access *plus* the new exclusive
+   `MANAGER`-grant/revoke power, and because every existing `@RoleRequired("MANAGER")` endpoint
+   across the whole admin area stays correct with zero changes. New migration
+   `V1.0020__add_admin_role.sql` (before the room-size migration above, so schema changes land
+   before dev-data repairs) inserts the `ADMIN` role row and grants it to the single `admin` user.
+   Backend enforcement lives in `UserServiceImpl.addRole`/`removeRole`: a new `isCurrentUserAdmin()`
+   helper reads the `roles` claim off the JWT `Authentication` principal (same idiom as the
+   existing `isCurrentlyAuthenticatedUser`), and both methods throw `AccessDeniedException` (`403`)
+   when `role == Role.MANAGER` and the caller isn't `ADMIN` - checked *before* the `findById` DB
+   call, so a non-admin's attempt never even loads the target user. No new `@RoleRequired` value
+   was introduced deliberately - `addRole`/`removeRole` are one shared endpoint pair for every
+   role, and only the `MANAGER` case needs the extra gate. Frontend: `Role` type gained `'ADMIN'`;
+   `UsersTab`'s "Dodaj/Oduzmi MANAGER" button and `ManagersTab`'s entire create form are hidden for
+   non-`ADMIN` users (`useAuthStore` exposes `user.roles.includes('ADMIN')`); `AppShell`'s role
+   switcher explicitly filters `ADMIN` out of the switchable-role list, since it's a permission
+   flag, not a switchable area with its own nav. **Verified live end to end**: logged in as `admin`
+   (JWT `roles: ["ADMIN","MANAGER"]`), granted `citva` a temporary `MANAGER` role via the API
+   (`200`); logged in as `citva` (JWT `roles: ["CLIENT","MANAGER"]`, no `ADMIN`) and confirmed both
+   `POST /api/user/{id}/role?role=MANAGER` and `DELETE .../role?role=MANAGER` on a third account
+   returned `403` with the expected Serbian messages; reverted `citva` back to `CLIENT`-only via
+   `admin` afterward, confirmed by re-querying `user_role`, so the real database was left exactly
+   as found. Also updated 3 existing Mockito unit tests that broke against the new gate
+   (`UserServiceImplTest`) and added 2 new ones (`addRole_rejectsNonAdminGrantingManagerRole`/
+   `addRole_allowsAdminGrantingManagerRole`, and the `removeRole` equivalents) - full suite (152
+   tests) passes.
+7. **Larger, more realistic `DevDataSeeder`.** Added one ordinary `MANAGER` (no `ADMIN`), a 5th
+   trainer, and scaled clients from 6 to 50 (44 generated from first/last-name pools + the 5
+   existing explicit ones + `citva`). Appointments are now generated for the **current calendar
+   month** (both already-elapsed and still-upcoming days), not a fixed past/future week window:
+   each of the 5 trainers works a fixed 3 weekdays for the whole month, each of the ~50 clients
+   independently prefers its own 3 weekdays, and on any date with a working trainer every
+   interested client is booked into an individual/small-group/big-group appointment (weighted
+   ~15/30/55% respectively - the only way ~50 clients' bookings fit into 5 trainers' schedules
+   while still leaving room for individual sessions to exist at all). Payments are generated
+   *after* appointment generation, from the actual resulting per-(client, session-type) booking
+   counts - ~90% of clients get a payment that fully covers what they booked, the rest are
+   deliberately underpaid (a realistic "used more than paid for" edge case, not a seeding bug - see
+   the known lack of a floor check on `remainingAppointments`).
+   - **Hit the `BaseEntity` id-less-`equals()` issue a third time** (see AGENTS.md "Known issues"):
+     the first version of this generator added multiple freshly-built `ClientAppointment`s to the
+     same `Appointment`'s `Set<ClientAppointment>`, and since all compared equal (all-null audit
+     fields), the `HashSet` silently kept only the first - every appointment ended up capped at
+     exactly 1 participant regardless of session capacity, discovered by seeding into a throwaway
+     database and finding `avg_participants == 1.0` for every session type including the
+     10-capacity big-group sessions. Fixed by tracking participant counts in an `IdentityHashMap`
+     (identity, not `equals()`) and saving `ClientAppointment` rows directly via their own
+     repository instead of through the entity's `Set` field. Also hit a duplicate-email collision
+     in the name-pool generator (`i%30`/`i%20` modulo pairing reproduced one of the 5 explicit
+     clients' emails at a specific `i`) - fixed by tracking used emails in a `Set` and skipping
+     forward past any collision.
+   - **Verified live** by running a second, fully isolated app instance (throwaway Postgres
+     container on a different port, never touching the real dev database) end to end: seeding
+     completed in ~6 seconds and produced 5 trainers, 50 clients, 226 appointments, 667
+     `ClientAppointment` rows with the expected capacity-respecting distribution (114 appointments
+     with 1 participant, 52 with 3, 30 with 10, a handful of partial-fill remainders), 146
+     payments, and per-client totals clustered around ~12-13 bookings for the month (matching the
+     ~3/week target) - then tore the throwaway container and app instance down.
+
+**What could not be visually verified this session**: no Chrome/browser automation tool was
+connected (the extension reported not connected), so items 1 and 3 above (both pure CSS/visual)
+were not visually screenshotted in a real browser - item 1's fix is mechanically identical to the
+already-shipped, previously-verified date-input fix, and item 3's finding is a root-cause
+explanation with no accompanying code change, not a claim of a visual fix. Items 2, 4, 5, 6, and 7
+were verified through direct backend API calls, database queries, and (for 7) a full isolated
+end-to-end run - not through clicking in a browser, but exercising the real running application
+and its real database rather than reasoning about the code alone.
+

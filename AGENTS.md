@@ -97,11 +97,14 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **User** (`model/user/User.java`) - email, password (null until account activation),
   `isActivated`, `notificationPreference` (`EMAIL`/`PUSH`/`BOTH`), registration/reset keys with
   validity timestamps, `Set<UserRole>`.
-- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT`. A single `User`
-  can hold multiple roles. Adding a role via `UserService.addRole` only inserts this join row - it
-  does **not** create the matching `Trainer`/`Client` domain entity (only
+- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`. A single
+  `User` can hold multiple roles. Adding a role via `UserService.addRole` only inserts this join
+  row - it does **not** create the matching `Trainer`/`Client` domain entity (only
   `TrainerController.create`/`ClientController.create` do that); removing a `Trainer`/`Client`
-  correspondingly also removes the matching role via `UserService.removeRole`.
+  correspondingly also removes the matching role via `UserService.removeRole`. `ADMIN` is additive
+  to `MANAGER` (never held alone) and is the only role allowed to grant/revoke `MANAGER` itself -
+  see "Upgrade: manager-hierarchy decisions" below and `docs/decision-log.md`. Exactly one seed
+  account (`admin`, via migration `V1.0020__add_admin_role.sql`) has it.
 - **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus` (`FULL_TIME` /
   `CONTRACT` / `FORMER_EMPLOYEE`).
 - **Client** - 1:1 with `User`; owns `Payment`s, `ClientSessionTracking`s, `ClientAppointment`s.
@@ -194,6 +197,15 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   `SecurityConfig` via `.cors(...)`), driven by `app.cors.allowed-origins` in `application.yaml`
   (defaults to `http://localhost:5173` for local frontend dev). **Change this to the real frontend
   domain in production - never `*`, since credentials are allowed.**
+- **Manager hierarchy**: only an `ADMIN` may grant/revoke the `MANAGER` role
+  (`UserServiceImpl.addRole`/`removeRole`, gated on `role == Role.MANAGER` via a new
+  `isCurrentUserAdmin()` helper that reads the `roles` claim off the JWT `Authentication` principal
+  - same idiom as `isCurrentlyAuthenticatedUser`). An ordinary `MANAGER` calling either endpoint
+  for `MANAGER` gets `403` (`AccessDeniedException`), same as any other `@RoleRequired` gap - there
+  is deliberately no separate `@RoleRequired("ADMIN")` annotation-level gate, since `addRole`/
+  `removeRole` are one shared endpoint pair for every role and only the `MANAGER` case needs the
+  extra check. Frontend (`UsersTab`/`ManagersTab`) hides the now-403-doomed buttons/form for
+  non-`ADMIN` users, but the backend check is what actually enforces this.
 
 ## Notifications
 
@@ -307,10 +319,15 @@ short-text-out calls, not open-ended reasoning.
   is the full cross-role account list (search/edit/delete/toggle MANAGER); `ManagersTab`/
   `TrainersTab`/`ClientsTab` each have their own create form that defaults that tab's role - there
   is deliberately no "create an account with no role" path. Every `<input type="date">` gets
-  `lang="sr-Latn-RS"` (Chromium's native empty-state placeholder formatting isn't reachable via
-  CSS or the `placeholder` attribute at all - this is the only lever that actually changes it) and
-  relies on the global `input[type='date'] { color-scheme: dark }` rule in `index.css` for a
-  visible calendar-picker icon.
+  `lang="sr-Latn-RS"` and both `input[type='date']`/`input[type='time']` rely on the global
+  `color-scheme: dark` rule in `index.css` for a visible calendar/clock-picker icon. **The
+  `lang="sr-Latn-RS"` attribute does not actually change the empty-state segment placeholder
+  ("dd.mm.gggg"/its Chromium equivalent) in Chrome/Edge** - confirmed during "manager-testing round
+  2" live testing (see `docs/decision-log.md`): Chromium derives that placeholder's format from the
+  browser/OS UI language, not the page's `lang` attribute (Firefox does honor it, which is
+  presumably why this was believed fixed). There is no reachable CSS or `placeholder`-attribute
+  lever for it either. Left as a known, confirmed limitation rather than a "fixed" claim - see
+  Known issues below for the accepted alternative.
 
 ## Known issues
 
@@ -358,3 +375,21 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   check against `remainingAppointments`.
 - No CI pipeline runs `mvn test`/`tsc -b`/`npm run build` automatically - all three must be run
   manually, and `mvn test` requires Postgres/Redis to be up first.
+- **`<input type="date">`'s native empty-state placeholder ("dd.mm.gggg"-shaped) cannot be
+  reliably localized from the page at all** - confirmed during "manager-testing round 2" (see
+  `docs/decision-log.md`): Chromium derives it from browser/OS UI language, not the `lang`
+  attribute, and there is no CSS or `placeholder`-attribute hook into it either. The accepted
+  alternative, not yet implemented: hide the native placeholder text only while unfocused-and-empty
+  (e.g. `input:not(:focus):invalid::-webkit-datetime-edit { color: transparent }`-style rule, or an
+  absolutely-positioned custom label sibling that disappears on focus/value) and show a custom
+  "dd.mm.gggg" label instead. Left unbuilt because it needs visual, in-browser confirmation to trust
+  (this session had no browser tooling available to verify it) - do not re-attempt the plain
+  `lang` fix, it is confirmed not to work in Chrome/Edge.
+- `docs/decision-log.md`'s "manager-testing round 2" also hit the `BaseEntity` id-less
+  `equals()`/`hashCode()` issue above a third time, in `DevDataSeeder`'s new month-long appointment
+  generator: adding several freshly-built, unsaved `ClientAppointment`s to the same `Appointment`'s
+  `Set<ClientAppointment>` silently kept only the first (all compared equal), capping every
+  generated appointment at exactly one participant regardless of session capacity. Fixed there by
+  tracking participant counts in an `IdentityHashMap` and saving `ClientAppointment` rows directly
+  via their own repository instead of through the entity's `Set` field - not a general fix, just
+  the same per-call-site workaround pattern used elsewhere in the codebase for this issue.
