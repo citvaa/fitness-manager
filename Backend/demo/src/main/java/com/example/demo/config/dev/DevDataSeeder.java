@@ -29,6 +29,7 @@ import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.progress.ClientPersonalRecordRepository;
 import com.example.demo.repository.progress.ClientProgressEntryRepository;
 import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
@@ -47,28 +48,43 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * Populates a fresh `dev` database with a dataset that looks like a gym that has actually been
  * running for months, rather than the handful of test rows the Flyway dev-data migrations add
- * (see AGENTS.md "Upgrade: Faza 7 decisions" for the full rationale). Deliberately a Java
- * {@link CommandLineRunner}, not a Flyway migration: the whole point is data expressed relative
- * to "now" (weeks of appointment history in the past, a few weeks of bookable slots in the
- * future), which a static SQL migration timestamped at write-time cannot express correctly on
- * every future run.
+ * (see AGENTS.md "Upgrade: Faza 7 decisions" / "Upgrade: manager-testing round 2 decisions" for
+ * the full rationale). Deliberately a Java {@link CommandLineRunner}, not a Flyway migration: the
+ * whole point is data expressed relative to "now" (the current calendar month's appointments),
+ * which a static SQL migration timestamped at write-time cannot express correctly on every future
+ * run.
  *
  * <p>Idempotency: guarded by checking whether {@link #MARKER_EMAIL} (the first trainer this
  * seeder creates) already exists - if so, the whole method is skipped. This mirrors the
  * `WHERE NOT EXISTS` guards the Flyway dev-data migrations use for the same reason (a manager
  * account seeded by an earlier migration, or manual testing, must not be duplicated on restart).
+ *
+ * <p><b>Appointment/payment scheme (round 2):</b> appointments are generated for every day of the
+ * <i>current calendar month</i> (both the days already elapsed and the days still to come), not a
+ * fixed past/future window - see AGENTS.md for why. Each of the 5 trainers works a fixed set of 3
+ * weekdays for the whole month; each of the ~50 clients independently prefers 3 weekdays of their
+ * own. On any date where at least one trainer is working, every client who prefers that weekday is
+ * booked into an appointment on that date (individual/small-group/big-group, weighted so most
+ * bookings are group sessions - that's what lets 50 clients fit into a handful of trainers'
+ * schedules while each client still gets their own ~3 sessions/week). Payments are generated
+ * afterwards from the actual resulting booking counts per (client, session type): ~90% of clients
+ * get a payment that fully covers what they booked, the rest are deliberately left with fewer paid
+ * appointments than booked (see AGENTS.md "Known issues" - reservations have no floor check against
+ * remaining balance, so this "used more than paid for" state is a realistic outcome, not a seeding
+ * bug).
  */
 @Slf4j
 @Component
@@ -78,8 +94,7 @@ public class DevDataSeeder implements CommandLineRunner {
 
     private static final String DEV_PASSWORD = "password123"; // same known dev password as V1.0017
     private static final String MARKER_EMAIL = "marko.markovic@fitpro.dev";
-    private static final int PAST_WEEKS = 8;
-    private static final int FUTURE_WEEKS = 3;
+    private static final int NEW_GENERATED_CLIENT_COUNT = 44; // + 5 explicit + "citva" = ~50 total
 
     private final UserRepository userRepository;
     private final TrainerRepository trainerRepository;
@@ -89,6 +104,7 @@ public class DevDataSeeder implements CommandLineRunner {
     private final HolidayRepository holidayRepository;
     private final SessionRepository sessionRepository;
     private final AppointmentRepository appointmentRepository;
+    private final ClientAppointmentRepository clientAppointmentRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final PaymentRepository paymentRepository;
     private final RoomRepository roomRepository;
@@ -106,11 +122,12 @@ public class DevDataSeeder implements CommandLineRunner {
             return;
         }
 
-        log.info("🌱 Seeding realistic dev data (trainers, clients, appointments, payments, check-ins, progress)...");
+        log.info("🌱 Seeding realistic dev data (manager, trainers, clients, appointments, payments, check-ins, progress)...");
 
         ensureGymSchedule();
         ensureHolidays();
 
+        seedManager();
         List<Trainer> trainers = seedTrainers();
         List<Client> clients = seedClients();
 
@@ -128,22 +145,19 @@ public class DevDataSeeder implements CommandLineRunner {
 
         List<Room> rooms = roomRepository.findAll();
 
-        // clientId -> sessionId -> {remaining, reserved}, accumulated purely from this run's own
-        // simulated payments/reservations, then added on top of whatever a (client, session) row
-        // already holds in the database (see persistSessionTracking) - so re-running against a
-        // database that already has real usage history on top of the marker check still produces
-        // consistent numbers instead of silently duplicating tracking rows.
-        Map<Integer, Map<Integer, int[]>> tracking = new HashMap<>();
+        // clientId -> sessionId -> count of appointments actually booked this run, tallied while
+        // generating appointments below and used afterwards to generate matching payments/
+        // tracking rows (see class Javadoc "Appointment/payment scheme").
+        Map<Integer, Map<Integer, Integer>> bookedCounts = new HashMap<>();
 
-        seedPayments(clients, individual, smallGroup, bigGroup, tracking);
-        seedAppointments(trainers, clients, individual, smallGroup, bigGroup, rooms, tracking);
-        persistSessionTracking(tracking, clients, List.of(individual, smallGroup, bigGroup));
+        seedAppointmentsForCurrentMonth(trainers, clients, individual, smallGroup, bigGroup, rooms, bookedCounts);
+        seedPayments(clients, individual, smallGroup, bigGroup, bookedCounts);
 
         seedRoomCheckIns(clients, rooms);
         seedProgressData(clients);
 
-        log.info("✅ Dev data seeded: {} trainers, {} clients, {} past weeks + {} future weeks of appointments.",
-                trainers.size(), clients.size(), PAST_WEEKS, FUTURE_WEEKS);
+        log.info("✅ Dev data seeded: 1 manager, {} trainers, {} clients, appointments across the current calendar month.",
+                trainers.size(), clients.size());
     }
 
     // ---------------------------------------------------------------- gym schedule / holidays
@@ -184,6 +198,15 @@ public class DevDataSeeder implements CommandLineRunner {
         holidayRepository.save(holiday);
     }
 
+    // ------------------------------------------------------------------------------------ manager
+
+    /** One ordinary MANAGER (no ADMIN role) - a real example of the non-super-admin manager
+     * account introduced alongside Role.ADMIN (see AGENTS.md "Upgrade: manager-hierarchy
+     * decisions"). Only the pre-existing "admin" account (V1.0020 migration) gets ADMIN. */
+    private void seedManager() {
+        createActivatedUser("milan.milic@fitpro.dev", Role.MANAGER);
+    }
+
     // ---------------------------------------------------------------------------- trainers/clients
 
     private List<Trainer> seedTrainers() {
@@ -191,6 +214,7 @@ public class DevDataSeeder implements CommandLineRunner {
         trainers.add(createTrainer(MARKER_EMAIL, LocalDate.now().minusYears(3), 1988, EmploymentStatus.FULL_TIME));
         trainers.add(createTrainer("jelena.jovanovic@fitpro.dev", LocalDate.now().minusYears(1).minusMonths(4), 1993, EmploymentStatus.FULL_TIME));
         trainers.add(createTrainer("nikola.nikolic@fitpro.dev", LocalDate.now().minusMonths(8), 1996, EmploymentStatus.CONTRACT));
+        trainers.add(createTrainer("dragan.dragic@fitpro.dev", LocalDate.now().minusYears(2), 1990, EmploymentStatus.FULL_TIME));
         // Include the pre-existing Phase 1-6 dev trainer too, so the seeded appointments give
         // "ogi" (the account every earlier phase's docs/screenshots reference) real data as well.
         trainerRepository.findByUserEmail("ogi").ifPresent(trainers::add);
@@ -208,16 +232,48 @@ public class DevDataSeeder implements CommandLineRunner {
         return trainerRepository.save(trainer);
     }
 
+    // ASCII-transliterated Serbian names (matches the existing "ana.petrovic@fitpro.dev" style -
+    // no diacritics in email local parts). 30 first names x 20 last names = 600 distinct
+    // combinations, comfortably more than NEW_GENERATED_CLIENT_COUNT, so a simple modulo pairing
+    // over a run of consecutive indices never repeats a combination.
+    private static final String[] FIRST_NAMES = {
+            "marko", "ana", "jovan", "milica", "nikola", "jelena", "petar", "ivana", "stefan", "teodora",
+            "aleksandar", "katarina", "nemanja", "marija", "vladimir", "sara", "dusan", "tamara", "filip", "milena",
+            "bojan", "natasa", "igor", "sanja", "zoran", "ljiljana", "goran", "snezana", "vladan", "tijana",
+    };
+    private static final String[] LAST_NAMES = {
+            "petrovic", "jovanovic", "nikolic", "ilic", "pavlovic", "stojanovic", "markovic", "djordjevic", "popovic", "ristic",
+            "simic", "kostic", "radovic", "milic", "stankovic", "tomic", "jankovic", "antic", "vukovic", "lazic",
+    };
+
     private List<Client> seedClients() {
         List<Client> clients = new ArrayList<>();
-        clients.add(createClient("ana.petrovic@fitpro.dev"));
-        clients.add(createClient("stefan.stojanovic@fitpro.dev"));
-        clients.add(createClient("milica.ilic@fitpro.dev"));
-        clients.add(createClient("petar.pavlovic@fitpro.dev"));
-        clients.add(createClient("jovana.jovanovic@fitpro.dev"));
+        Set<String> usedEmails = new HashSet<>();
+
+        String[] explicitEmails = {
+                "ana.petrovic@fitpro.dev", "stefan.stojanovic@fitpro.dev", "milica.ilic@fitpro.dev",
+                "petar.pavlovic@fitpro.dev", "jovana.jovanovic@fitpro.dev",
+        };
+        for (String email : explicitEmails) {
+            clients.add(createClient(email));
+            usedEmails.add(email);
+        }
         // Same reasoning as including "ogi" above: the pre-existing dev CLIENT account should
         // also show up with real booking/payment/progress history, not just the brand-new ones.
         clientRepository.findByUserEmail("citva").ifPresent(clients::add);
+
+        // i%30/i%20 modulo pairing can coincidentally reproduce one of the explicit emails above
+        // (e.g. i=3 -> "milica.ilic@fitpro.dev") - skip forward past any such collision rather
+        // than fail on the resulting duplicate-email constraint violation.
+        int added = 0;
+        for (int i = 0; added < NEW_GENERATED_CLIENT_COUNT; i++) {
+            String first = FIRST_NAMES[i % FIRST_NAMES.length];
+            String last = LAST_NAMES[i % LAST_NAMES.length];
+            String email = first + "." + last + "@fitpro.dev";
+            if (!usedEmails.add(email)) continue;
+            clients.add(createClient(email));
+            added++;
+        }
         return clients;
     }
 
@@ -249,144 +305,194 @@ public class DevDataSeeder implements CommandLineRunner {
         return userRepository.save(user);
     }
 
-    // ---------------------------------------------------------------------------------- payments
-
-    private void seedPayments(List<Client> clients, Session individual, Session smallGroup, Session bigGroup,
-                               Map<Integer, Map<Integer, int[]>> tracking) {
-        for (Client client : clients) {
-            payFor(client, individual, 10 + random.nextInt(8),
-                    LocalDate.now().minusMonths(3).plusDays(random.nextInt(15)), tracking);
-            payFor(client, individual, 6 + random.nextInt(6),
-                    LocalDate.now().minusDays(5 + random.nextInt(10)), tracking);
-            payFor(client, smallGroup, 8 + random.nextInt(6),
-                    LocalDate.now().minusMonths(2).plusDays(random.nextInt(15)), tracking);
-            if (random.nextBoolean()) {
-                payFor(client, bigGroup, 10 + random.nextInt(10),
-                        LocalDate.now().minusMonths(4).plusDays(random.nextInt(20)), tracking);
-            }
-        }
-    }
-
-    private void payFor(Client client, Session session, int paidAppointments, LocalDate paymentDate,
-                         Map<Integer, Map<Integer, int[]>> tracking) {
-        paymentRepository.save(Payment.builder()
-                .client(client)
-                .session(session)
-                .paidAppointments(paidAppointments)
-                .paymentDate(paymentDate)
-                .build());
-
-        tracking.computeIfAbsent(client.getId(), k -> new HashMap<>())
-                .computeIfAbsent(session.getId(), k -> new int[]{0, 0})[0] += paidAppointments;
-    }
-
     // ------------------------------------------------------------------------------ appointments
 
-    private void seedAppointments(List<Trainer> trainers, List<Client> clients, Session individual,
-                                   Session smallGroup, Session bigGroup, List<Room> rooms,
-                                   Map<Integer, Map<Integer, int[]>> tracking) {
-        LocalDate today = LocalDate.now();
-        DayOfWeek[] pastDays = {DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY};
-        DayOfWeek[] futureDays = {DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY};
+    // Trainers each work a fixed 3 weekdays for the whole month - chosen so every weekday has at
+    // least one, and most have two, trainers available (needed to spread ~50 clients' bookings
+    // across the month without any single trainer being double- or triple-booked at once).
+    private static final DayOfWeek[][] TRAINER_WORKDAY_SETS = {
+            {DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY},
+            {DayOfWeek.TUESDAY, DayOfWeek.THURSDAY, DayOfWeek.SATURDAY},
+            {DayOfWeek.MONDAY, DayOfWeek.THURSDAY, DayOfWeek.SATURDAY},
+            {DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY},
+            {DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY, DayOfWeek.SUNDAY},
+    };
 
-        int slot = 0;
-        for (int w = PAST_WEEKS; w >= 1; w--) {
-            for (DayOfWeek day : pastDays) {
-                LocalDate date = today.minusWeeks(w).with(ChronoField.DAY_OF_WEEK, day.getValue());
-                slot++;
-                // ~15% of past slots come out empty - the closest this schema can represent a
-                // cancelled/no-show slot, since appointments have no persisted status column
-                // (see AGENTS.md "Upgrade: Faza 7 decisions" for why this is a deliberate
-                // approximation, not a bug).
-                createAppointmentSlot(date, LocalTime.of(8, 0), LocalTime.of(9, 0), individual,
-                        trainers, clients, rooms, tracking, slot, pastCount(1), 0.9);
-                createAppointmentSlot(date, LocalTime.of(10, 0), LocalTime.of(11, 0), smallGroup,
-                        trainers, clients, rooms, tracking, slot, pastCount(1 + random.nextInt(3)), 0.9);
-                createAppointmentSlot(date, LocalTime.of(18, 0), LocalTime.of(19, 0), bigGroup,
-                        trainers, clients, rooms, tracking, slot, pastCount(3 + random.nextInt(6)), 0.9);
+    /** Time slots available per weekday, kept inside that day's gym hours (see
+     * ensureGymSchedule) - Sunday closes at 15:00 and Saturday at 20:00, both narrower than the
+     * 06:00-22:00 weekday window. */
+    private List<LocalTime> slotsFor(DayOfWeek day) {
+        if (day == DayOfWeek.SUNDAY) {
+            return List.of(LocalTime.of(9, 0), LocalTime.of(11, 0), LocalTime.of(13, 0));
+        }
+        if (day == DayOfWeek.SATURDAY) {
+            return List.of(LocalTime.of(8, 0), LocalTime.of(10, 0), LocalTime.of(12, 0), LocalTime.of(16, 0), LocalTime.of(18, 0));
+        }
+        return List.of(LocalTime.of(8, 0), LocalTime.of(10, 0), LocalTime.of(12, 0), LocalTime.of(16, 0), LocalTime.of(18, 0), LocalTime.of(19, 30));
+    }
+
+    private void seedAppointmentsForCurrentMonth(List<Trainer> trainers, List<Client> clients, Session individual,
+                                                  Session smallGroup, Session bigGroup, List<Room> rooms,
+                                                  Map<Integer, Map<Integer, Integer>> bookedCounts) {
+        LocalDate first = LocalDate.now().withDayOfMonth(1);
+        LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
+
+        // Each trainer keeps its fixed weekday set for the whole month (assigned by index, wrapping
+        // if there are more trainers than pattern rows).
+        Map<Integer, Set<DayOfWeek>> trainerWorkdays = new HashMap<>();
+        for (int i = 0; i < trainers.size(); i++) {
+            trainerWorkdays.put(trainers.get(i).getId(),
+                    EnumSet.copyOf(List.of(TRAINER_WORKDAY_SETS[i % TRAINER_WORKDAY_SETS.length])));
+        }
+
+        // Each client independently prefers 3 distinct weekdays of their own for the whole month -
+        // this is what makes "~3 sessions/week per client" hold across the month regardless of how
+        // many weeks it has.
+        Map<Integer, Set<DayOfWeek>> clientPreferredDays = new HashMap<>();
+        DayOfWeek[] allDays = DayOfWeek.values();
+        for (Client client : clients) {
+            Set<DayOfWeek> preferred = new HashSet<>();
+            while (preferred.size() < 3) {
+                preferred.add(allDays[random.nextInt(allDays.length)]);
+            }
+            clientPreferredDays.put(client.getId(), preferred);
+        }
+
+        List<Appointment> appointmentsToSave = new ArrayList<>();
+        List<ClientAppointment> clientAppointmentsToSave = new ArrayList<>();
+        // Participant count per in-progress appointment, tracked here rather than via
+        // Appointment.getClientAppointments().size() - BaseEntity's Lombok @Data equals()/
+        // hashCode() only compares audit fields (never the subclass id, see AGENTS.md "Known
+        // issues"), so every freshly-built, unsaved ClientAppointment compares equal to every
+        // other one and a HashSet silently drops all but the first. An IdentityHashMap keyed by
+        // the Appointment instance (identity, not equals()) sidesteps that entirely, and
+        // ClientAppointment rows are saved directly via their own repository below instead of
+        // through Appointment's Set field.
+        Map<Appointment, Integer> participantCount = new java.util.IdentityHashMap<>();
+
+        for (LocalDate date = first; !date.isAfter(last); date = date.plusDays(1)) {
+            DayOfWeek dow = date.getDayOfWeek();
+            List<Trainer> workingTrainers = trainers.stream()
+                    .filter(t -> trainerWorkdays.get(t.getId()).contains(dow))
+                    .toList();
+            if (workingTrainers.isEmpty()) continue;
+
+            List<Client> interestedClients = clients.stream()
+                    .filter(c -> clientPreferredDays.get(c.getId()).contains(dow))
+                    .toList();
+            if (interestedClients.isEmpty()) continue;
+
+            List<LocalTime> slots = slotsFor(dow);
+            // Appointments still open to more participants for this date, per session type.
+            List<Appointment> openIndividual = new ArrayList<>();
+            List<Appointment> openSmallGroup = new ArrayList<>();
+            List<Appointment> openBigGroup = new ArrayList<>();
+            int slotCounter = 0;
+            int trainerCounter = 0;
+
+            for (Client client : interestedClients) {
+                // Weighted towards group sessions - the only way ~50 clients' bookings fit into a
+                // handful of trainers' daily schedules while still leaving room for individual
+                // sessions to exist at all (see class Javadoc).
+                int roll = random.nextInt(100);
+                Session sessionType = roll < 15 ? individual : roll < 45 ? smallGroup : bigGroup;
+                List<Appointment> openList = sessionType == individual ? openIndividual
+                        : sessionType == smallGroup ? openSmallGroup : openBigGroup;
+
+                Appointment appointment = openList.isEmpty() ? null : openList.get(openList.size() - 1);
+                if (appointment == null) {
+                    LocalTime time = slots.get(slotCounter % slots.size());
+                    slotCounter++;
+                    Trainer trainer = workingTrainers.get(trainerCounter % workingTrainers.size());
+                    trainerCounter++;
+                    Room room = rooms.isEmpty() ? null : rooms.get(random.nextInt(rooms.size()));
+
+                    appointment = Appointment.builder()
+                            .date(date)
+                            .startTime(time)
+                            .endTime(time.plusHours(1))
+                            .session(sessionType)
+                            .trainer(trainer)
+                            .room(room)
+                            .clientAppointments(new HashSet<>())
+                            .build();
+                    openList.add(appointment);
+                    appointmentsToSave.add(appointment);
+                    participantCount.put(appointment, 0);
+                }
+
+                clientAppointmentsToSave.add(
+                        ClientAppointment.builder().client(client).appointment(appointment).build());
+                int newCount = participantCount.merge(appointment, 1, Integer::sum);
+                if (newCount >= sessionType.getMaxParticipants()) {
+                    // Identity-based removal (not List.remove(Object), which is equals()-based
+                    // and hits the same BaseEntity landmine described above).
+                    Appointment fullAppointment = appointment;
+                    openList.removeIf(a -> a == fullAppointment);
+                }
+
+                bookedCounts.computeIfAbsent(client.getId(), k -> new HashMap<>())
+                        .merge(sessionType.getId(), 1, Integer::sum);
             }
         }
 
-        for (int w = 1; w <= FUTURE_WEEKS; w++) {
-            for (DayOfWeek day : futureDays) {
-                LocalDate date = today.plusWeeks(w).with(ChronoField.DAY_OF_WEEK, day.getValue());
-                slot++;
-                // Only ~55% pre-assigned a trainer, so the trainer "without-trainer" self-assign
-                // screen and the client "available" list both have real, non-trivial data.
-                createAppointmentSlot(date, LocalTime.of(8, 0), LocalTime.of(9, 0), individual,
-                        trainers, clients, rooms, tracking, slot, random.nextInt(2), 0.55);
-                createAppointmentSlot(date, LocalTime.of(10, 0), LocalTime.of(11, 0), smallGroup,
-                        trainers, clients, rooms, tracking, slot, random.nextInt(3), 0.55);
-                createAppointmentSlot(date, LocalTime.of(18, 0), LocalTime.of(19, 0), bigGroup,
-                        trainers, clients, rooms, tracking, slot, random.nextInt(6), 0.55);
-            }
-        }
+        // Appointments first - ClientAppointment rows reference their generated ids via FK.
+        appointmentRepository.saveAll(appointmentsToSave);
+        clientAppointmentRepository.saveAll(clientAppointmentsToSave);
     }
 
-    private int pastCount(int desired) {
-        return random.nextInt(100) < 15 ? 0 : desired;
-    }
+    // ---------------------------------------------------------------------------------- payments
 
-    private void createAppointmentSlot(LocalDate date, LocalTime start, LocalTime end, Session session,
-                                        List<Trainer> trainers, List<Client> clients, List<Room> rooms,
-                                        Map<Integer, Map<Integer, int[]>> tracking, int slotIndex,
-                                        int clientCount, double trainerProbability) {
-        Trainer trainer = random.nextDouble() < trainerProbability ? trainers.get(slotIndex % trainers.size()) : null;
-        Room room = rooms.isEmpty() || random.nextInt(10) < 4 ? null : rooms.get(slotIndex % rooms.size());
+    /** Builds payments (and the matching ClientSessionTracking rows) from the appointment counts
+     * actually booked above - see class Javadoc "Appointment/payment scheme". */
+    private void seedPayments(List<Client> clients, Session individual, Session smallGroup, Session bigGroup,
+                               Map<Integer, Map<Integer, Integer>> bookedCounts) {
+        Map<Integer, Session> sessionsById = Map.of(
+                individual.getId(), individual,
+                smallGroup.getId(), smallGroup,
+                bigGroup.getId(), bigGroup);
 
-        Appointment appointment = Appointment.builder()
-                .date(date)
-                .startTime(start)
-                .endTime(end)
-                .session(session)
-                .trainer(trainer)
-                .room(room)
-                .clientAppointments(new HashSet<>())
-                .build();
+        List<Payment> payments = new ArrayList<>();
+        List<ClientSessionTracking> trackingRows = new ArrayList<>();
 
-        int toAdd = Math.min(clientCount, session.getMaxParticipants());
-        for (int i = 0; i < toAdd; i++) {
-            Client client = clients.get((slotIndex + i) % clients.size());
-            if (!tryReserve(tracking, client, session)) continue;
-            appointment.getClientAppointments().add(
-                    ClientAppointment.builder().client(client).appointment(appointment).build());
-        }
+        for (Client client : clients) {
+            Map<Integer, Integer> perSession = bookedCounts.get(client.getId());
+            if (perSession == null || perSession.isEmpty()) continue;
 
-        appointmentRepository.save(appointment);
-    }
+            // ~90% of clients paid for (at least) everything they booked; the rest are a
+            // deliberate "used more than paid for" edge case (see class Javadoc).
+            boolean fullyPaid = random.nextInt(100) < 90;
 
-    private boolean tryReserve(Map<Integer, Map<Integer, int[]>> tracking, Client client, Session session) {
-        int[] counts = tracking.computeIfAbsent(client.getId(), k -> new HashMap<>())
-                .computeIfAbsent(session.getId(), k -> new int[]{0, 0});
-        if (counts[0] <= 0) return false;
-        counts[0]--;
-        counts[1]++;
-        return true;
-    }
+            for (Map.Entry<Integer, Integer> entry : perSession.entrySet()) {
+                Session session = sessionsById.get(entry.getKey());
+                int booked = entry.getValue();
+                int paid = fullyPaid ? booked : Math.max(0, booked - (1 + random.nextInt(3)));
 
-    private void persistSessionTracking(Map<Integer, Map<Integer, int[]>> tracking, List<Client> clients,
-                                         List<Session> sessions) {
-        Map<Integer, Client> clientsById = clients.stream().collect(Collectors.toMap(Client::getId, c -> c));
-        Map<Integer, Session> sessionsById = sessions.stream().collect(Collectors.toMap(Session::getId, s -> s));
-
-        List<ClientSessionTracking> rows = new ArrayList<>();
-        tracking.forEach((clientId, perSession) -> perSession.forEach((sessionId, counts) -> {
-            Client client = clientsById.get(clientId);
-            Session session = sessionsById.get(sessionId);
-            // Add on top of whatever a (client, session) row already holds, rather than blindly
-            // inserting a fresh one - a dev database that already had real usage before this
-            // seeder's marker existed (e.g. earlier phases' manual QA) keeps that history intact.
-            ClientSessionTracking row = clientSessionTrackingRepository.findByClientAndSession(client, session)
-                    .orElseGet(() -> ClientSessionTracking.builder()
-                            .client(client).session(session)
-                            .remainingAppointments(0).reservedAppointments(0)
+                if (paid > 0) {
+                    payments.add(Payment.builder()
+                            .client(client)
+                            .session(session)
+                            .paidAppointments(paid)
+                            .paymentDate(LocalDate.now().minusDays(5 + random.nextInt(50)))
                             .build());
-            row.setRemainingAppointments(row.getRemainingAppointments() + counts[0]);
-            row.setReservedAppointments(row.getReservedAppointments() + counts[1]);
-            rows.add(row);
-        }));
+                }
 
-        clientSessionTrackingRepository.saveAll(rows);
+                ClientSessionTracking row = clientSessionTrackingRepository.findByClientAndSession(client, session)
+                        .orElseGet(() -> ClientSessionTracking.builder()
+                                .client(client).session(session)
+                                .remainingAppointments(0).reservedAppointments(0)
+                                .build());
+                // remaining can end up negative for the underpaid clients above - a realistic
+                // outcome, not a seeding bug (see AGENTS.md "Known issues": reservations have no
+                // floor check against remaining balance).
+                row.setRemainingAppointments(row.getRemainingAppointments() + paid - booked);
+                row.setReservedAppointments(row.getReservedAppointments() + booked);
+                trackingRows.add(row);
+            }
+        }
+
+        paymentRepository.saveAll(payments);
+        clientSessionTrackingRepository.saveAll(trackingRows);
     }
 
     // ------------------------------------------------------------------------------- room check-ins

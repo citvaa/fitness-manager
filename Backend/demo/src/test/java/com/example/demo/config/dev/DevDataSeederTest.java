@@ -10,6 +10,7 @@ import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.progress.ClientPersonalRecordRepository;
 import com.example.demo.repository.progress.ClientProgressEntryRepository;
 import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
@@ -53,6 +54,8 @@ class DevDataSeederTest {
     @Mock
     private AppointmentRepository appointmentRepository;
     @Mock
+    private ClientAppointmentRepository clientAppointmentRepository;
+    @Mock
     private ClientSessionTrackingRepository clientSessionTrackingRepository;
     @Mock
     private PaymentRepository paymentRepository;
@@ -71,8 +74,8 @@ class DevDataSeederTest {
     void setUp() {
         seeder = new DevDataSeeder(userRepository, trainerRepository, clientRepository, passwordEncoder,
                 gymScheduleRepository, holidayRepository, sessionRepository, appointmentRepository,
-                clientSessionTrackingRepository, paymentRepository, roomRepository, roomCheckInRepository,
-                clientProgressEntryRepository, clientPersonalRecordRepository);
+                clientAppointmentRepository, clientSessionTrackingRepository, paymentRepository, roomRepository,
+                roomCheckInRepository, clientProgressEntryRepository, clientPersonalRecordRepository);
     }
 
     @Test
