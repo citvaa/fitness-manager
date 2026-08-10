@@ -61,7 +61,9 @@ session - this file is the current-state summary; the decision log is the detail
    - no manual export/`source` step needed. All four are bound via `${...}` placeholders in
    `application.yaml` (e.g. `app.anthropic.api-key: ${ANTHROPIC_API_KEY:}`); see
    `docs/decision-log.md`'s "Upgrade: dev-tooling decisions" for how this was wired up and the one
-   gotcha hit along the way.
+   gotcha hit along the way. An optional fifth var, `FRONTEND_URL` (defaults to
+   `http://localhost:5173`), controls the origin activation/reset-password email links point to -
+   only worth overriding once there's a real deployed frontend to point at.
 2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
    - Postgres on host port `8877` (mapped to container `5432`), db `fm`, user `fm_dbuser` /
      password `password`
@@ -116,9 +118,16 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
   driven by `Payment`s.
 - **GymSchedule** - opening/closing time per `DayOfWeek`; upserted per day (`create` finds-or-builds
-  by `DayOfWeek`), not insert-only.
+  by `DayOfWeek`), not insert-only. `closingTime <= openingTime` means "closes the next calendar
+  day at this time" (deliberately allowed, not clamped to midnight) - but that overnight portion
+  is validated against the adjacent day's own hours both directions
+  (`GymScheduleServiceImpl.validateNoAdjacentDayOverlap`), so e.g. Thursday open until 02:00 can't
+  coexist with Friday opening at 01:00.
 - **TrainerSchedule** - a trainer's status (`WORKING`/`HOLIDAY`/`SICK_LEAVE`/`VACATION`) for a given
-  date and time range.
+  date and time range. A trainer's rows never overlap regardless of status mix (a `WORKING` shift
+  can't overlap an existing `VACATION` day and vice versa) - enforced both directions in
+  `TrainerScheduleServiceImpl` via the same status-agnostic
+  `existsByTrainerIdAndDateAndTimeRange` check.
 - **Holiday** - a gym-wide non-working date; insert-only by design (no update/delete).
 - **Gym** (`model/gym/Gym.java`) - single-installation config (name, address, contact info,
   logo/brand color, timezone). A real table (not a `@ConfigurationProperties` bean), even though
@@ -127,7 +136,10 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **Room** (`model/gym/Room.java`) - belongs to a `Gym`; name, `RoomType`, capacity, and
   **rectangle** geometry (`posX`/`posY`/`width`/`height`/`rotationDegrees`, all `double precision`)
   for the 2D floor-plan editor/live view - deliberately not an arbitrary polygon, since real gym
-  rooms are overwhelmingly rectangular and `react-konva`'s `Rect` maps to this directly.
+  rooms are overwhelmingly rectangular and `react-konva`'s `Rect` maps to this directly. The room
+  editor (`RoomEditorPage`) enforces a 4m x 2.5m minimum resize floor client-side only (no backend
+  validation) so the name label/occupancy count rendered on top never spills outside the
+  rectangle - not enforced retroactively against rooms already smaller than that.
 - **RoomCheckIn** (`model/gym/RoomCheckIn.java`) - a manual check-in/check-out event of a `Client`
   into a `Room`; `checkedOutAt == null` means currently inside. At most one active check-in per
   client is enforced **globally** (not per-room) by a DB unique partial index
@@ -188,10 +200,15 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - Email (`service/impl/notification/email/`): activation and password-reset emails use Thymeleaf
   templates; appointment-reminder and trainer-schedule emails are built as inline strings
   (inconsistent with the templated ones, not yet unified). Activation/reset links are built
-  entirely client-side (`${window.location.origin}/register/complete?registration_key=...`); no
-  `app.frontend.url` backend property exists. Real email delivery is not configured in this
-  environment (see Known issues) - the frontend shows a dev-only on-screen activation-link banner
-  as a stand-in.
+  server-side via `app.frontend.url` (env var `FRONTEND_URL`, defaults to
+  `http://localhost:5173`) - wired through `ActivationEmailData`/`ForgetPasswordEmailData` into
+  both templates as `${frontendUrl} + '/register/complete?registration_key=' + ...` (and
+  `/reset-password?reset_key=...`). This used to be hardcoded to a placeholder domain
+  (`https://nesto.com`) in both templates - a real, previously-shipped bug, not a dev/demo
+  placeholder; fixed once real Gmail credentials made these emails actually deliverable. The
+  frontend's on-screen activation-link banner (a dev/demo stand-in for when email wasn't real) has
+  been removed accordingly - the link now reaches the user exclusively via email, in every
+  environment.
 - WebSocket/STOMP (`config/web/WebSocketConfig`, endpoint `/ws`, no SockJS fallback, simple broker
   on `/topic`): `NotificationServiceImpl` pushes per-user notifications and additionally sends
   email based on `User.notificationPreference`. A second topic, `/topic/gym/occupancy`, carries the
@@ -286,7 +303,14 @@ short-text-out calls, not open-ended reasoning.
   messages in the UI. Destructive actions use the browser's native `window.confirm(...)`, not a
   custom modal (no modal/dialog pattern exists in this frontend). Multi-role accounts get a role
   *switcher*, not a merged view - one "active role" at a time gates routes/nav
-  (`RequireActiveRole`).
+  (`RequireActiveRole`). `AdminPage`'s tabs (`features/admin/`) each own one domain: `UsersTab`
+  is the full cross-role account list (search/edit/delete/toggle MANAGER); `ManagersTab`/
+  `TrainersTab`/`ClientsTab` each have their own create form that defaults that tab's role - there
+  is deliberately no "create an account with no role" path. Every `<input type="date">` gets
+  `lang="sr-Latn-RS"` (Chromium's native empty-state placeholder formatting isn't reachable via
+  CSS or the `placeholder` attribute at all - this is the only lever that actually changes it) and
+  relies on the global `input[type='date'] { color-scheme: dark }` rule in `index.css` for a
+  visible calendar-picker icon.
 
 ## Known issues
 
@@ -320,7 +344,15 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   same type with all-null audit fields (e.g. two freshly-built, unsaved `ClientAppointment`s)
   compare as equal. Affects any code that relies on `HashSet`/`equals()` semantics for unsaved
   entities of the same type - a real fix would override `equals()`/`hashCode()` per-entity on `id`,
-  or switch collections holding these entities to `List`.
+  or switch collections holding these entities to `List`. **Confirmed to actually bite in
+  production, not just a theoretical edge case**: entity-level cascade delete of a `Client` (via
+  its `cascade = ALL, orphanRemoval = true` collections) throws
+  `TransientObjectException`/`OptimisticLockException` once an `Appointment`'s own bidirectional
+  `clientAppointments` collection gets pulled into the same cascade graph (e.g. any shared GROUP
+  session) - see `UserServiceImpl.delete()`'s workaround (bulk JPQL deletes for every `client_id`/
+  `trainer_id`-FK'd table instead of relying on JPA cascade), which sidesteps this without fixing
+  the underlying bug. Any other future code path that cascade-deletes a `Client` or `User` entity
+  (not via bulk JPQL) is still exposed to this.
 - A client's appointment reservation can still go negative against their remaining-session balance
   - `reserve()`/`addClients()` increment `ClientSessionTracking.reservedAppointments` with no floor
   check against `remainingAppointments`.
