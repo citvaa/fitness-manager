@@ -140,7 +140,7 @@ class TrainerScheduleServiceImplTest {
         assertThatThrownBy(() -> service.createMySchedule(request))
                 .isInstanceOf(RuntimeException.class)
                 .isNotInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("No gym schedule found for");
+                .hasMessageContaining("Radno vreme teretane nije definisano za");
 
         verify(trainerScheduleRepository, never()).save(any());
     }
@@ -161,7 +161,7 @@ class TrainerScheduleServiceImplTest {
 
         assertThatThrownBy(() -> service.createMySchedule(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("gym hours");
+                .hasMessageContaining("radnog vremena teretane");
 
         verify(trainerScheduleRepository, never()).save(any());
     }
@@ -178,7 +178,7 @@ class TrainerScheduleServiceImplTest {
 
         assertThatThrownBy(() -> service.createMySchedule(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Start time is after end time");
+                .hasMessageContaining("Vreme početka je posle vremena završetka");
 
         verifyNoInteractions(gymScheduleRepository);
         verify(trainerScheduleRepository, never()).save(any());
@@ -202,7 +202,7 @@ class TrainerScheduleServiceImplTest {
 
         assertThatThrownBy(() -> service.createMySchedule(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("overlapping");
+                .hasMessageContaining("preklapa");
 
         verify(trainerScheduleRepository, never()).save(any());
     }
@@ -260,7 +260,7 @@ class TrainerScheduleServiceImplTest {
 
         assertThatThrownBy(() -> service.deleteSchedule(50))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("your own");
+                .hasMessageContaining("svoje");
 
         verify(trainerScheduleRepository, never()).delete(any());
     }
