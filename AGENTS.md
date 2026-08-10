@@ -124,10 +124,9 @@ Every entity is also `@Audited` (Hibernate Envers).
     403s if none match. **A handler with no `@RoleRequired` is reachable by
     any authenticated user regardless of role** (e.g. `CalendarController`).
   - Both are registered in `config/web/WebConfig` with an identical
-    exclude-list (register/login/swagger). Note that `forgot-password` and
-   exclude-list covering register, login, login-refresh, forgot-password,
-   reset-password, and Swagger. Password recovery and refresh therefore do
-   not require a valid access token.
+    exclude-list covering register, login, login-refresh, forgot-password,
+    reset-password, and Swagger, so password recovery and token refresh do
+    not require a valid JWT.
 - `SecurityConfig`'s `SecurityFilterChain` permits `/api/**` (and
   swagger/websocket paths) via `authorizeHttpRequests(...).permitAll()` and
   otherwise requires authentication via its own `oauth2ResourceServer` JWT
