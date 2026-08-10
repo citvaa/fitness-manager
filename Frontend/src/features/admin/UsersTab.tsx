@@ -14,7 +14,12 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-const ROLE_LABEL: Record<Role, string> = { MANAGER: 'Menadžer', TRAINER: 'Trener', CLIENT: 'Klijent' }
+const ROLE_LABEL: Record<Role, string> = {
+  MANAGER: 'Menadžer',
+  TRAINER: 'Trener',
+  CLIENT: 'Klijent',
+  ADMIN: 'Admin',
+}
 const PAGE_SIZE = 10
 
 /**
@@ -26,6 +31,10 @@ const PAGE_SIZE = 10
  */
 export function UsersTab() {
   const currentUserId = useAuthStore((s) => s.user?.id)
+  // Only an ADMIN may grant/revoke MANAGER - backend-enforced (UserServiceImpl
+  // addRole/removeRole -> 403 for non-ADMIN callers); this just hides the now-unusable button
+  // for everyone else instead of leaving it clickable-but-always-403.
+  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
 
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -194,18 +203,20 @@ export function UsersTab() {
                             Izmeni email
                           </button>
                         )}
-                        <button
-                          onClick={() => toggleManagerRole(u)}
-                          disabled={u.roles.includes('MANAGER') && u.id === currentUserId}
-                          className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                          title={
-                            u.roles.includes('MANAGER') && u.id === currentUserId
-                              ? 'Ne možete sami sebi oduzeti MANAGER rolu'
-                              : 'TRAINER/CLIENT role se dodeljuju kroz tabove Treneri/Klijenti, jer tamo se uz rolu kreira i domenski profil'
-                          }
-                        >
-                          {u.roles.includes('MANAGER') ? 'Oduzmi MANAGER' : 'Dodaj MANAGER'}
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => toggleManagerRole(u)}
+                            disabled={u.roles.includes('MANAGER') && u.id === currentUserId}
+                            className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                            title={
+                              u.roles.includes('MANAGER') && u.id === currentUserId
+                                ? 'Ne možete sami sebi oduzeti MANAGER rolu'
+                                : 'TRAINER/CLIENT role se dodeljuju kroz tabove Treneri/Klijenti, jer tamo se uz rolu kreira i domenski profil'
+                            }
+                          >
+                            {u.roles.includes('MANAGER') ? 'Oduzmi MANAGER' : 'Dodaj MANAGER'}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(u.id)}
                           className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"

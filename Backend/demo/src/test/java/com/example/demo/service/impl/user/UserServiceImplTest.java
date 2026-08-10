@@ -265,14 +265,60 @@ class UserServiceImplTest {
 
     @Test
     void addRole_addsNewRoleToUser() {
+        // TRAINER/CLIENT roles have no ADMIN gate - only MANAGER does (see the two tests below).
         User user = User.builder().id(1).userRoles(new HashSet<>()).build();
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
 
-        service.addRole(1, Role.MANAGER);
+        service.addRole(1, Role.TRAINER);
 
         verify(userRoleRepository).save(any(UserRole.class));
         assertThat(user.getUserRoles()).hasSize(1);
-        assertThat(user.getUserRoles().iterator().next().getRole()).isEqualTo(Role.MANAGER);
+        assertThat(user.getUserRoles().iterator().next().getRole()).isEqualTo(Role.TRAINER);
+    }
+
+    @Test
+    void addRole_rejectsNonAdminGrantingManagerRole() {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "manager@gym.com")
+                .claim("roles", java.util.List.of("MANAGER"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            assertThatThrownBy(() -> service.addRole(1, Role.MANAGER))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            verify(userRepository, never()).findById(any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void addRole_allowsAdminGrantingManagerRole() {
+        User user = User.builder().id(1).userRoles(new HashSet<>()).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "admin@gym.com")
+                .claim("roles", java.util.List.of("ADMIN", "MANAGER"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            service.addRole(1, Role.MANAGER);
+
+            verify(userRoleRepository).save(any(UserRole.class));
+            assertThat(user.getUserRoles()).hasSize(1);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     @Test
@@ -322,6 +368,7 @@ class UserServiceImplTest {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .claim("email", "admin@gym.com")
+                .claim("roles", java.util.List.of("ADMIN", "MANAGER"))
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(60))
                 .build();
@@ -347,6 +394,7 @@ class UserServiceImplTest {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .claim("email", "admin@gym.com")
+                .claim("roles", java.util.List.of("ADMIN", "MANAGER"))
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(60))
                 .build();
@@ -356,6 +404,27 @@ class UserServiceImplTest {
             service.removeRole(2, Role.MANAGER);
 
             verify(userRoleRepository).delete(existing);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void removeRole_rejectsNonAdminRevokingManagerRole() {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "manager@gym.com")
+                .claim("roles", java.util.List.of("MANAGER"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            assertThatThrownBy(() -> service.removeRole(2, Role.MANAGER))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            verify(userRepository, never()).findById(any());
         } finally {
             SecurityContextHolder.clearContext();
         }

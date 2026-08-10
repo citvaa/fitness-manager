@@ -3,10 +3,14 @@ import { useAuthStore } from '../auth/store'
 import type { Role } from '../auth/types'
 import clsx from 'clsx'
 
+// ADMIN is additive to MANAGER, never a switchable active role on its own (see
+// auth/types.ts) - it has no entry in ROLE_PRIORITY/the role switcher and these two maps'
+// ADMIN keys are only here to satisfy Record<Role, ...>; they're never actually looked up.
 const ROLE_LABEL: Record<Role, string> = {
   MANAGER: 'Menadžer',
   TRAINER: 'Trener',
   CLIENT: 'Klijent',
+  ADMIN: 'Admin',
 }
 
 const NAV_BY_ROLE: Record<Role, { to: string; label: string }[]> = {
@@ -29,6 +33,7 @@ const NAV_BY_ROLE: Record<Role, { to: string; label: string }[]> = {
     { to: '/client/zakazivanje', label: 'Zakaži trening' },
     { to: '/client/moji-termini', label: 'Moji termini' },
   ],
+  ADMIN: [],
 }
 
 export function AppShell() {
@@ -39,6 +44,11 @@ export function AppShell() {
 
   if (!user || !activeRole) return null
 
+  // ADMIN is additive permission, not a switchable area (see auth/types.ts) - exclude it from
+  // the role switcher so an ADMIN+MANAGER account (the seed admin) doesn't get an "Admin" button
+  // that would set activeRole to a role with no nav/routes of its own.
+  const switchableRoles = user.roles.filter((r) => r !== 'ADMIN')
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100">
       <aside className="flex w-64 flex-col border-r border-slate-800 bg-slate-900/40">
@@ -47,10 +57,10 @@ export function AppShell() {
           <span className="font-semibold">Fitness Manager</span>
         </div>
 
-        {user.roles.length > 1 && (
+        {switchableRoles.length > 1 && (
           <div className="mx-4 mb-4 rounded-lg border border-slate-800 bg-slate-950 p-1">
             <div className="grid grid-cols-1 gap-1">
-              {user.roles.map((role) => (
+              {switchableRoles.map((role) => (
                 <button
                   key={role}
                   onClick={() => setActiveRole(role)}
