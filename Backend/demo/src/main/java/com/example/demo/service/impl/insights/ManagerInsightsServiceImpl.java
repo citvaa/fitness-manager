@@ -37,12 +37,23 @@ public class ManagerInsightsServiceImpl implements ManagerInsightsService {
 
     private static final int PERIOD_DAYS = 30;
 
+    // Structured into a short paragraph + a bullet list of recommendations (rather than one
+    // unbroken block of prose) specifically so the frontend can render actual paragraphs/list
+    // items instead of one dense wall of text - see AGENTS.md ("Upgrade: manager-testing
+    // fixes"). The exact two-part shape (one summary paragraph, one "-"-prefixed line per
+    // recommendation, blank line between them) is dictated here since ManagerInsightsPage's
+    // rendering depends on it: a line starting with "- " is rendered as a list item, everything
+    // else as a paragraph.
     private static final String SYSTEM_PROMPT = """
             You are an analytics assistant for a gym manager. You are given aggregated,
             already-computed statistics about room occupancy history, attendance, and payments
-            over the last %d days. Write a short (4-6 sentence) plain-text summary highlighting
-            the most notable pattern(s) and one concrete, actionable recommendation. Do not
-            invent numbers beyond what is given. No markdown, no headings, plain prose only.
+            over the last %d days. Respond in exactly two parts, in this order:
+            1. One short paragraph (2-3 sentences) summarizing the most notable pattern(s) in the
+               data.
+            2. A blank line, then 2-4 concrete, actionable recommendations, each on its own line
+               starting with "- ".
+            Do not invent numbers beyond what is given. No markdown formatting (no headings, no
+            bold, no numbered lists) - only plain sentences and "- " bullet lines as described.
             Respond in Serbian (srpski jezik), written in the Latin alphabet (latinica) - the
             rest of the application's UI is Serbian Latin script, so the summary must match it
             exactly; do not use Cyrillic (ćirilica).

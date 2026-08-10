@@ -50,7 +50,25 @@ export function ManagerInsightsPage() {
     return <div className="p-8 text-slate-400">Učitavanje...</div>
   }
 
-  const paragraphs = insights?.insightText.split(/\n+/).filter((p) => p.trim().length > 0) ?? []
+  // The backend prompt (see AGENTS.md "Upgrade: manager-testing fixes") asks Claude for a short
+  // summary paragraph followed by "- "-prefixed recommendation lines - rendered here as an
+  // actual <ul>/<li> list instead of dumping everything into one dense text blob. Consecutive
+  // bullet lines are grouped into a single list; everything else becomes its own paragraph.
+  const lines = insights?.insightText.split(/\n+/).filter((line) => line.trim().length > 0) ?? []
+  const blocks: { type: 'paragraph' | 'list'; items: string[] }[] = []
+  for (const line of lines) {
+    const bulletMatch = /^[-•]\s*(.+)/.exec(line.trim())
+    if (bulletMatch) {
+      const last = blocks[blocks.length - 1]
+      if (last?.type === 'list') {
+        last.items.push(bulletMatch[1])
+      } else {
+        blocks.push({ type: 'list', items: [bulletMatch[1]] })
+      }
+    } else {
+      blocks.push({ type: 'paragraph', items: [line.trim()] })
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl p-6">
@@ -80,8 +98,18 @@ export function ManagerInsightsPage() {
       {insights && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
           <div className="space-y-3 text-sm leading-relaxed text-slate-200">
-            {paragraphs.length > 0 ? (
-              paragraphs.map((p, i) => <p key={i}>{p}</p>)
+            {blocks.length > 0 ? (
+              blocks.map((block, i) =>
+                block.type === 'list' ? (
+                  <ul key={i} className="list-disc space-y-1.5 pl-5">
+                    {block.items.map((item, j) => (
+                      <li key={j}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p key={i}>{block.items[0]}</p>
+                ),
+              )
             ) : (
               <p className="text-slate-500">Nema dostupnog teksta.</p>
             )}
