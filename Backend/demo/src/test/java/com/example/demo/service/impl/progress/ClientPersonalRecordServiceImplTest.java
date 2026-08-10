@@ -112,7 +112,7 @@ class ClientPersonalRecordServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Client not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test

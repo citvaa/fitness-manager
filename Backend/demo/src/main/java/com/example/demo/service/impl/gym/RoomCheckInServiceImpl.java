@@ -46,12 +46,12 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
     @Transactional
     public RoomCheckInDTO checkIn(Integer roomId, Integer clientId) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new EntityNotFoundException("Room not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Soba nije pronađena"));
         Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new EntityNotFoundException("Client not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Klijent nije pronađen"));
 
         if (!roomCheckInRepository.findByClientIdAndCheckedOutAtIsNull(clientId).isEmpty()) {
-            throw new IllegalStateException("Client already has an active check-in - check out first");
+            throw new IllegalStateException("Klijent već ima aktivnu prijavu - potrebno je prvo odjaviti se");
         }
 
         RoomCheckIn checkIn = RoomCheckIn.builder()
@@ -66,7 +66,7 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
         } catch (DataIntegrityViolationException e) {
             // Belt-and-suspenders: the DB unique partial index (uq_room_check_in_one_active_per_client)
             // rejects a concurrent second active check-in even if the pre-check above raced.
-            throw new IllegalStateException("Client already has an active check-in - check out first", e);
+            throw new IllegalStateException("Klijent već ima aktivnu prijavu - potrebno je prvo odjaviti se", e);
         }
 
         broadcastOccupancy();
@@ -77,10 +77,10 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
     @Transactional
     public RoomCheckInDTO checkOut(Integer checkInId) {
         RoomCheckIn checkIn = roomCheckInRepository.findById(checkInId)
-                .orElseThrow(() -> new EntityNotFoundException("Check-in not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Prijava nije pronađena"));
 
         if (checkIn.getCheckedOutAt() != null) {
-            throw new IllegalStateException("Client is already checked out of this room");
+            throw new IllegalStateException("Klijent je već odjavljen iz ove sobe");
         }
 
         checkIn.setCheckedOutAt(LocalDateTime.now());
@@ -93,7 +93,7 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
     @Override
     public RoomOccupancyDTO getOccupancy(Integer roomId) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new EntityNotFoundException("Room not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Soba nije pronađena"));
         return toOccupancyDto(room);
     }
 

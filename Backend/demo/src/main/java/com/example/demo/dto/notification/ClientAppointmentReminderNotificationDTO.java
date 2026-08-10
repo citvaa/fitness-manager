@@ -13,6 +13,6 @@ public class ClientAppointmentReminderNotificationDTO {
     private String message;
 
     public ClientAppointmentReminderNotificationDTO(@NotNull AppointmentDTO appointment) {
-        this.message = "Reminder: You have a training session tomorrow at " + appointment.getStartTime();
+        this.message = "Podsetnik: imate termin treninga sutra u " + appointment.getStartTime();
     }
 }

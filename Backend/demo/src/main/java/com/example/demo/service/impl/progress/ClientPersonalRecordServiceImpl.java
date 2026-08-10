@@ -39,7 +39,7 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
         trainerClientAccessGuard.assertCanAccessClient(request.getClientId());
 
         Client client = clientRepository.findById(request.getClientId())
-                .orElseThrow(() -> new EntityNotFoundException("Client not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Klijent nije pronađen"));
 
         ClientPersonalRecord record = ClientPersonalRecord.builder()
                 .client(client)
@@ -57,7 +57,7 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
     @Transactional
     public ClientPersonalRecordDTO update(Integer id, CreatePersonalRecordRequest request) {
         ClientPersonalRecord record = clientPersonalRecordRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Personal record not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Lični rekord nije pronađen"));
 
         // Authorization is checked against the record's own (immutable) client, not the request
         // body - see the identical reasoning in ClientProgressEntryServiceImpl.update() and
@@ -77,7 +77,7 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
     @Transactional
     public void delete(Integer id) {
         ClientPersonalRecord record = clientPersonalRecordRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Personal record not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Lični rekord nije pronađen"));
 
         trainerClientAccessGuard.assertCanAccessClient(record.getClient().getId());
 
@@ -104,12 +104,12 @@ public class ClientPersonalRecordServiceImpl implements ClientPersonalRecordServ
     private @NotNull Client getAuthenticatedClient() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
 
         String email = jwt.getClaim("email");
 
         return clientRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+                .orElseThrow(() -> new RuntimeException("Klijent nije pronađen za prijavljenog korisnika!"));
     }
 }

@@ -42,7 +42,7 @@ public class NotificationServiceImpl implements NotificationService {
         String jsonPayload = JsonUtil.convertToJson(new TrainerScheduleNotificationDTO(appointments));
 
         User user = userRepository.findById(trainer.getUser().getId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Korisnik nije pronađen"));
 
         switch (user.getNotificationPreference()) {
             case BOTH -> {
@@ -65,7 +65,7 @@ public class NotificationServiceImpl implements NotificationService {
         String jsonPayload = JsonUtil.convertToJson(new ClientAppointmentReminderNotificationDTO(appointment));
 
         User user = userRepository.findById(client.getUser().getId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Korisnik nije pronađen"));
 
         switch (user.getNotificationPreference()) {
             case BOTH -> {

@@ -74,7 +74,7 @@ class PaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("greater than zero");
+                .hasMessageContaining("od nule");
 
         verifyNoInteractions(clientRepository, sessionRepository, paymentRepository);
     }
@@ -129,7 +129,7 @@ class PaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Client not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test

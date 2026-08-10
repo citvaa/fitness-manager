@@ -96,7 +96,7 @@ public class ClientProgressInsightServiceImpl implements ClientProgressInsightSe
 
     private ClientProgressInsightDTO generateSummary(Integer clientId) {
         if (!clientRepository.existsById(clientId)) {
-            throw new EntityNotFoundException("Client not found");
+            throw new EntityNotFoundException("Klijent nije pronađen");
         }
 
         List<ClientProgressEntry> entries = clientProgressEntryRepository.findByClientIdOrderByEntryDateAsc(clientId);
@@ -159,12 +159,12 @@ public class ClientProgressInsightServiceImpl implements ClientProgressInsightSe
     private @NotNull Client getAuthenticatedClient() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
 
         String email = jwt.getClaim("email");
 
         return clientRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+                .orElseThrow(() -> new RuntimeException("Klijent nije pronađen za prijavljenog korisnika!"));
     }
 }

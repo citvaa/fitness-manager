@@ -66,7 +66,7 @@ public class TrainerServiceImpl implements TrainerService {
     public TrainerDTO getById(Integer id) {
         return trainerRepository.findById(id)
                 .map(trainerMapper::toDto)
-                .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen"));
     }
 
     @CachePut(value = "TRAINER_CACHE", key = "#id")
@@ -80,14 +80,14 @@ public class TrainerServiceImpl implements TrainerService {
                     trainer.setStatus(request.getStatus());
                     Trainer savedTrainer = trainerRepository.save(trainer);
                     return trainerMapper.toDto(savedTrainer);
-                }).orElseThrow(() -> new EntityNotFoundException("User not found"));
+                }).orElseThrow(() -> new EntityNotFoundException("Korisnik nije pronađen"));
     }
 
     @CacheEvict(value = "TRAINER_CACHE", key = "#id")
     @Transactional
     public void delete(Integer id) {
         Trainer trainer = trainerRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Korisnik nije pronađen"));
         Integer userId = trainer.getUser().getId();
 
         trainerScheduleRepository.deleteByTrainer(trainer);
@@ -109,11 +109,11 @@ public class TrainerServiceImpl implements TrainerService {
     public List<ClientSummaryDTO> getMyClients() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
         String email = jwt.getClaim("email");
         Trainer trainer = trainerRepository.findByUserEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Trainer not found for the logged-in user!"));
+                .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen za prijavljenog korisnika!"));
 
         return clientAppointmentRepository.findDistinctClientsByAppointmentTrainerId(trainer.getId()).stream()
                 .map(client -> new ClientSummaryDTO(client.getId(), client.getUser().getEmail()))

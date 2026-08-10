@@ -13,6 +13,6 @@ public class TrainerAssignmentNotificationDTO {
     private String message;
 
     public TrainerAssignmentNotificationDTO(@NotNull AppointmentDTO appointment) {
-        this.message = "Update: You have been assigned for a new training session on " + appointment.getDate() + " at " + appointment.getStartTime();
+        this.message = "Obaveštenje: dodeljeni ste novom terminu treninga " + appointment.getDate() + " u " + appointment.getStartTime();
     }
 }

@@ -48,7 +48,7 @@ class GymServiceImplTest {
 
         assertThatThrownBy(() -> gymService.getGym())
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Gym has not been configured yet");
+                .hasMessageContaining("nije pod");
     }
 
     @Test

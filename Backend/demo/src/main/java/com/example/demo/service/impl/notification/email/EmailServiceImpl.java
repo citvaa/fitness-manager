@@ -41,19 +41,19 @@ public class EmailServiceImpl implements EmailService {
     }
 
     public void sendClientAppointmentReminderEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
-        String subject = "Training Reminder";
-        String body = "Hello, you have a training session scheduled tomorrow at " + appointment.getStartTime();
+        String subject = "Podsetnik za termin";
+        String body = "Poštovani, imate zakazan termin treninga sutra u " + appointment.getStartTime();
         asyncEmailService.sendEmail(clientEmail, subject, body);
     }
 
     public void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<AppointmentDTO> appointments) {
-        String subject = "Your Schedule for Tomorrow";
-        StringBuilder body = new StringBuilder("Hello, here is your schedule for tomorrow:\n\n");
+        String subject = "Vaš raspored za sutra";
+        StringBuilder body = new StringBuilder("Poštovani, evo vašeg rasporeda za sutra:\n\n");
 
         for (AppointmentDTO appointment : appointments) {
             body.append("⏰ ").append(appointment.getStartTime())
                     .append(" - ").append(appointment.getEndTime())
-                    .append(" | Clients: ");
+                    .append(" | Klijenti: ");
 
             Set<ClientSummaryDTO> clients = appointment.getClients();
             List<String> clientNames = clients.stream()

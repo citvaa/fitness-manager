@@ -117,7 +117,7 @@ class TrainerClientAccessGuardTest {
 
         assertThatThrownBy(() -> guard.assertCanAccessClient(7))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("never trained this client");
+                .hasMessageContaining("Nikada niste trenirali");
     }
 
     @Test
@@ -127,7 +127,7 @@ class TrainerClientAccessGuardTest {
 
         assertThatThrownBy(() -> guard.assertCanAccessClient(1))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Trainer not found");
+                .hasMessageContaining("nije prona");
 
         verifyNoInteractions(clientAppointmentRepository);
     }

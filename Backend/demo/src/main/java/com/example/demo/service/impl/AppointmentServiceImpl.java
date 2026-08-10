@@ -91,10 +91,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO addTrainer(Integer appointmentId, Integer trainerId) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         Trainer trainer = trainerRepository.findById(trainerId)
-                .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen"));
 
         appointment.setTrainer(trainer);
 
@@ -104,7 +104,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO removeTrainer(Integer id) {
         Appointment appointment = appointmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         appointment.setTrainer(null);
 
@@ -114,7 +114,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO addClients(Integer appointmentId, @NotNull Set<Integer> clientIds) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         // Filter out clients already on this appointment before doing anything else - otherwise
         // re-adding an already-assigned client would double-charge their session tracking and
@@ -131,9 +131,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         int capacity = appointment.getSession().getMaxParticipants();
         int currentCount = appointment.getClientAppointments().size();
         if (currentCount + newClientIds.size() > capacity) {
-            throw new IllegalArgumentException("Adding " + newClientIds.size()
-                    + " client(s) would exceed this appointment's capacity of " + capacity
-                    + " (currently " + currentCount + " booked)");
+            throw new IllegalArgumentException("Dodavanje " + newClientIds.size()
+                    + " klijenta bi premašilo kapacitet ovog termina od " + capacity
+                    + " (trenutno prijavljeno " + currentCount + ")");
         }
 
         Set<ClientAppointment> clientAppointments = createClientAppointments(newClientIds, appointment);
@@ -147,7 +147,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentDTO removeClient(Integer appointmentId, Integer clientId) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         Optional<ClientAppointment> toRemove = appointment.getClientAppointments().stream()
                 .filter(clientAppointment -> clientAppointment.getClient().getId().equals(clientId))
@@ -182,10 +182,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         Client client = getAuthenticatedClient();
 
         Appointment appointment = appointmentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Appointment not found!"));
+                .orElseThrow(() -> new RuntimeException("Termin nije pronađen!"));
 
         if (appointment.getClientAppointments().size() >= appointment.getSession().getMaxParticipants()) {
-            throw new RuntimeException("No available spots for this appointment!");
+            throw new RuntimeException("Nema slobodnih mesta za ovaj termin!");
         }
 
         ClientAppointment clientAppointment = createClientAppointment(client, appointment);
@@ -199,7 +199,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Client client = getAuthenticatedClient();
 
         Appointment appointment = appointmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         LocalDateTime appointmentTime = LocalDateTime.of(appointment.getDate(), appointment.getStartTime());
         LocalDateTime cancellationDeadline = appointmentTime.minusHours(24);
@@ -209,7 +209,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                     clientAppointment.getClient().getId().equals(client.getId()));
 
             if (!removed) {
-                throw new RuntimeException("Client is not registered for this appointment!");
+                throw new RuntimeException("Klijent nije prijavljen na ovaj termin!");
             }
 
             ClientSessionTracking tracking = getOrCreateClientSessionTracking(client, appointment.getSession());
@@ -217,7 +217,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
             return appointmentMapper.toDto(appointmentRepository.save(appointment));
         } else {
-            throw new RuntimeException("Too late to cancel! Cancellation must be at least 24 hours before the appointment.");
+            throw new RuntimeException("Prekasno za otkazivanje! Otkazivanje mora biti najmanje 24 sata pre termina.");
         }
     }
 
@@ -239,7 +239,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentDTO unassign(Integer appointmentId) {
         Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
         if (!trainerAppointment.getFirst().equals(trainerAppointment.getSecond().getTrainer())) {
-            throw new RuntimeException("Trainer is not assigned to this appointment!");
+            throw new RuntimeException("Trener nije dodeljen ovom terminu!");
         }
         trainerAppointment.getSecond().setTrainer(null);
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
@@ -296,26 +296,26 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, @NotNull LocalTime endTime) {
         if (startTime.isAfter(endTime) || startTime.equals(endTime)) {
-            throw new IllegalArgumentException("Start time must be before end time!");
+            throw new IllegalArgumentException("Vreme početka mora biti pre vremena završetka!");
         }
 
         if (date.isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("Appointment date must be in the future!");
+            throw new IllegalArgumentException("Datum termina mora biti u budućnosti!");
         }
     }
 
     private void validateGymSchedule(@NotNull LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
-                .orElseThrow(() -> new IllegalArgumentException("No gym schedule found for " + date.getDayOfWeek()));
+                .orElseThrow(() -> new IllegalArgumentException("Radno vreme teretane nije definisano za " + date.getDayOfWeek()));
 
         if (startTime.isBefore(gymSchedule.getOpeningTime()) || endTime.isAfter(gymSchedule.getClosingTime())) {
-            throw new IllegalArgumentException("Appointment is outside gym working hours!");
+            throw new IllegalArgumentException("Termin je van radnog vremena teretane!");
         }
     }
 
     private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
         if (id != null && !isTrainerAvailable(id, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trainer with ID " + id + " is already occupied in this time slot!");
+            throw new IllegalArgumentException("Trener sa ID " + id + " je već zauzet u ovom terminu!");
         }
     }
 
@@ -323,7 +323,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (ids != null) {
             for (Integer clientId : ids) {
                 if (!isClientAvailable(clientId, date, startTime, endTime)) {
-                    throw new IllegalArgumentException("Client with ID " + clientId + " is already booked in this time slot!");
+                    throw new IllegalArgumentException("Klijent sa ID " + clientId + " je već zakazan u ovom terminu!");
                 }
             }
         }
@@ -347,7 +347,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Session fetchSession(Integer id) {
         return sessionRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Sesija nije pronađena"));
     }
 
     private Trainer fetchTrainer(Integer id) {
@@ -373,7 +373,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         return clientIds.stream()
                 .map(clientId -> {
                     Client client = clientRepository.findById(clientId)
-                            .orElseThrow(() -> new EntityNotFoundException("Client not found"));
+                            .orElseThrow(() -> new EntityNotFoundException("Klijent nije pronađen"));
 
                     return createClientAppointment(client, appointment);
                 })
@@ -415,20 +415,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     private Client getAuthenticatedClient() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
 
         String email = jwt.getClaim("email");
 
         return clientRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+                .orElseThrow(() -> new RuntimeException("Klijent nije pronađen za prijavljenog korisnika!"));
     }
 
     private @NotNull Pair<Trainer, Appointment> getAuthenticatedTrainerAndAppointment(Integer id) {
         Trainer trainer = getAuthenticatedTrainer();
 
         Appointment appointment = appointmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Termin nije pronađen"));
 
         return Pair.of(trainer, appointment);
     }
@@ -436,12 +436,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     private Trainer getAuthenticatedTrainer() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
 
         String email = jwt.getClaim("email");
 
         return trainerRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Trainer not found for the logged-in user!"));
+                .orElseThrow(() -> new RuntimeException("Trener nije pronađen za prijavljenog korisnika!"));
     }
 }

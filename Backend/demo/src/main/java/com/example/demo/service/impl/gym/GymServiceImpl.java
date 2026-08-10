@@ -32,7 +32,7 @@ public class GymServiceImpl implements GymService {
     public GymDTO getGym() {
         List<Gym> gyms = gymRepository.findAll();
         if (gyms.isEmpty()) {
-            throw new EntityNotFoundException("Gym has not been configured yet");
+            throw new EntityNotFoundException("Teretana još nije podešena");
         }
         return gymMapper.toDto(gyms.get(0));
     }

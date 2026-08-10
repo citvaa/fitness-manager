@@ -145,7 +145,7 @@ class ClientProgressInsightServiceImplTest {
 
         assertThatThrownBy(() -> service.getSummary(5))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Client not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test

@@ -29,7 +29,7 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public RoomDTO create(CreateRoomRequest request) {
         Gym gym = gymRepository.findById(request.getGymId())
-                .orElseThrow(() -> new EntityNotFoundException("Gym not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Teretana nije pronađena"));
 
         Room room = Room.builder()
                 .gym(gym)
@@ -51,7 +51,7 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public RoomDTO update(Integer id, UpdateRoomRequest request) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Room not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Soba nije pronađena"));
 
         room.setName(request.getName());
         room.setType(request.getType());
@@ -70,7 +70,7 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public void delete(Integer id) {
         if (!roomRepository.existsById(id)) {
-            throw new EntityNotFoundException("Room not found");
+            throw new EntityNotFoundException("Soba nije pronađena");
         }
         roomRepository.deleteById(id);
     }
@@ -79,7 +79,7 @@ public class RoomServiceImpl implements RoomService {
     public RoomDTO getById(Integer id) {
         return roomRepository.findById(id)
                 .map(roomMapper::toDto)
-                .orElseThrow(() -> new EntityNotFoundException("Room not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Soba nije pronađena"));
     }
 
     @Override

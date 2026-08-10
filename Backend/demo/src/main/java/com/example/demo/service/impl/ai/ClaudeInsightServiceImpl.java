@@ -35,7 +35,7 @@ public class ClaudeInsightServiceImpl implements ClaudeInsightService {
     @Override
     public String generate(String systemPrompt, String userPrompt) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("ANTHROPIC_API_KEY is not set - cannot call the Claude API for AI insights.");
+            throw new IllegalStateException("ANTHROPIC_API_KEY nije podešen - AI uvid trenutno nije dostupan.");
         }
 
         MessageCreateParams params = MessageCreateParams.builder()
@@ -50,7 +50,7 @@ public class ClaudeInsightServiceImpl implements ClaudeInsightService {
             response = anthropicClient.messages().create(params);
         } catch (Exception e) {
             log.error("❌ Claude API call failed: {}", e.getMessage());
-            throw new IllegalStateException("Claude API call failed: " + e.getMessage(), e);
+            throw new IllegalStateException("Poziv Claude API-ja nije uspeo: " + e.getMessage(), e);
         }
 
         String text = response.content().stream()

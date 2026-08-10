@@ -64,27 +64,27 @@ public class PaymentServiceImpl implements PaymentService {
     private Client getAuthenticatedClient() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
         String email = jwt.getClaim("email");
         return clientRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Client not found for the logged-in user!"));
+                .orElseThrow(() -> new RuntimeException("Klijent nije pronađen za prijavljenog korisnika!"));
     }
 
     private void validatePaymentRequest(@NotNull CreatePaymentRequest request) {
         if (request.getPaidAppointments() <= 0) {
-            throw new IllegalArgumentException("Paid sessions must be greater than zero");
+            throw new IllegalArgumentException("Broj plaćenih termina mora biti veći od nule");
         }
     }
 
     private Client fetchClient(Integer clientId) {
         return clientRepository.findById(clientId)
-                .orElseThrow(() -> new IllegalArgumentException("Client not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Klijent nije pronađen"));
     }
 
     private Session fetchSession(Integer sessionId) {
         return sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Sesija nije pronađena"));
     }
 
     private ClientSessionTracking getOrCreateClientSessionTracking(Client client, Session session) {

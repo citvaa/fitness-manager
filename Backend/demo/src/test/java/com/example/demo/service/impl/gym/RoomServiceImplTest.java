@@ -53,7 +53,7 @@ class RoomServiceImplTest {
 
         assertThatThrownBy(() -> roomService.create(request))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Gym not found");
+                .hasMessageContaining("nije prona");
 
         verify(roomRepository, never()).save(any());
     }
@@ -93,7 +93,7 @@ class RoomServiceImplTest {
 
         assertThatThrownBy(() -> roomService.update(5, request))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Room not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test
@@ -132,7 +132,7 @@ class RoomServiceImplTest {
 
         assertThatThrownBy(() -> roomService.delete(3))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Room not found");
+                .hasMessageContaining("nije prona");
 
         verify(roomRepository, never()).deleteById(any());
     }
@@ -152,7 +152,7 @@ class RoomServiceImplTest {
 
         assertThatThrownBy(() -> roomService.getById(1))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Room not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test

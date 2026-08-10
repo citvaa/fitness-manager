@@ -15,6 +15,6 @@ public class ClientUpcomingAppointmentNotificationDTO {
 
     @Contract(pure = true)
     public ClientUpcomingAppointmentNotificationDTO(@NotNull AppointmentDTO appointment) {
-        this.message = "Reminder: You have a training session at " + appointment.getStartTime();
+        this.message = "Podsetnik: imate termin treninga u " + appointment.getStartTime();
     }
 }

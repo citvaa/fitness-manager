@@ -81,7 +81,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkIn(1, 1))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Room not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test
@@ -91,7 +91,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkIn(1, 2))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Client not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test
@@ -105,7 +105,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkIn(1, 2))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("already has an active check-in");
+                .hasMessageContaining("aktivnu prijavu");
 
         // The pre-check caught it - save should never even be attempted.
         verify(roomCheckInRepository, never()).save(any());
@@ -127,7 +127,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkIn(1, 2))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("already has an active check-in");
+                .hasMessageContaining("aktivnu prijavu");
 
         verifyNoInteractions(notificationService);
     }
@@ -173,7 +173,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkOut(5))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Check-in not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test
@@ -183,7 +183,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.checkOut(5))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("already checked out");
+                .hasMessageContaining("odjavljen");
 
         verify(roomCheckInRepository, never()).save(any());
     }
@@ -218,7 +218,7 @@ class RoomCheckInServiceImplTest {
 
         assertThatThrownBy(() -> service.getOccupancy(1))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Room not found");
+                .hasMessageContaining("nije prona");
     }
 
     @Test

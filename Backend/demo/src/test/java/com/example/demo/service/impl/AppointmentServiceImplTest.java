@@ -144,7 +144,7 @@ class AppointmentServiceImplTest {
 
         assertThatThrownBy(() -> service.reserve(10))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("No available spots");
+                .hasMessageContaining("Nema slobodnih mesta");
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -200,7 +200,7 @@ class AppointmentServiceImplTest {
 
         assertThatThrownBy(() -> service.cancel(10))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Too late to cancel");
+                .hasMessageContaining("Prekasno za otkazivanje");
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -218,7 +218,7 @@ class AppointmentServiceImplTest {
 
         assertThatThrownBy(() -> service.cancel(10))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("not registered");
+                .hasMessageContaining("nije prijavljen");
     }
 
     // ---------- assign / unassign ----------
@@ -274,7 +274,7 @@ class AppointmentServiceImplTest {
 
         assertThatThrownBy(() -> service.unassign(10))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("not assigned");
+                .hasMessageContaining("nije dodeljen");
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -461,7 +461,7 @@ class AppointmentServiceImplTest {
 
         assertThatThrownBy(() -> service.addClients(10, Set.of(2)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("capacity");
+                .hasMessageContaining("kapacitet");
 
         verify(appointmentRepository, never()).save(any());
         verifyNoInteractions(clientSessionTrackingRepository);

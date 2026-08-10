@@ -37,7 +37,7 @@ public class TrainerClientAccessGuard {
     public void assertCanAccessClient(Integer clientId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AccessDeniedException("Unauthorized access!");
+            throw new AccessDeniedException("Neovlašćen pristup!");
         }
 
         List<String> roles = jwt.getClaimAsStringList("roles");
@@ -47,10 +47,10 @@ public class TrainerClientAccessGuard {
 
         String email = jwt.getClaim("email");
         Trainer trainer = trainerRepository.findByUserEmail(email)
-                .orElseThrow(() -> new AccessDeniedException("Trainer not found for the logged-in user!"));
+                .orElseThrow(() -> new AccessDeniedException("Trener nije pronađen za prijavljenog korisnika!"));
 
         if (!clientAppointmentRepository.existsByClientIdAndAppointmentTrainerId(clientId, trainer.getId())) {
-            throw new AccessDeniedException("You have never trained this client - access denied");
+            throw new AccessDeniedException("Nikada niste trenirali ovog klijenta - pristup odbijen");
         }
     }
 }
