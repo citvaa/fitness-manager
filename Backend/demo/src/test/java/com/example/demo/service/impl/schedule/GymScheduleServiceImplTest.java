@@ -45,7 +45,7 @@ class GymScheduleServiceImplTest {
     void create_insertsANewRowWhenDayHasNoScheduleYet() {
         CreateGymScheduleRequest request = new CreateGymScheduleRequest(
                 DayOfWeek.SUNDAY, LocalTime.of(9, 0), LocalTime.of(15, 0));
-        when(gymScheduleRepository.findByDay(DayOfWeek.SUNDAY)).thenReturn(Optional.empty());
+        when(gymScheduleRepository.findByDay(any(DayOfWeek.class))).thenReturn(Optional.empty());
         when(gymScheduleRepository.save(any(GymSchedule.class))).thenAnswer(inv -> inv.getArgument(0));
         when(gymScheduleMapper.toDto(any(GymSchedule.class))).thenReturn(new GymScheduleDTO());
 
@@ -62,6 +62,7 @@ class GymScheduleServiceImplTest {
     void create_overwritesTheExistingRowInsteadOfErroringWhenDayAlreadyHasOne() {
         GymSchedule existing = GymSchedule.builder().id(1).day(DayOfWeek.MONDAY)
                 .openingTime(LocalTime.of(0, 0)).closingTime(LocalTime.of(23, 0)).build();
+        when(gymScheduleRepository.findByDay(any(DayOfWeek.class))).thenReturn(Optional.empty());
         when(gymScheduleRepository.findByDay(DayOfWeek.MONDAY)).thenReturn(Optional.of(existing));
         when(gymScheduleRepository.save(any(GymSchedule.class))).thenAnswer(inv -> inv.getArgument(0));
         when(gymScheduleMapper.toDto(any(GymSchedule.class))).thenReturn(new GymScheduleDTO());
