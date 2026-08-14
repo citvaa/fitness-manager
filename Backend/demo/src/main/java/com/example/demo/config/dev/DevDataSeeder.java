@@ -6,6 +6,7 @@ import com.example.demo.enums.RecordUnit;
 import com.example.demo.enums.Role;
 import com.example.demo.enums.RoomType;
 import com.example.demo.enums.SessionType;
+import com.example.demo.enums.WorkStatus;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.Holiday;
 import com.example.demo.model.Payment;
@@ -16,6 +17,7 @@ import com.example.demo.model.gym.RoomCheckIn;
 import com.example.demo.model.progress.ClientPersonalRecord;
 import com.example.demo.model.progress.ClientProgressEntry;
 import com.example.demo.model.schedule.GymSchedule;
+import com.example.demo.model.schedule.TrainerSchedule;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.ClientSessionTracking;
@@ -501,6 +503,14 @@ public class DevDataSeeder implements CommandLineRunner {
 
         List<Appointment> appointmentsToSave = new ArrayList<>();
         List<ClientAppointment> clientAppointmentsToSave = new ArrayList<>();
+        // One WORKING TrainerSchedule row per (trainer, date) actually booked below - see
+        // "Upgrade: dev-seeder trainer-schedule gap fix" in AGENTS.md. Without this, every
+        // seeded appointment looks "uncovered" against the real TrainerSchedule table (empty
+        // after seeding) even though the seeder only ever assigns a trainer to a date within
+        // their own fixed TRAINER_WORKDAY_SETS pattern - a seeder gap, not a validation gap
+        // (AppointmentServiceImpl.validateTrainerWorkingSchedule already requires real coverage
+        // for appointments created through the actual API).
+        List<TrainerSchedule> trainerScheduleToSave = new ArrayList<>();
         // Participant count per in-progress appointment, tracked here rather than via
         // Appointment.getClientAppointments().size() - BaseEntity's Lombok @Data equals()/
         // hashCode() only compares audit fields (never the subclass id, see AGENTS.md "Known
@@ -541,6 +551,11 @@ public class DevDataSeeder implements CommandLineRunner {
             int comboCounter = 0;
             int totalCombos = slots.size() * workingTrainers.size();
             int skippedForNoFreeSlot = 0;
+            // Trainers actually assigned at least one appointment on this date - the exact set
+            // that needs a matching WORKING TrainerSchedule row below, not the whole
+            // workingTrainers list (a trainer eligible to work this weekday may still end up with
+            // zero appointments on a specific date if there aren't enough clients/combos).
+            Set<Trainer> bookedTrainersToday = new HashSet<>();
 
             for (Client client : interestedClients) {
                 // Weighted towards group sessions - the only way ~50 clients' bookings fit into a
@@ -578,6 +593,7 @@ public class DevDataSeeder implements CommandLineRunner {
                         skippedForNoFreeSlot++;
                         continue;
                     }
+                    bookedTrainersToday.add(trainer);
 
                     Room room = null;
                     if (!rooms.isEmpty()) {
@@ -627,6 +643,24 @@ public class DevDataSeeder implements CommandLineRunner {
                         skippedForNoFreeSlot, date, totalCombos);
             }
 
+            // One WORKING shift per trainer actually booked today, spanning this weekday's whole
+            // slotsFor() range (simpler and more realistic than a tight per-trainer min/max of only
+            // their own assigned slots, and still always a superset of what needs to be covered -
+            // see AGENTS.md "Upgrade: dev-seeder trainer-schedule gap fix").
+            if (!bookedTrainersToday.isEmpty()) {
+                LocalTime dayStart = slots.get(0);
+                LocalTime dayEnd = slots.get(slots.size() - 1).plusHours(1);
+                for (Trainer trainer : bookedTrainersToday) {
+                    trainerScheduleToSave.add(TrainerSchedule.builder()
+                            .trainer(trainer)
+                            .date(date)
+                            .startTime(dayStart)
+                            .endTime(dayEnd)
+                            .status(WorkStatus.WORKING)
+                            .build());
+                }
+            }
+
             // A handful of trainer-less "open slots" - the whole point of the TRAINER self-assign
             // marketplace (POST /api/appointment/{id}/assign, already fully wired since Faza 7)
             // is meaningless without any actual trainer-less appointment to assign to, and
@@ -660,6 +694,7 @@ public class DevDataSeeder implements CommandLineRunner {
         // Appointments first - ClientAppointment rows reference their generated ids via FK.
         appointmentRepository.saveAll(appointmentsToSave);
         clientAppointmentRepository.saveAll(clientAppointmentsToSave);
+        trainerScheduleRepository.saveAll(trainerScheduleToSave);
     }
 
     // ---------------------------------------------------------------------------------- payments
