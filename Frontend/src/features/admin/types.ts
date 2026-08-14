@@ -131,6 +131,10 @@ export interface AppointmentClientSummary {
 export interface RoomOptionDTO {
   id: number
   name: string
+  /** Backs the "Tip sesije" picker filter (a session type only fits a room whose capacity is at
+   * least that type's maxParticipants) - see AGENTS.md "Upgrade: appointment picker filtering
+   * decisions". */
+  capacity: number
 }
 
 export interface AppointmentDTO {

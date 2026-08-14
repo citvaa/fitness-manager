@@ -169,6 +169,27 @@ export function getSessionsForPicker() {
  * duplication in features/payments/api.ts). */
 export function getRoomsForPicker() {
   return http
-    .get<{ id: number; name: string }[]>('/api/gym/room')
-    .then((r): RoomOptionDTO[] => r.data.map((room) => ({ id: room.id, name: room.name })))
+    .get<{ id: number; name: string; capacity: number }[]>('/api/gym/room')
+    .then((r): RoomOptionDTO[] => r.data.map((room) => ({ id: room.id, name: room.name, capacity: room.capacity })))
+}
+
+/** Trainers that would actually pass create()'s validation for this date/time (working-schedule
+ * coverage + not already double-booked) - narrows the "new appointment" form's trainer picker so a
+ * manager can't select a combination the backend would reject anyway. Backend remains the
+ * authority - create()/createRecurringAppointment() re-validate from scratch regardless (this is a
+ * picker-filtering UX aid, not a second source of truth for the check itself). See AGENTS.md
+ * "Upgrade: appointment picker filtering decisions". */
+export function getAvailableTrainersForPicker(date: string, startTime: string, endTime: string) {
+  return http
+    .get<TrainerDTO[]>('/api/appointment/available-trainers', { params: { date, startTime, endTime } })
+    .then((r) => r.data)
+}
+
+/** Same reasoning as getAvailableTrainersForPicker() above, for the room picker. */
+export function getAvailableRoomsForPicker(date: string, startTime: string, endTime: string) {
+  return http
+    .get<{ id: number; name: string; capacity: number }[]>('/api/appointment/available-rooms', {
+      params: { date, startTime, endTime },
+    })
+    .then((r): RoomOptionDTO[] => r.data.map((room) => ({ id: room.id, name: room.name, capacity: room.capacity })))
 }

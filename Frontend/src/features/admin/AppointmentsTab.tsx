@@ -7,6 +7,8 @@ import {
   createAppointment,
   createRecurringAppointment,
   getAllAppointments,
+  getAvailableRoomsForPicker,
+  getAvailableTrainersForPicker,
   getClients,
   getRoomsForPicker,
   getSessionsForPicker,
@@ -25,6 +27,32 @@ function extractErrorMessage(err: unknown, fallback: string): string {
     return err.response.data.message
   }
   return fallback
+}
+
+/** Backend validation errors are sometimes multi-line - most notably
+ * createRecurringAppointment()'s "nothing could be created" message, which is a summary sentence
+ * followed by one "date: reason" line per attempted week (see AGENTS.md "Upgrade: appointment
+ * conflict-message decisions"). A plain <p> collapses "\n" into nothing, turning that into an
+ * unreadable wall of text - this renders the first line as a heading and the rest as a bulleted
+ * list, and falls back to a single <p> for any plain one-line message. Used for every backend
+ * error message shown in this component (createError/rowError), not just the recurring case,
+ * since any future multi-line message here would hit the same collapsing problem. */
+function ErrorMessage({ message, className }: { message: string; className: string }) {
+  const lines = message.split('\n').filter((line) => line.trim().length > 0)
+  if (lines.length <= 1) {
+    return <p className={className}>{message}</p>
+  }
+  const [heading, ...rest] = lines
+  return (
+    <div className={className}>
+      <p>{heading}</p>
+      <ul className="mt-1 list-disc space-y-1 pl-4">
+        {rest.map((line, i) => (
+          <li key={i}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
@@ -76,6 +104,16 @@ export function AppointmentsTab() {
   const [rowError, setRowError] = useState<string | null>(null)
   const [addClientChoice, setAddClientChoice] = useState<Record<number, string>>({})
 
+  // Trainer/room options for the "Novi termin" form specifically - narrowed to what's actually
+  // available for the currently entered date/start/end (falls back to the full trainers/rooms
+  // lists when those three fields aren't all filled in yet, or on a fetch error). Kept separate
+  // from `trainers`/`rooms` above, which back the unrelated result-list filters and the per-row
+  // "assign trainer" dropdown - those must keep showing every trainer/room regardless of this
+  // form's date/time. See AGENTS.md "Upgrade: appointment picker filtering decisions".
+  const [formTrainers, setFormTrainers] = useState<TrainerDTO[]>([])
+  const [formRooms, setFormRooms] = useState<RoomOptionDTO[]>([])
+  const [formOptionsLoading, setFormOptionsLoading] = useState(false)
+
   async function reload() {
     setLoading(true)
     try {
@@ -103,6 +141,83 @@ export function AppointmentsTab() {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Refetch the form's trainer/room options whenever the date/start/end change. For a "fiksni
+  // termin" this deliberately only looks at the first occurrence's date/time - a best-effort aid,
+  // not a guarantee every one of the 8 weekly instances will succeed (that's still surfaced by the
+  // per-date breakdown in createError if the whole series fails). See AGENTS.md.
+  useEffect(() => {
+    const { date, startTime, endTime } = form
+    if (!date || !startTime || !endTime || startTime >= endTime) {
+      setFormTrainers(trainers)
+      setFormRooms(rooms)
+      return
+    }
+    let cancelled = false
+    setFormOptionsLoading(true)
+    Promise.all([
+      getAvailableTrainersForPicker(date, `${startTime}:00`, `${endTime}:00`),
+      getAvailableRoomsForPicker(date, `${startTime}:00`, `${endTime}:00`),
+    ])
+      .then(([availableTrainers, availableRooms]) => {
+        if (cancelled) return
+        setFormTrainers(availableTrainers)
+        setFormRooms(availableRooms)
+      })
+      .catch(() => {
+        // Fail open to the unfiltered lists rather than leaving the pickers empty on a transient
+        // network error - this is a UX aid on top of the authoritative backend validation, not a
+        // replacement for it, so showing too much here is safer than showing too little.
+        if (cancelled) return
+        setFormTrainers(trainers)
+        setFormRooms(rooms)
+      })
+      .finally(() => {
+        if (!cancelled) setFormOptionsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.date, form.startTime, form.endTime, trainers, rooms])
+
+  // Clear a previously chosen trainer/room if it fell out of the now-current available list (e.g.
+  // the manager changes the date after already picking a trainer who isn't free on the new date) -
+  // otherwise the form would silently submit a doomed combination that no longer shows as selected
+  // in the dropdown's visible options.
+  useEffect(() => {
+    if (form.trainerId && !formTrainers.some((t) => String(t.id) === form.trainerId)) {
+      setForm((f) => ({ ...f, trainerId: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formTrainers])
+
+  useEffect(() => {
+    if (form.roomId && !formRooms.some((r) => String(r.id) === form.roomId)) {
+      setForm((f) => ({ ...f, roomId: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formRooms])
+
+  const selectedFormRoom = useMemo(
+    () => formRooms.find((r) => String(r.id) === form.roomId),
+    [formRooms, form.roomId],
+  )
+
+  // A session type only fits a room whose capacity is at least that type's maxParticipants - see
+  // AGENTS.md "Upgrade: appointment picker filtering decisions" for why this criterion (rather
+  // than an exact match) was chosen. Shows every type until a room is picked.
+  const filteredSessions = useMemo(() => {
+    if (!selectedFormRoom) return sessions
+    return sessions.filter((s) => s.maxParticipants <= selectedFormRoom.capacity)
+  }, [sessions, selectedFormRoom])
+
+  useEffect(() => {
+    if (form.sessionId && !filteredSessions.some((s) => String(s.id) === form.sessionId)) {
+      setForm((f) => ({ ...f, sessionId: filteredSessions[0] ? String(filteredSessions[0].id) : '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredSessions])
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -240,35 +355,20 @@ export function AppointmentsTab() {
             />
           </label>
           <label className="block text-xs text-slate-400">
-            Tip sesije
-            <select
-              required
-              value={form.sessionId}
-              onChange={(e) => setForm((f) => ({ ...f, sessionId: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
-            >
-              <option value="" disabled>
-                Izaberi...
-              </option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {SESSION_TYPE_LABEL[s.type] ?? s.type} (max {s.maxParticipants})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs text-slate-400">
             Trener
             <select
               required
+              disabled={formOptionsLoading}
               value={form.trainerId}
               onChange={(e) => setForm((f) => ({ ...f, trainerId: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500 disabled:opacity-60"
             >
               <option value="" disabled>
-                Izaberi trenera...
+                {formTrainers.length === 0 && form.date && form.startTime && form.endTime && !formOptionsLoading
+                  ? 'Nema dostupnih trenera za ovaj termin'
+                  : 'Izaberi trenera...'}
               </option>
-              {trainers.map((t) => (
+              {formTrainers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.user.email}
                 </option>
@@ -279,16 +379,39 @@ export function AppointmentsTab() {
             Soba
             <select
               required
+              disabled={formOptionsLoading}
               value={form.roomId}
               onChange={(e) => setForm((f) => ({ ...f, roomId: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500 disabled:opacity-60"
+            >
+              <option value="" disabled>
+                {formRooms.length === 0 && form.date && form.startTime && form.endTime && !formOptionsLoading
+                  ? 'Nema dostupnih soba za ovaj termin'
+                  : 'Izaberi sobu...'}
+              </option>
+              {formRooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-slate-400">
+            Tip sesije
+            <select
+              required
+              value={form.sessionId}
+              onChange={(e) => setForm((f) => ({ ...f, sessionId: e.target.value }))}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             >
               <option value="" disabled>
-                Izaberi sobu...
+                {filteredSessions.length === 0 && selectedFormRoom
+                  ? 'Nema odgovarajućih tipova sesije za ovu sobu'
+                  : 'Izaberi...'}
               </option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
+              {filteredSessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {SESSION_TYPE_LABEL[s.type] ?? s.type} (max {s.maxParticipants})
                 </option>
               ))}
             </select>
@@ -305,7 +428,7 @@ export function AppointmentsTab() {
         >
           {creating ? 'Kreiranje...' : form.recurring ? 'Kreiraj fiksni termin' : 'Kreiraj termin'}
         </button>
-        {createError && <p className="mt-3 text-xs text-red-400">{createError}</p>}
+        {createError && <ErrorMessage message={createError} className="mt-3 text-xs text-red-400" />}
         {createInfo && <p className="mt-3 text-xs text-emerald-400">{createInfo}</p>}
       </form>
 
@@ -355,7 +478,7 @@ export function AppointmentsTab() {
             </select>
           </div>
 
-          {rowError && <p className="mb-3 text-xs text-red-400">{rowError}</p>}
+          {rowError && <ErrorMessage message={rowError} className="mb-3 text-xs text-red-400" />}
 
           {loading ? (
             <p className="text-sm text-slate-500">Učitavanje...</p>
