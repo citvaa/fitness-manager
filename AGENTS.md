@@ -331,7 +331,33 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   full live room-occupancy snapshot (`List<RoomOccupancyDTO>`, JSON-serialized once server-side)
   for the live floor-plan view - broadcast both event-driven (every check-in/check-out) and via a
   once-a-minute `OccupancyScheduler` sweep (for occupancy changes driven by appointments
-  starting/ending, which have no application event to hang a push off of).
+  starting/ending, which have no application event to hang a push off of). As of the notification-
+  audit round, every per-recipient notification method (trainer-assignment, trainer-daily-schedule,
+  client-appointment-reminder, client-upcoming-appointment, payment-confirmation) branches on
+  `NotificationPreference` identically (`EMAIL` -> email only, `PUSH` -> WebSocket only, `BOTH` ->
+  both) - trainer-assignment and client-upcoming-appointment previously ignored the preference
+  entirely (always WebSocket-only); see AGENTS.md "Upgrade: notification decisions" and
+  `docs/decision-log.md` for the fix and its live verification. A `/topic/manager` topic (new this
+  round) broadcasts manager-facing alerts (a client self-booking via `POST /{id}/reserve`, a
+  trainer self-assigning via `POST /{id}/assign`) to every MANAGER account - deliberately
+  WebSocket-only/not preference-aware, same "public feed, no single owner" rationale as
+  `/topic/gym/occupancy`, since there can be more than one MANAGER and nothing marks one as "the"
+  recipient (see the decision log for why per-manager email fan-out was scoped out).
+- **Frontend push delivery** (`Frontend/src/features/notifications/`): before this round, nothing
+  in the frontend subscribed to `/topic/trainer{id}`/`/topic/client{id}` at all - every PUSH-
+  preference WebSocket notification for a TRAINER/CLIENT went nowhere. `NotificationProvider`
+  (mounted once in `AppShell.tsx`) now resolves subscription topics from the logged-in user's
+  *held* roles (not their currently *active* one, so a multi-role account keeps both live) via two
+  new self-lookup endpoints, `GET /api/trainer/me`/`GET /api/client/me` (id-only, same JWT-email
+  idiom as every other self-service endpoint), and a `NotificationBell` in the sidebar header
+  renders an unread-count badge plus a dropdown history (capped at 30) - the actual visible proof
+  that a PUSH notification arrived.
+- **Self-service notification preference**: `GET /api/user/me`/`PATCH /api/user/me/notification-
+  preference` (no `@RoleRequired` - reachable by any authenticated role, resolved from the JWT) let
+  every role view/change their own preference; the pre-existing `PATCH /{id}/notification-
+  preference` stays MANAGER-only/other-user-facing. Frontend `NotificationPreferenceSelect` sits in
+  `AppShell`'s footer, role-agnostic since the preference lives on `User`, not a role-specific
+  entity.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment digests at 20:00, and an
   hourly sweep for appointments starting within the next hour.
 - `websocket/StompWebSocketClient` is a manual `public static void main` test harness left in
@@ -545,6 +571,18 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
 
 - Refresh tokens have no rotation and no server-side revocation - a leaked refresh token stays
   valid until its own natural (2h) expiry.
+- `DevDataSeeder`'s marker accounts (`admin`/`ogi`/`citva`) have their login username as their
+  `email` column value, not a real email address. Any EMAIL/BOTH-preference notification (and
+  presumably activation/reset-password emails) silently fails for exactly these three accounts via
+  an async `MailSendException` (Gmail rejects it as an invalid RFC 5321 address) that only reaches
+  the log, never the user - found live during the notification-audit round (see
+  `docs/decision-log.md` "Upgrade: notification decisions"). The other ~49 generated clients/4
+  trainers have realistic `@fitpro.dev` addresses and are unaffected.
+- `NotificationBell`/`NotificationPreferenceSelect` (added in the notification-audit round) were
+  verified via `tsc -b` and a live Node/STOMP script that confirmed the WebSocket frames they'd
+  render actually arrive, but were never screenshotted in a real browser - no browser-automation
+  tool was available in that session. Worth a visual pass with one before trusting the rendered
+  layout/interaction, not just the data path.
 - Claude's manager-insights JSON response occasionally slips a Cyrillic-alphabet word into an
   otherwise-Latin-script Serbian sentence (e.g. "занетост" mid-sentence) despite the system prompt
   explicitly saying "latinica... do not use ćirilica" - observed live during the manager-insights

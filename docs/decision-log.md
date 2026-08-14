@@ -3769,3 +3769,136 @@ client back out afterward via a direct API call, to leave the dev dataset as fou
 
 - None. Both items in this round were explicitly scoped by the session brief; no additional
   pre-existing issues were newly encountered while implementing either.
+
+## Upgrade: notification decisions
+
+Session brief was a notification-system audit: 5 known notification types (trainer-assignment,
+trainer-daily-schedule, client-appointment-reminder, client-upcoming-appointment, gym-occupancy
+broadcast), a report that (a) trainer-assignment and (d) client-upcoming-appointment ignored
+`NotificationPreference` entirely (always WebSocket-only, unlike (b)/(c) which already branched
+correctly), a report that nothing in the frontend subscribed to `/topic/trainer{id}`/
+`/topic/client{id}` at all (only `/topic/gym/occupancy`, the manager's live floor plan), and a
+request to add a self-service preference endpoint/UI plus propose additional notification types.
+
+**Confirmed the frontend gap first** (`grep -rn "topic/trainer\|topic/client" Frontend/src` before
+any change): zero matches outside this session's new code. Every PUSH-preference trainer/client
+account in the dev seed data was therefore receiving nothing, ever, for any WebSocket notification -
+not a hypothetical, a real dead code path since `NotificationServiceImpl`'s `/topic/trainer{id}`/
+`/topic/client{id}` sends were added.
+
+**(a)/(d) preference fix**: both methods were rewritten to the same `switch (user.
+getNotificationPreference())` shape already used by `sendTrainerScheduleNotification`/
+`sendClientAppointmentReminderNotification` - `EMAIL` sends only the (new) email, `PUSH` sends
+only the WebSocket frame, `BOTH` sends both. `sendTrainerAssignmentNotification`'s signature
+changed from `(Integer trainerId, AppointmentDTO)` to `(Trainer trainer, AppointmentDTO)` - the
+preference branch needs the trainer's `User` (for `notificationPreference`/email), and the sole
+caller (`AppointmentServiceImpl.create()`) already had the full `Trainer` in hand, so this is a
+pure signature tightening, not a new lookup. Added `EmailService.sendTrainerAssignmentEmail`/
+`sendClientUpcomingAppointmentEmail` (same plain-string-body style as the pre-existing
+`sendClientAppointmentReminderEmail`/`sendTrainerScheduleEmail` - AGENTS.md's Notifications section
+already documents this as an established inconsistency vs. the Thymeleaf-templated
+activation/reset emails, not something to "fix" as a side effect here).
+
+**Frontend push delivery + UI** (`Frontend/src/features/notifications/`): a `useNotificationSocket`
+hook (modeled on `gym/useOccupancySocket.ts`'s connection handling, generalized to accept an
+arbitrary topic list) plus a `NotificationProvider`/`useNotifications` context that resolves which
+topics to subscribe to from the logged-in user's *held* roles, not their currently *active* one -
+TRAINER holds resolve `/topic/trainer{id}` via a new `GET /api/trainer/me`, CLIENT holds resolve
+`/topic/client{id}` via a new `GET /api/client/me` (neither endpoint existed before; both are the
+obvious missing "self" pair next to the pre-existing `TrainerController.getMyClients`/manager-only
+CRUD, same JWT-email-repository idiom as everywhere else). This means a multi-role account (e.g. a
+TRAINER who is also a CLIENT) keeps receiving both topics' notifications even while only one role's
+nav is visible, matching how the rest of the app already treats "held roles" vs. "active role" as
+separate concerns (`AppShell`'s role switcher). Mounted once in `AppShell.tsx` (wraps the whole
+shell) so the subscription survives navigation between pages instead of reconnecting per page. A
+`NotificationBell` (🔔, unread-count badge, dropdown history capped at 30) in the sidebar header is
+the actual visible proof-of-delivery this session's brief called for - without it, "PUSH" was
+provably a no-op regardless of what the backend sent.
+
+**Self-service preference**: `GET /api/user/me`/`PATCH /api/user/me/notification-preference` (no
+`@RoleRequired`, reachable by any authenticated role, resolved from the JWT via a new private
+`UserServiceImpl.getCurrentUser()` - the existing `PATCH /{id}/notification-preference` stays
+MANAGER-only/other-user-facing, unchanged). Frontend `NotificationPreferenceSelect` (plain
+`<select>`, optimistic update with rollback on failure) placed in `AppShell`'s footer next to the
+user's email/"Odjava" - role-agnostic by design since the preference lives on `User`, not any
+role-specific entity, so it doesn't belong under any one role's nav section.
+
+**New notification types proposed and implemented** (session brief explicitly left this open):
+1. **Payment confirmation to client** - implemented. A client has no way to know a payment was
+   recorded on their behalf except by manually checking `/client/uplate`; this is the same
+   "someone else acted on my behalf, tell me" shape as (a) trainer-assignment, so it got the
+   identical per-recipient `NotificationPreference`-respecting treatment (new
+   `PaymentConfirmationNotificationDTO`, `NotificationService.sendPaymentConfirmationNotification`,
+   `EmailService.sendPaymentConfirmationEmail`), fired from `PaymentServiceImpl.create()` after the
+   payment is saved.
+2. **Manager alert on new client self-booking / trainer self-assign** - implemented, but
+   *deliberately* not preference-aware. Both `AppointmentServiceImpl.reserve()` (CLIENT
+   self-booking, `/api/appointment/{id}/reserve`) and `.assign()` (TRAINER self-assign to an open
+   slot, `/api/appointment/{id}/assign`) now call a new `NotificationService.sendManagerAlert
+   (String message)`, broadcasting a `ManagerAlertNotificationDTO{message}` to a single fixed
+   `/topic/manager` topic - every MANAGER account gets it, WebSocket-only, same "public feed, no
+   single owner" rationale AGENTS.md already documents for (e) gym-occupancy broadcast. This was a
+   deliberate scope cut: there can be more than one MANAGER account and nothing in this codebase
+   marks one as "the" recipient of a given alert, so doing this properly (per-manager `EMAIL`/
+   `BOTH` branching) would mean querying every user with the MANAGER role and fanning out
+   individually - a real feature, not a fix, and out of scope for this session. Documented here
+   explicitly so a future session doesn't mistake the broadcast-only behavior for an oversight.
+   Considered and rejected for this round: a "new reservation" alert on manager-created
+   appointments too (`AppointmentServiceImpl.create()`) - that action is already manager-initiated,
+   so notifying the actor about their own action would be noise.
+
+**Live verification**: started the real backend (Postgres/Redis via the existing `docker compose`,
+`mvn -o -Dmaven.test.skip=true spring-boot:run` - a stray earlier background `mvn spring-boot:run`
+had bound port 8088 with stale pre-session code and had to be killed first, see below) and drove it
+end-to-end with a small Node script (`@stomp/stompjs`'s wire protocol re-implemented directly over
+Node's native `WebSocket` in ~30 lines, no dependency install needed) that: logs in as `admin`/
+`ogi`/`citva`, calls `GET /api/user/me`/`/api/trainer/me`/`/api/client/me`, `PATCH`es citva's
+preference between `BOTH`/`EMAIL`/`PUSH`, opens one real STOMP connection and subscribes to
+`/topic/client{citvaId}`, `/topic/trainer{ogiId}`, and `/topic/manager` - the exact topic set
+`NotificationProvider` itself computes - then triggers real actions through the real REST API and
+watches which frames arrive:
+- `POST /api/payment` for citva while `BOTH` -> `/topic/client362` frame received (payment-
+  confirmation message) confirmed live.
+- Same call while preference switched to `EMAIL` -> **no** WebSocket frame received (correctly
+  suppressed) - confirms the branch is genuinely gating on the live DB value, not always sending.
+- `POST /api/appointment/{id}/reserve` as citva -> `/topic/manager` frame received ("Nova
+  rezervacija: citva je zakazao/la termin ...").
+- `POST /api/appointment/{id}/assign` as ogi (on a real trainer-less seeded slot) -> `/topic/
+  manager` frame received ("Trener ogi je preuzeo/la termin bez trenera ...").
+- Confirmed the EMAIL channel itself is live (not just "no exception on the WebSocket side"): the
+  first payment call above logged a real `org.springframework.mail.MailSendException` from
+  `AsyncEmailServiceImpl.sendEmail` - **not** an auth failure (SMTP login succeeded), but Gmail
+  rejecting `citva` as an invalid RFC 5321 recipient address, because the `citva`/`ogi`/`admin` seed
+  accounts' `email` column is literally their login username, not a real address (see "Bugs found,
+  not fixed" below). Re-ran the same payment call for a normally-seeded client with a real-shaped
+  address (`ana.petrovic@fitpro.dev`, id 357) and got **no** exception logged - Gmail SMTP accepted
+  and queued the send, live-proving the EMAIL branch actually dispatches through the real mail
+  server end to end, not just that the code path is reached.
+- Preference-branch coverage for all four notification types across all three preference values
+  (12 cases) is additionally locked in by a new `NotificationServiceImplTest` (10 tests, all
+  passing) - broader and faster than trying to live-trigger every combination through the running
+  app, and it exists specifically so this exact regression (a)/(d) had can't silently reappear.
+  `PaymentServiceImplTest` (pre-existing, was already failing to compile before this session - see
+  "Bugs found" below) was fixed as part of adding `NotificationService` to `PaymentServiceImpl`'s
+  constructor, since that mismatch was this session's own doing, unlike the still-broken
+  `ManagerInsightsServiceImplTest`.
+- Did **not** live-verify (b) trainer-daily-schedule or (c) client-appointment-reminder end-to-end
+  through the running app, since neither was touched this session (already correct, per AGENTS.md);
+  their code path is unchanged from what a prior session already live-verified.
+- No browser/screenshot verification of the `NotificationBell`/`NotificationPreferenceSelect` UI
+  itself was possible this session (no browser-automation tool available in this environment,
+  unlike prior rounds' Playwright screenshots) - `tsc -b` is clean and the Node/STOMP script proves
+  the exact same subscribe-and-render data path the bell consumes actually delivers live frames, but
+  the visual rendering was not screenshotted. Worth a follow-up with a browser tool available.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- **Dev-seed marker accounts (`admin`/`ogi`/`citva`) have their login username as their `email`
+  column value**, not a real email address (`select email from "user" where email in ('admin',
+  'ogi','citva')` returns exactly `admin`/`ogi`/`citva`). Any EMAIL/BOTH-preference notification,
+  and presumably activation/reset-password emails too, silently fails for these three specific
+  accounts via an async `MailSendException` (Gmail: "not a valid RFC 5321 address") that's caught
+  by Spring's default `SimpleAsyncUncaughtExceptionHandler` and only ever reaches the log - never
+  the user, never an exception the caller sees. `DevDataSeeder`'s other ~49 generated clients/4
+  trainers all have realistic `@fitpro.dev`-style addresses and are unaffected. Pre-existing (not
+  introduced this session) - `DevDataSeeder`'s marker-account block is the fix point if picked up.
