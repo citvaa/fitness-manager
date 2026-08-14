@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react'
-import { getMyPayments } from './api'
-import type { PaymentDTO } from './types'
+import { getMyPaymentStatus, getMyPayments } from './api'
+import { PaymentStatusSummary } from './PaymentStatusSummary'
+import type { PaymentDTO, SessionTypePaymentStatusDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
 
 export function MyPaymentsPage() {
   const [payments, setPayments] = useState<PaymentDTO[]>([])
+  const [status, setStatus] = useState<SessionTypePaymentStatusDTO[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getMyPayments()
-      .then(setPayments)
+    Promise.all([getMyPayments(), getMyPaymentStatus()])
+      .then(([p, s]) => {
+        setPayments(p)
+        setStatus(s)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -19,6 +24,12 @@ export function MyPaymentsPage() {
     <div className="p-6">
       <h1 className="mb-1 text-lg font-semibold text-slate-100">Moje uplate</h1>
       <p className="mb-6 text-sm text-slate-500">Istorija tvojih uplata za termine.</p>
+
+      {!loading && (
+        <div className="mb-6">
+          <PaymentStatusSummary status={status} />
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         {loading ? (

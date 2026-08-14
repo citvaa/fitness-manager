@@ -1,5 +1,11 @@
 import { http } from '../../lib/http'
-import type { ClientSummaryDTO, CreatePaymentRequest, PaymentDTO, SessionDTO } from './types'
+import type {
+  ClientSummaryDTO,
+  CreatePaymentRequest,
+  PaymentDTO,
+  SessionDTO,
+  SessionTypePaymentStatusDTO,
+} from './types'
 
 export function getAllPayments(clientId?: number) {
   return http.get<PaymentDTO[]>('/api/payment', { params: { clientId } }).then((r) => r.data)
@@ -7,6 +13,16 @@ export function getAllPayments(clientId?: number) {
 
 export function getMyPayments() {
   return http.get<PaymentDTO[]>('/api/payment/me').then((r) => r.data)
+}
+
+/** MANAGER-facing - held-vs-paid debt status for one client, per session type. */
+export function getPaymentStatus(clientId: number) {
+  return http.get<SessionTypePaymentStatusDTO[]>(`/api/payment/status/${clientId}`).then((r) => r.data)
+}
+
+/** CLIENT self-service version of getPaymentStatus, resolved from the JWT. */
+export function getMyPaymentStatus() {
+  return http.get<SessionTypePaymentStatusDTO[]>('/api/payment/me/status').then((r) => r.data)
 }
 
 export function createPayment(request: CreatePaymentRequest) {

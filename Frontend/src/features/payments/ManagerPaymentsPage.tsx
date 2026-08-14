@@ -1,8 +1,9 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { DateInput } from '../../components/DateInput'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import { createPayment, getAllPayments, getClientsForPicker, getSessions } from './api'
-import type { ClientSummaryDTO, PaymentDTO, SessionDTO } from './types'
+import { createPayment, getAllPayments, getClientsForPicker, getPaymentStatus, getSessions } from './api'
+import { PaymentStatusSummary } from './PaymentStatusSummary'
+import type { ClientSummaryDTO, PaymentDTO, SessionDTO, SessionTypePaymentStatusDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
@@ -14,6 +15,8 @@ export function ManagerPaymentsPage() {
   const [loading, setLoading] = useState(true)
 
   const [filterClientId, setFilterClientId] = useState<number | ''>('')
+  const [status, setStatus] = useState<SessionTypePaymentStatusDTO[] | null>(null)
+  const [statusLoading, setStatusLoading] = useState(false)
 
   const [clientId, setClientId] = useState<number | ''>('')
   const [sessionId, setSessionId] = useState<number | ''>('')
@@ -33,6 +36,15 @@ export function ManagerPaymentsPage() {
     }
   }
 
+  async function reloadStatus(id: number) {
+    setStatusLoading(true)
+    try {
+      setStatus(await getPaymentStatus(id))
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
   useEffect(() => {
     void reload()
     getClientsForPicker().then(setClients)
@@ -42,6 +54,11 @@ export function ManagerPaymentsPage() {
   function handleFilterChange(id: number | '') {
     setFilterClientId(id)
     void reload(id || undefined)
+    if (id) {
+      void reloadStatus(id)
+    } else {
+      setStatus(null)
+    }
   }
 
   async function handleCreate(e: FormEvent) {
@@ -58,6 +75,11 @@ export function ManagerPaymentsPage() {
       })
       setPaidAppointments(1)
       await reload(filterClientId || undefined)
+      // Keep the debt summary in sync if a payment was just recorded for the currently-filtered
+      // client - a payment for a different client doesn't affect what's shown.
+      if (filterClientId && filterClientId === clientId) {
+        await reloadStatus(filterClientId)
+      }
     } catch {
       setCreateError('Unos uplate nije uspeo.')
     } finally {
@@ -132,6 +154,18 @@ export function ManagerPaymentsPage() {
         </button>
         {createError && <p className="mt-3 text-xs text-red-400">{createError}</p>}
       </form>
+
+      {filterClientId && (
+        <div className="mb-6">
+          {statusLoading || !status ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+              <LoadingIndicator className="text-sm text-slate-500" />
+            </div>
+          ) : (
+            <PaymentStatusSummary status={status} />
+          )}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <div className="mb-4 flex items-center justify-between">

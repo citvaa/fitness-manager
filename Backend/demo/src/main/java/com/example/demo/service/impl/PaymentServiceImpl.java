@@ -1,11 +1,15 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.PaymentDTO;
+import com.example.demo.dto.SessionTypePaymentStatusDTO;
+import com.example.demo.enums.SessionType;
 import com.example.demo.mapper.PaymentMapper;
+import com.example.demo.model.Appointment;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientSessionTracking;
 import com.example.demo.model.Payment;
 import com.example.demo.model.Session;
+import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.PaymentRepository;
@@ -21,7 +25,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -33,6 +41,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ClientRepository clientRepository;
     private final SessionRepository sessionRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
+    private final AppointmentRepository appointmentRepository;
 
     @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {
@@ -58,6 +67,53 @@ public class PaymentServiceImpl implements PaymentService {
     public List<PaymentDTO> getMyPayments() {
         Client client = getAuthenticatedClient();
         return paymentMapper.toDto(paymentRepository.findByClientIdOrderByPaymentDateDesc(client.getId()));
+    }
+
+    @Override
+    public List<SessionTypePaymentStatusDTO> getPaymentStatus(Integer clientId) {
+        return computePaymentStatus(clientId);
+    }
+
+    @Override
+    public List<SessionTypePaymentStatusDTO> getMyPaymentStatus() {
+        Client client = getAuthenticatedClient();
+        return computePaymentStatus(client.getId());
+    }
+
+    /** Compares actually-HELD past appointments (a client's own {@code ClientAppointment} rows
+     * whose appointment has already ended, grouped by {@code Session.type}) against PAID
+     * appointments ({@code Payment.paidAppointments}, same grouping) - see AGENTS.md "Upgrade:
+     * payment debt tracking decisions" for why this queries real Appointment/ClientAppointment/
+     * Payment data rather than {@code ClientSessionTracking} (whose `reservedAppointments`
+     * includes future, not-yet-attended bookings - a client shouldn't show as "owing" for a
+     * session that hasn't happened yet) or {@code DevDataSeeder}'s internal `bookedCounts` map
+     * (seed-time only, not available at request time). Deliberately computed in Java over the
+     * fetched lists rather than a grouped JPQL aggregation - the per-client row counts here are
+     * small (a client's own appointment/payment history, not a table scan), and this stays
+     * consistent with the same "small duplication/directness over cleverness" style already used
+     * elsewhere in this service. */
+    private List<SessionTypePaymentStatusDTO> computePaymentStatus(Integer clientId) {
+        LocalDateTime now = LocalDateTime.now();
+        Map<SessionType, Integer> held = new EnumMap<>(SessionType.class);
+        for (Appointment appointment : appointmentRepository.findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(clientId)) {
+            LocalDateTime end = LocalDateTime.of(appointment.getDate(), appointment.getEndTime());
+            if (end.isBefore(now)) {
+                held.merge(appointment.getSession().getType(), 1, Integer::sum);
+            }
+        }
+
+        Map<SessionType, Integer> paid = new EnumMap<>(SessionType.class);
+        for (Payment payment : paymentRepository.findByClientIdOrderByPaymentDateDesc(clientId)) {
+            paid.merge(payment.getSession().getType(), payment.getPaidAppointments(), Integer::sum);
+        }
+
+        List<SessionTypePaymentStatusDTO> status = new ArrayList<>();
+        for (SessionType type : SessionType.values()) {
+            int heldCount = held.getOrDefault(type, 0);
+            int paidCount = paid.getOrDefault(type, 0);
+            status.add(new SessionTypePaymentStatusDTO(type, heldCount, paidCount, Math.max(0, heldCount - paidCount)));
+        }
+        return status;
     }
 
     /** Same JWT->email->repository idiom used across the codebase (see AGENTS.md, "Upgrade: service layer decisions"). */
