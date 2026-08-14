@@ -150,12 +150,23 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **Room** (`model/gym/Room.java`) - belongs to a `Gym`; name, `RoomType`, capacity, and
   **rectangle** geometry (`posX`/`posY`/`width`/`height`/`rotationDegrees`, all `double precision`)
   for the 2D floor-plan editor/live view - deliberately not an arbitrary polygon, since real gym
-  rooms are overwhelmingly rectangular and `react-konva`'s `Rect` maps to this directly. The room
-  editor (`RoomEditorPage`) enforces a 4m x 2.5m minimum resize floor client-side only (no backend
-  validation) so the name label/occupancy count rendered on top never spills outside the
-  rectangle - not enforced retroactively against rooms already smaller than that. The 5 seed rooms
-  (including their exact dimensions/capacity) are now defined solely in `DevDataSeeder` (see
-  "Conventions" below) rather than a Flyway migration.
+  rooms are overwhelmingly rectangular and `react-konva`'s `Rect` maps to this directly. The
+  minimum size a room may be resized to is no longer a single fixed constant (previously a flat
+  4m x 2.5m floor) - it is now computed **per room from its own name/type** (name length is the
+  dominant factor, since it's the only unbounded string), so the live floor-plan tile
+  (`LiveFloorPlanPage`'s `RoomTile`, which has no `overflow-hidden`) is guaranteed to fit its
+  icon+name, type label, progress bar, and count/percent badge without truncating or spilling
+  outside the rectangle. See `docs/decision-log.md`'s "Upgrade: room minimum-size decisions" for
+  the formula, the frontend/backend split, and why the backend's heuristic is deliberately a
+  looser approximation
+  tuned to stay at least as strict as the frontend's exact canvas measurement - enforced on both
+  create and update (including a name-only rename, since a longer name on an already-valid room
+  must not be savable without a matching size increase), and re-checked but **not** retroactively
+  against rooms already smaller than the newly-computed minimum for their content. The 5 seed
+  rooms (including their exact dimensions/capacity) are now defined solely in `DevDataSeeder` (see
+  "Conventions" below) rather than a Flyway migration - one of them (`Svlačionica`) had its width
+  bumped from 6.0 to 7.5 units as part of this change, since the old value no longer satisfies its
+  own name's computed minimum.
 - **RoomCheckIn** (`model/gym/RoomCheckIn.java`) - a manual check-in/check-out event of a `Client`
   into a `Room`; `checkedOutAt == null` means currently inside. At most one active check-in per
   client is enforced **globally** (not per-room) by a DB unique partial index
@@ -267,7 +278,11 @@ Redis via Spring Cache, one global `RedisCacheConfiguration` (10 min TTL, JSON s
 - `MANAGER_INSIGHTS_CACHE` (30 min TTL) - `@Cacheable` on `ManagerInsightsServiceImpl.getInsights()`;
   a separate `refreshInsights()` evicts+regenerates+re-populates directly via an injected
   `CacheManager` (never calling the cached method internally, to avoid the Spring AOP
-  self-invocation pitfall), backing `POST /api/insights/manager/refresh`.
+  self-invocation pitfall), backing `POST /api/insights/manager/refresh`. Caches the full
+  structured `ManagerInsightsDTO` (see "Upgrade: manager-insights dashboard decisions" in
+  `docs/decision-log.md`) - changing that DTO's shape again will leave a stale/incompatible entry
+  under the `'current'` key for up to the 30 min TTL on existing Redis data; flush that key (or
+  the whole cache) after a shape change during local dev, the same way this session had to.
 - `CLIENT_PROGRESS_INSIGHT_CACHE` (10 min TTL) - manual `CacheManager` lookup/populate (no
   `@Cacheable` annotation, for the same self-invocation reason) in
   `ClientProgressInsightServiceImpl`; evicted explicitly whenever a `ClientProgressEntry` is
@@ -364,6 +379,12 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
 
 - Refresh tokens have no rotation and no server-side revocation - a leaked refresh token stays
   valid until its own natural (2h) expiry.
+- Claude's manager-insights JSON response occasionally slips a Cyrillic-alphabet word into an
+  otherwise-Latin-script Serbian sentence (e.g. "занетост" mid-sentence) despite the system prompt
+  explicitly saying "latinica... do not use ćirilica" - observed live during the manager-insights
+  dashboard upgrade (see `docs/decision-log.md`, "Upgrade: manager-insights dashboard decisions").
+  Not a code bug - it's model output variance the prompt doesn't fully constrain - but worth
+  knowing before assuming a rendering bug if a Cyrillic word shows up on `/manager/insights`.
 - `AuditorAwareImpl` always returns empty (nothing populates `SecurityContext` in this
   interceptor-based auth model) - `createdBy`/`updatedBy` are effectively dead columns on every
   entity.

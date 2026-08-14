@@ -2547,3 +2547,165 @@ backend and real dev database as detailed above; items 4 and 5 were verified by 
 build` succeeding cleanly (no type errors across the new component and its two call sites) and by
 direct code/diff review, not by clicking through the UI.
 
+## Upgrade: room minimum-size decisions
+
+A fourth round, driven by a written brief (2026-08-14) covering two independent manager-facing
+items from manual testing. Chrome browser automation was unavailable again this session (extension
+reported not connected, same as rounds 2 and 3) - see "what could not be visually verified" below
+for exactly what that limits on this item.
+
+**Problem**: `LiveFloorPlanPage`'s `RoomTile` has no `overflow-hidden`, so a room too small for its
+own name truncates it (`Recepcija` → "Rece...") or spills content outside the rectangle. The old
+floor (`RoomEditorPage`'s `MIN_ROOM_WIDTH_UNITS = 4` / `MIN_ROOM_HEIGHT_UNITS = 2.5`, a single
+constant for every room) didn't actually guarantee this - `Svlačionica` at 6x6 units and
+`Recepcija` at 8x6 units were both already above that floor and still truncated, since the
+constant had no relationship to what the tile actually renders.
+
+**Formula**: replaced the fixed constant with `computeMinRoomUnits(name, type)`
+(`Frontend/src/features/gym/roomSizing.ts`), which reconstructs `RoomTile`'s actual box model in
+pixels and converts back to geometry units (1 unit = 20px, `PX_PER_UNIT`):
+- Width = padding (`p-3` = 12px/side) + border (`border-2` = 2px/side) + the widest of: (icon +
+  gap + Canvas-`measureText`-measured name width, at the exact `600 14px` font `RoomTile`'s name
+  span renders with), the type-label width, or the bottom row's fixed width (`"99/99"` badge +
+  gap + `"100%"` - the widest plausible values for those two live-updating fields, so the minimum
+  doesn't shrink again once occupancy actually reaches those values).
+- Height = padding + border + name-line-height + type-line-height + bar height/margin + badge-row
+  height - all fixed contributions, since the name is `truncate` (never wraps to a second line) so
+  height has no free-text component. This comes out to a single derived constant (5.0 units)
+  rather than something that varies with name length - a deliberate, documented consequence of the
+  layout, not an oversight.
+- Rounds up to the nearest 0.5 unit so the editor's drag handles still snap to human-friendly
+  sizes.
+
+Wired into `RoomEditorPage`'s `RoomShape` (`boundBoxFunc` for the Transformer's live resize clamp,
+`onTransformEnd` for the persisted patch) **per room**, computed fresh from that room's own current
+`name`/`type` on every render - not the old shared constant. `persistPatch` also recomputes and
+auto-grows `width`/`height` whenever a `name`/`type` patch is applied (not just on resize), so
+typing a longer name into the "Naziv" field immediately raises the floor instead of silently
+saving an undersized room that only 400s on the *next* unrelated edit.
+
+**Backend mirror**: `RoomServiceImpl.create()`/`update()` call `RoomSizingPolicy` (new
+package-private class, same package), which reimplements the same box model without canvas/font
+access - name length × a fixed average-character-width constant (`8.5px`, deliberately rounded up
+from a typical ~7.5px real measured average for 600-weight 14px Latin text) instead of exact
+`measureText`. Chosen to be *at least as strict* as the frontend on purpose: an heuristic that
+under-counts required width would let a room pass backend validation that still truncates
+client-side, which is the actual bug being fixed. Rejects with `IllegalArgumentException` (→ `400`
+via the existing `GlobalExceptionHandler` `RuntimeException` mapping, same as every other
+validation failure in this codebase) and a Serbian message naming the room's name and the computed
+minimum dimensions. Re-validated on **every** create/update, not just when `width`/`height`
+change, so a rename-only patch on an already-valid room is re-checked too - this is what actually
+enforces the "longer name needs a bigger room" rule; the frontend's auto-grow above is just a UX
+nicety on top of it.
+
+**Existing seed data**: per AGENTS.md's established precedent ("not enforced retroactively against
+rooms already smaller than that"), the new minimum is not retroactively applied to existing DB
+rows - only create/update are gated. However, to make `/manager/plan-uzivo` actually render
+correctly out of the box, `DevDataSeeder`'s `Svlačionica` definition was bumped from 6.0 to 7.5
+units wide (an 11-character name needs 7.5 per the backend heuristic; the old 6.0 was exactly the
+value that reproduced the reported bug) and `Recepcija`'s `posX` shifted from 16.0 to 17.5 to keep
+a gap now that its neighbor is wider. Every other seeded room already exceeded its own computed
+minimum. Verified via `POST /api/dev/reseed` (MANAGER JWT) followed by `GET /api/gym/room`,
+confirming `Svlačionica` now reports `width: 7.5`.
+
+**Verified live against the running backend** (not just compiled): `mvn -o compile` and
+`npx tsc -b` both clean; `POST /api/gym/room` with a deliberately long name (`"Vrlo dugacko ime
+sale za testiranje"`, 8 chars width/2 chars height) returned `400` with `"Soba je premala za naziv
+\"Vrlo dugacko ime sale za testiranje\" - minimalna dimenzija je 17.5m x 5.0m, ..."` - confirming
+the rejection path, the computed minimum, and the Serbian message all work end-to-end.
+
+## Upgrade: manager-insights dashboard decisions
+
+**Problem**: `/manager/insights` rendered Claude's entire response as one prose paragraph plus a
+`<ul>` of recommendations - "a wall of text nobody will read." The brief asked for the same
+underlying analytics (30-day room check-ins, distinct clients, average check-in duration, paid
+appointments per session type) but exposed as real numbers for charts, with a **per-item** AI
+verdict (not one closing paragraph), while keeping a short overall summary + recommendations as
+one section among several, not the whole page.
+
+**DTO redesign**: `ManagerInsightsDTO` went from a single `insightText` string to five structured
+fields - `summary` (String), `recommendations` (`List<String>`), `roomOccupancy`
+(`List<RoomOccupancyInsightDTO>`: room name, check-in count, share-of-total percent, an
+`InsightRating` enum, a one-sentence `comment`), `sessionTypeBreakdown`
+(`List<SessionTypeInsightDTO>`: same shape, keyed by `Session.type`), and `attendance`
+(`AttendanceInsightDTO`: distinct clients, total check-ins, average duration, rating, comment).
+`InsightRating` is a fixed 4-value enum (`EXCELLENT`/`GOOD`/`AVERAGE`/`POOR`) rather than free text
+- same pattern as `RoomType`'s English-enum/Serbian-label split elsewhere in this codebase - so the
+frontend renders a consistent colored badge per item instead of parsing prose.
+
+**Prompt/parsing redesign**: the old approach asked for free-form prose (one paragraph + `"- "`
+bullet lines) and had the *frontend* regex-parse it into paragraph/list blocks.
+`ManagerInsightsServiceImpl`'s new `SYSTEM_PROMPT` instead spells out an exact JSON object shape
+and asks Claude to return **only** that JSON (no markdown fences, no commentary) - one
+`roomRatings`/`sessionTypeRatings` entry per room/session-type actually present in the data, each
+naming its subject (`roomName`/`sessionType`) so the backend can match it back to the
+already-computed numbers by name (case-insensitive). Parsed via the existing Spring-managed
+Jackson `ObjectMapper` into a package-private `ClaudeManagerInsightResponse` (own file,
+`@JsonIgnoreProperties(ignoreUnknown = true)` throughout for forward-compatibility), defensively
+stripped of a leading/trailing ` ```json ` fence first since Claude occasionally adds one despite
+being told not to. A rating that fails to parse, or a room/session-type Claude's response omits
+entirely, degrades to `AVERAGE` + a generic "Nema dovoljno podataka za ocenu." comment rather than
+failing the whole request - matches this codebase's general preference for graceful degradation
+over a hard failure on AI-response variance. A genuine JSON parse failure (Claude ignoring the
+format entirely) still throws `IllegalStateException` → `400`, same failure mode as the old
+free-text path had for an empty/unusable response.
+
+**Every room is included, not just ones with check-ins** - `computeMetrics()` seeds
+`checkInsByRoom` from `roomRepository.findAll()` first (defaulting to 0), then overlays actual
+counts, so the per-room chart reflects the whole floor plan's occupancy including rooms nobody
+checked into, which is itself informative.
+
+**Frontend**: new `Frontend/src/features/insights/InsightCharts.tsx` (companion to the page, same
+pattern as `progress/ProgressCharts.tsx`) holds `RatingBadge`, `StatTile`, `RoomOccupancyChart`,
+and `SessionTypeChart` - both charts are horizontal Recharts `BarChart`s (`layout="vertical"`),
+each bar colored by that item's `InsightRating` via per-`Cell` fill, reusing the same
+green/amber/red traffic-light convention `LiveFloorPlanPage`'s `occupancyColor` already
+established, extended with a distinct sky-blue step for `GOOD` so all four ratings stay visually
+distinct. `ManagerInsightsPage` was rewritten around a stack of `SectionCard`s: a summary +
+recommendations card, three attendance `StatTile`s, an attendance rating card, then the room and
+session-type charts each followed by a per-item rating+comment list (redundant with the chart's
+bar color on purpose - the color communicates the verdict at a glance, the list gives the actual
+sentence). `RATING_LABEL`/`RATING_COLOR` constant maps live in `features/insights/types.ts`,
+mirroring the `ROOM_TYPE_LABEL`/`ROOM_TYPE_ICON` convention in `features/gym/types.ts`.
+
+**Redis cache caveat hit live**: `MANAGER_INSIGHTS_CACHE` (30 min TTL) had a stale entry from
+before this change under the `'current'` key from the already-running dev backend; the first
+`GET /api/insights/manager` after restarting with the new code still returned the **old**
+`insightText`-shaped JSON, because the backend process serving the request hadn't actually
+restarted yet (an earlier `mvnw spring-boot:run` from before this session's edits was still bound
+to :8088). Diagnosed via `Get-CimInstance Win32_Process` showing the java process's start time
+predated the new source files, fixed by stopping both the `mvnw` wrapper and child JVM processes,
+flushing Redis (`redis-cli FLUSHALL`, since a changed DTO shape could otherwise deserialize into
+garbage or throw depending on the serializer) and restarting - documented in AGENTS.md's Caching
+section as a general "flush the cache after a shape change" note for future sessions.
+
+**Verified live against the running backend**: after the restart above, `GET
+/api/insights/manager` returned the new structured shape with real per-room/per-session-type
+numbers and ratings computed from the actual reseeded dev dataset (5 rooms each with a real
+`checkIns` count and computed `sharePercent`, `GROUP` at 250 paid appointments/84.5% share rated
+`EXCELLENT` vs `INDIVIDUAL` at 46/15.5% rated `POOR`, attendance numbers matching the dev dataset).
+`mvn -o compile` and `npx tsc -b` both clean for the DTO/service and the new chart
+components/rewritten page.
+
+**Bug found in Claude's output, not this codebase's code** (flagged per this session's
+instructions rather than silently worked around): one live response's `summary` text contained a
+Cyrillic-alphabet word ("занетост") embedded mid-sentence in otherwise-Latin-script Serbian text,
+despite `SYSTEM_PROMPT` explicitly saying "Latin alphabet (latinica) ... do not use Cyrillic
+(ćirilica)". This is model output variance the prompt doesn't fully constrain, not a parsing or
+rendering bug - the JSON structure itself was valid and parsed correctly. Documented in AGENTS.md
+Known issues; not fixed, since there's no code-level lever for it beyond what the prompt already
+asks for.
+
+**What could not be visually verified this session**: no Chrome/browser automation tool was
+connected (extension reported not connected, same limitation as rounds 2 and 3), so neither
+change was screenshotted in a real browser. For item 1 (room minimum size), the actual on-screen
+appearance of `/manager/plan-uzivo` (whether `Recepcija`/`Svlačionica`'s names now render without
+truncation, whether the editor's resize handles visibly clamp at the new per-room floor) was not
+confirmed visually - verification was limited to the backend rejection/acceptance behavior above,
+`GET /api/gym/room` confirming the reseeded dimensions, and code-level review of `RoomTile`'s
+actual CSS box model against the formula's constants. For item 2 (insights dashboard), the charts'
+actual rendering (bar colors, layout, responsiveness) was not screenshotted - verification was
+limited to the API response shape/values above and `tsc -b` type-checking the chart components
+against that same shape. Both items should be given a real look in the browser before considering
+this fully done.
+
