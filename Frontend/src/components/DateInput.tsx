@@ -17,6 +17,15 @@ import { useState } from 'react'
  * always reaches the native input underneath (still opens the picker normally); the overlay
  * disappears the moment the input gets a value (a real date shows through normally) or gets
  * focus (so typing/using the native picker is never obscured).
+ *
+ * The overlay alone only DRAWS OVER the native input - it doesn't hide the native "dd-----yyyy"
+ * segment placeholder underneath, so both were visible at once (overlapping, unreadable) until an
+ * inline `style={{ color: 'transparent' }}` was added to the native input itself for exactly the
+ * `showPlaceholder` window. Inline `style` wins over any `className` a caller passes (its default
+ * text-color class would otherwise still apply, since a plain CSS class can't out-rank an inline
+ * style), so this reliably hides the native segments without depending on every call site's exact
+ * className. Reverts to inheriting normal text color the instant there's a value or focus, so the
+ * real picked date and the native picker itself are never affected.
  */
 export function DateInput({
   value,
@@ -54,6 +63,7 @@ export function DateInput({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className={className}
+        style={showPlaceholder ? { color: 'transparent' } : undefined}
       />
       {showPlaceholder && (
         <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-sm text-slate-500">
