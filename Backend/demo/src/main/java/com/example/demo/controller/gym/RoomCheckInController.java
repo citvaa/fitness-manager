@@ -60,4 +60,16 @@ public class RoomCheckInController {
     public ResponseEntity<List<RoomOccupancyDTO>> getAllOccupancy() {
         return ResponseEntity.ok(roomCheckInService.getAllOccupancy());
     }
+
+    /** Backs the TRAINER "Započni trening" client check-in panel - whether a given client already
+     * has an active (not-yet-checked-out) check-in anywhere, so the UI can offer "Check-out"
+     * instead of "Check-in" for that client. 204 (no body) when the client has no active check-in,
+     * rather than a null-bodied 200, so the frontend can branch on status alone. */
+    @RoleRequired({"MANAGER", "TRAINER"})
+    @GetMapping("/check-in/active/{clientId}")
+    public ResponseEntity<RoomCheckInDTO> getActiveCheckIn(@PathVariable Integer clientId) {
+        return roomCheckInService.getActiveCheckInForClient(clientId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
 }

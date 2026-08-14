@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { ClientCheckInPanel } from './ClientCheckInPanel'
 import {
   assignSelfToAppointment,
   getAppointmentsWithoutTrainer,
@@ -56,6 +57,10 @@ function clientList(a: AppointmentDTO) {
  * indicators already tell a trainer which days have anything to look at (for the "assigned to me"
  * section) - "Termini bez trenera" now filters to `selectedDate` exactly like "Termini za
  * {selectedDate}" above it, using the same calendar and the same selected day.
+ *
+ * "Započni trening" (assigned-to-me cards only) toggles a per-appointment `ClientCheckInPanel`
+ * with Check-in/Check-out per roster client, backed by the pre-existing room check-in endpoints -
+ * see AGENTS.md "Upgrade: trainer check-in decisions".
  */
 export function TrainerAppointmentsPage() {
   const [mine, setMine] = useState<AppointmentDTO[]>([])
@@ -64,6 +69,7 @@ export function TrainerAppointmentsPage() {
   const [busyId, setBusyId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso())
+  const [checkInPanelId, setCheckInPanelId] = useState<number | null>(null)
 
   async function reload() {
     setLoading(true)
@@ -134,7 +140,7 @@ export function TrainerAppointmentsPage() {
         </div>
         <div className="mt-1 text-xs text-slate-400">Soba: {a.room?.name ?? 'bez sobe'}</div>
         <div className="mt-1 text-xs text-slate-400">Klijenti: {clientList(a)}</div>
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {options?.assignAction ? (
             <button
               onClick={() => handleAssign(a.id)}
@@ -144,17 +150,26 @@ export function TrainerAppointmentsPage() {
               {busyId === a.id ? '...' : 'Prijavi se'}
             </button>
           ) : (
-            isUpcoming(a) && (
+            <>
               <button
-                onClick={() => handleUnassign(a.id)}
-                disabled={busyId === a.id}
-                className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
+                onClick={() => setCheckInPanelId((id) => (id === a.id ? null : a.id))}
+                className="rounded-lg border border-slate-700 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
               >
-                {busyId === a.id ? '...' : 'Otkaži dodelu'}
+                {checkInPanelId === a.id ? 'Sakrij klijente' : 'Započni trening'}
               </button>
-            )
+              {isUpcoming(a) && (
+                <button
+                  onClick={() => handleUnassign(a.id)}
+                  disabled={busyId === a.id}
+                  className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
+                >
+                  {busyId === a.id ? '...' : 'Otkaži dodelu'}
+                </button>
+              )}
+            </>
           )}
         </div>
+        {!options?.assignAction && checkInPanelId === a.id && <ClientCheckInPanel appointment={a} />}
       </li>
     )
   }

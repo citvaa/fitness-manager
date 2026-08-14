@@ -34,3 +34,13 @@ export interface AppointmentDTO {
   room: RoomSummaryDTO | null
   clients: ClientSummaryDTO[]
 }
+
+/** Backs the TRAINER "Započni trening" client check-in panel - see AGENTS.md "Upgrade: trainer
+ * check-in decisions". */
+export interface RoomCheckInDTO {
+  id: number
+  room: RoomSummaryDTO
+  client: ClientSummaryDTO
+  checkedInAt: string // ISO LocalDateTime
+  checkedOutAt: string | null
+}

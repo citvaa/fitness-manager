@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * See AGENTS.md ("Upgrade: schema decisions" and "Upgrade: service layer decisions") - the
@@ -102,6 +103,13 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
         return roomRepository.findAll().stream()
                 .map(this::toOccupancyDto)
                 .toList();
+    }
+
+    @Override
+    public Optional<RoomCheckInDTO> getActiveCheckInForClient(Integer clientId) {
+        return roomCheckInRepository.findByClientIdAndCheckedOutAtIsNull(clientId).stream()
+                .findFirst()
+                .map(roomCheckInMapper::toDto);
     }
 
     private void broadcastOccupancy() {
