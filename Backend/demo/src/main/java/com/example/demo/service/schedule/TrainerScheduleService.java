@@ -22,6 +22,12 @@ public interface TrainerScheduleService {
     /** TRAINER-facing self-service - create a schedule entry for the logged-in trainer only. */
     TrainerScheduleDTO createMySchedule(CreateOwnTrainerScheduleRequest request);
 
+    /** TRAINER-facing self-service - "fiksni raspored": generates weekly-repeating WORKING shifts
+     * for the logged-in trainer, same convention as AppointmentService#createRecurringWeekly (8
+     * weeks ahead from {@code request.getDate()}, one week's conflict skipped rather than fatal
+     * to the whole series). See AGENTS.md "Upgrade: trainer fixed-schedule decisions". */
+    List<TrainerScheduleDTO> createMyScheduleRecurring(CreateOwnTrainerScheduleRequest request);
+
     /** TRAINER-facing self-service - create an unavailability period for the logged-in trainer only. */
     void createMyUnavailability(CreateOwnTrainerUnavailabilityRequest request);
 

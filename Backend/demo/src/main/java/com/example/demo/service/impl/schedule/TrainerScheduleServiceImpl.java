@@ -17,6 +17,7 @@ import com.example.demo.service.params.request.schedule.CreateTrainerScheduleReq
 import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -27,12 +28,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class TrainerScheduleServiceImpl implements TrainerScheduleService {
+
+    /** Same weekly-recurrence convention as AppointmentServiceImpl#RECURRING_WEEKS_AHEAD - kept
+     * at 8 (~2 months) for consistency across the two "fiksni raspored"/"fiksni termin" features
+     * rather than inventing a different number for schedules. See AGENTS.md "Upgrade: trainer
+     * fixed-schedule decisions". */
+    private static final int RECURRING_WEEKS_AHEAD = 8;
+
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerRepository trainerRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
@@ -68,6 +78,41 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
 
         TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, request.getDate(), request.getStartTime(), request.getEndTime());
         return trainerScheduleMapper.toDto(trainerScheduleRepository.save(trainerSchedule));
+    }
+
+    @Transactional
+    public List<TrainerScheduleDTO> createMyScheduleRecurring(@NotNull CreateOwnTrainerScheduleRequest request) {
+        Trainer trainer = getAuthenticatedTrainer();
+
+        List<TrainerScheduleDTO> created = new ArrayList<>();
+        // Per-date failure reasons, same "don't abort the whole series on one bad week" + "only
+        // surface reasons if EVERY week failed" convention as
+        // AppointmentServiceImpl#createRecurringWeekly (see AGENTS.md "Upgrade: trainer
+        // fixed-schedule decisions").
+        List<String> failureReasons = new ArrayList<>();
+        LocalDate firstDate = request.getDate();
+
+        for (int week = 0; week < RECURRING_WEEKS_AHEAD; week++) {
+            LocalDate occurrenceDate = firstDate.plusWeeks(week);
+            try {
+                validateScheduleRequest(occurrenceDate, request.getStartTime(), request.getEndTime());
+                validateGymHours(occurrenceDate, request.getStartTime(), request.getEndTime());
+                validateTrainerAvailability(trainer.getId(), occurrenceDate, request.getStartTime(), request.getEndTime());
+
+                TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, occurrenceDate, request.getStartTime(), request.getEndTime());
+                created.add(trainerScheduleMapper.toDto(trainerScheduleRepository.save(trainerSchedule)));
+            } catch (IllegalArgumentException e) {
+                log.warn("⚠️ Skipping recurring trainer-schedule occurrence on {}: {}", occurrenceDate, e.getMessage());
+                failureReasons.add(occurrenceDate + ": " + e.getMessage());
+            }
+        }
+
+        if (created.isEmpty()) {
+            throw new IllegalArgumentException("Nijedna instanca fiksnog rasporeda nije mogla biti kreirana. Razlog po datumu:\n" +
+                    String.join("\n", failureReasons));
+        }
+
+        return created;
     }
 
     @Transactional

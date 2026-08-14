@@ -62,6 +62,15 @@ public class TrainerScheduleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleService.createMySchedule(request));
     }
 
+    /** TRAINER self-service - "fiksni raspored": generates weekly-repeating WORKING shifts for the
+     * logged-in trainer, same convention as POST /api/appointment/recurring. See AGENTS.md
+     * "Upgrade: trainer fixed-schedule decisions". */
+    @RoleRequired("TRAINER")
+    @PostMapping("/me/recurring")
+    public ResponseEntity<List<TrainerScheduleDTO>> createMyScheduleRecurring(@RequestBody CreateOwnTrainerScheduleRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleService.createMyScheduleRecurring(request));
+    }
+
     /** TRAINER self-service - create an unavailability period for the logged-in trainer only. */
     @RoleRequired("TRAINER")
     @PostMapping("/me/unavailable")
