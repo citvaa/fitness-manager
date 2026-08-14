@@ -219,11 +219,17 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **ClientPersonalRecord** (`model/progress/ClientPersonalRecord.java`) - a `Client`'s best result
   for a free-text exercise name (value + `RecordUnit` + date), and every `create()` call is a new
   row (no unique constraint on client+exerciseName) - the full history this way already backed
-  `PersonalRecordsList.tsx`'s list view before the trainer-testing round added a chart on top of
-  it (`PersonalRecordChart`, same file) - one exercise at a time via a dropdown (defaulting to
-  whichever has the most history), since different exercises use different units/scales
-  (`RecordUnit` is a fixed enum: `KG`/`LB`/`REPS`/`SECONDS`/`MINUTES`/`METERS`/`KM`) and can't
-  share one Recharts axis the way `ProgressCharts.tsx`'s body-measurement lines can.
+  `PersonalRecordsList.tsx`'s list view before a later round added a chart on top of it
+  (`PersonalRecordChart`, exported from that same file but rendered separately - see "Conventions"
+  below) - one exercise at a time via a dropdown (defaulting to whichever has the most history),
+  since different exercises use different units/scales (`RecordUnit` is a fixed enum:
+  `KG`/`LB`/`REPS`/`SECONDS`/`MINUTES`/`METERS`/`KM`) and can't share one Recharts axis the way
+  `ProgressCharts.tsx`'s body-measurement lines can. `RecordForm.tsx`'s exercise-name field is a
+  free-text `<input>` backed by a `<datalist>` of that client's own existing exercise names (see
+  "Upgrade: exercise-name dropdown decisions" in `docs/decision-log.md`) - suggests, doesn't
+  force, since a client's first record of any given exercise still needs to accept brand-new text;
+  this is a UX nudge only, there is still no DB-level uniqueness constraint preventing two
+  differently-spelled rows for what a human would consider the same exercise.
 
 ## Auth flow (read this before touching security-adjacent code)
 
@@ -419,7 +425,14 @@ short-text-out calls, not open-ended reasoning.
   Termini tab, `/manager/dnevni-raspored`, and - as of the trainer-testing round - both TRAINER
   self-service pages, `TrainerSchedulePage`/`TrainerAppointmentsPage`), `SearchableSelect` (a
   from-scratch filterable combobox, used by Plaćanja's client picker), and `DateInput` (see below)
-  - all built without adding a dependency, since none existed for any of these needs. A shared
+  - all built without adding a dependency, since none existed for any of these needs. Both TRAINER
+  pages that pair a `MonthCalendar` day-picker with the trainer's own history
+  (`TrainerAppointmentsPage.tsx`/`TrainerSchedulePage.tsx`) also carry a collapsible, always-
+  reachable "Istorija ..." section (a plain `useState` toggle, collapsed by default) below the
+  calendar - a calendar alone is a poor history browser (finding "what did I do last month"
+  requires navigating month-by-month and clicking each date individually), so a day-picker and a
+  flat reverse-chronological list are complementary here, not substitutes for each other. See
+  `docs/decision-log.md` "Upgrade: appointment/schedule history visibility decisions". A shared
   `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`
@@ -450,6 +463,13 @@ short-text-out calls, not open-ended reasoning.
   datum") shown only while the input is empty and unfocused, rather than fighting the native
   placeholder - see `docs/decision-log.md` for why this approach (over a CSS-only attempt) and how
   it keeps the native picker's click-to-open behavior intact (`pointer-events-none` on the overlay).
+  The overlay alone only draws on top - it does **not** hide the native placeholder text
+  underneath by itself, so `DateInput` also sets an inline `style={{ color: 'transparent' }}` on
+  the native input for exactly that same `showPlaceholder` window (an inline style, not a
+  `className`, since it must reliably out-rank whatever text-color class each call site passes in)
+  - without it, the native "dd-----yyyy" segments and the overlay text render simultaneously,
+  overlapping and unreadable (confirmed live, screenshotted, and fixed in a later round - see
+  `docs/decision-log.md` "Upgrade: DateInput placeholder-overlap fix").
 
 ## Known issues
 
@@ -503,13 +523,16 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   check against `remainingAppointments`.
 - No CI pipeline runs `mvn test`/`tsc -b`/`npm run build` automatically - all three must be run
   manually, and `mvn test` requires Postgres/Redis to be up first.
-- ~~`<input type="date">`'s native empty-state placeholder cannot be reliably localized~~ - fixed in
-  the trainer-testing round via `components/DateInput.tsx`'s overlay label approach (see
-  "Conventions" above and `docs/decision-log.md` "Upgrade: DateInput decisions"). Not yet visually
-  confirmed in an actual browser (no browser-automation tooling was available in that session either
-  - verification there was tsc/build passing plus reading the rendered DOM logic, not a screenshot);
-  worth a quick visual sanity check next time a browser is available, though the mechanism
-  (`pointer-events-none` overlay, hidden on value/focus) is standard and low-risk.
+- ~~`<input type="date">`'s native empty-state placeholder cannot be reliably localized~~ - fixed via
+  `components/DateInput.tsx`'s overlay label approach (see "Conventions" above and
+  `docs/decision-log.md` "Upgrade: DateInput decisions"/"Upgrade: DateInput placeholder-overlap
+  fix"). Live-screenshotted and confirmed working in Chromium (Playwright) in a later round -
+  the initial overlay-only version had a real bug (native placeholder text and the overlay both
+  rendered at once, overlapping) that a first round's non-visual verification (tsc/build only) had
+  missed; fixed with an inline `color: transparent` style on the native input for the same window
+  the overlay is shown. Worth remembering for any future CSS-overlay-over-a-native-control pattern
+  in this app: drawing over an element is not the same as hiding what's under it, and this class of
+  bug is invisible to type-checking/build-passing verification - it needs an actual screenshot.
 - `docs/decision-log.md`'s "manager-testing round 2" also hit the `BaseEntity` id-less
   `equals()`/`hashCode()` issue above a third time, in `DevDataSeeder`'s new month-long appointment
   generator: adding several freshly-built, unsaved `ClientAppointment`s to the same `Appointment`'s

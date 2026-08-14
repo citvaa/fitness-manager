@@ -3254,3 +3254,137 @@ next time one is available, before being treated as fully verified.
   `ManagerInsightsServiceImplTest` compile failure blocking `spring-boot:run`/`mvn test`, and the
   `RoomServiceImplTest` failure noted in AGENTS.md's Known Issues - neither was touched, both are
   unrelated to this round's TRAINER-facing scope).
+
+## Upgrade: TRAINER manual-testing follow-up round decisions
+
+Three items surfaced from manual testing of the previous round's TRAINER-facing work: chart
+placement on the progress page, a real (screenshotted) bug in the DateInput overlay, and a
+usability regression in the two calendar-restructured pages' history views. This round had actual
+browser-automation tooling available (Playwright + Chromium, installed temporarily as a frontend
+dev dependency and uninstalled again afterward - not left in `package.json`/`package-lock.json`,
+since it wasn't requested as a permanent addition to the project's toolchain) - every frontend
+change below was screenshotted against the live dev app, not just tsc/build-verified.
+
+### 1a - chart placement on progress pages
+
+`PersonalRecordChart` was defined inside `PersonalRecordsList.tsx` and rendered from within that
+component's own return - meaning it physically rendered wherever `PersonalRecordsList` was placed
+in the page (after the entry/record forms on `TrainerProgressPage.tsx`), regardless of where the
+page's JSX intended charts to visually group. Fixed by exporting `PersonalRecordChart` as a named
+export from the same file (kept in that file rather than a new one - it's small and tightly
+coupled to `ClientPersonalRecordDTO`) and having both page components
+(`TrainerProgressPage.tsx`/`ClientProgressPage.tsx`) render it directly, immediately after
+`ProgressCharts`, ABOVE the entry/record forms - `PersonalRecordsList` itself now renders only the
+history list, unchanged from its pre-chart shape. `ClientProgressPage.tsx` (read-only, no forms)
+got the same reordering for consistency even though there was no form to move past, per the
+brief's explicit ask.
+
+**Live verification**: screenshotted `TrainerProgressPage.tsx` for a client with real chart data
+(`milica.ilic@fitpro.dev`) - confirmed both `ProgressCharts` (two chart cards) and
+`PersonalRecordChart` ("Grafik ličnog rekorda", with its exercise dropdown showing "Trčanje 5km")
+render together at the top of the page, followed by the "Novo merenje"/"Novi lični rekord" forms
+below them, followed by the history lists and the AI insight panel - exactly the intended order.
+
+### 1b - exercise-name suggestions in RecordForm
+
+Went with an HTML5 `<input list="...">` + `<datalist>` combination (native browser autocomplete)
+over a `<select>` (would block any brand-new exercise name, since a `<select>` can't accept
+arbitrary free text - unacceptable for a client's very first record of a new exercise) or a custom
+JS-driven combobox component (`SearchableSelect` already exists in `components/`, but it's built
+around a fixed, closed option list with no "accept anything typed" mode - extending it to also
+accept free text felt like more surface area than a native, zero-dependency `<datalist>` for a
+simple "suggest, don't force" need). `TrainerProgressPage.tsx` computes
+`existingExerciseNames` as the sorted, deduplicated set of the *currently selected client's own*
+`records` (not a global cross-client list - a suggestion drawn from a different client's exercise
+naming would be actively unhelpful/confusing) and passes it down to `RecordForm`; the datalist's
+`id` is a fixed literal since only one `RecordForm` is ever mounted at a time on this page.
+
+**Live verification**: read the rendered DOM structure via Playwright (confirmed the `<input
+list="record-form-exercise-names">` and matching `<datalist>` with real client-specific option
+values are present after selecting a client with personal-record history) - did not screenshot the
+native browser autocomplete dropdown itself opening, since that's an OS-level native UI affordance
+Playwright's screenshot wouldn't meaningfully capture beyond what the DOM inspection already
+confirms.
+
+### 2 - DateInput placeholder/native-text overlap (real bug, found and fixed)
+
+The previous round's `DateInput` component only drew the "Izaberite datum" overlay ON TOP of the
+native input - it never made the native input's own placeholder segments invisible underneath, so
+both rendered simultaneously and visually collided (exactly as the user's attached screenshot
+showed). This was specifically the kind of bug the previous round's decision-log entry flagged as
+unverified risk ("this specific piece should get a quick visual sanity check... before being
+treated as fully verified") - confirmed here to have actually been a real, live bug, not a
+false-alarm caveat.
+
+Fix: an inline `style={{ color: 'transparent' }}` on the native `<input>` itself, applied for
+exactly the same `showPlaceholder` condition that shows the overlay span. Inline `style` was
+chosen deliberately over adding another Tailwind class to the existing `className` prop -
+`DateInput` receives `className` from ~16 different call sites with varying `text-slate-100`/
+similar color classes, and CSS class specificity/ordering between an existing passed-in class and
+a new one added inside the component is not guaranteed predictable; an inline `style` attribute
+always wins over any `class`, regardless of which classes a caller happens to pass, so it's the
+only mechanism here that's reliable across every call site without auditing each one's exact
+className string. Reverts to no inline style (inherits whatever color the `className` specifies)
+the instant there's a value or the input is focused, so the real picked date and the native
+picker's own focused-state rendering are unaffected.
+
+**Live verification**: screenshotted `TrainerSchedulePage.tsx`'s "Nova smena" date field in three
+states - empty/unfocused (only "Izaberite datum" visible, no native segments behind it), focused
+(native "dd-----yyyy" segments visible normally, overlay gone), and confirmed via the calendar
+icon still being present/clickable throughout that the native picker affordance itself was never
+hidden or disabled by the transparent-text fix (the fix only ever touches `color`, never
+`pointer-events` or the picker-indicator pseudo-element).
+
+### 3 - restoring always-reachable appointment/schedule history
+
+The previous round's collapse of "upcoming" + "history" into one `MonthCalendar` day-picker (both
+`TrainerAppointmentsPage.tsx` and, by the same pattern, `TrainerSchedulePage.tsx`) was flagged by
+the user as a genuine regression, not a simplification: a calendar is a fine tool for "what do I
+have on this specific date" but a poor one for "let me see everything I did" - that requires
+clicking through every past date's cell individually with zero indication in advance of which
+ones even have anything to show beyond the dot indicator.
+
+Fix, on both pages: kept the calendar (still useful for the specific-date lookup case) and added
+back a separate, always-visible section titled "Istorija ..." - a plain reverse-chronological flat
+list of every past item, collapsed by default behind a "Prikaži"/"Sakrij" toggle button (a
+`useState<boolean>`, not a route/query-param) so it doesn't dominate the page by default but is
+always one click away, with no calendar navigation required. Considered making it expanded by
+default instead - collapsed was chosen since the calendar+selected-day view is still the primary
+"day to day" surface for both pages, and a trainer checking in on a normal day has no need to see
+their full history immediately; the count in the section header ("Istorija dodeljenih termina
+(6)") makes it discoverable/scannable without opening it.
+
+`TrainerAppointmentsPage.tsx`'s existing `appointmentCard()` render helper is reused for history
+items (not a separate render path) - a real bug was caught and fixed during live verification here:
+the helper only showed each appointment's `date` when rendering the "Termini bez trenera" list
+(`options.assignAction`), since every other call site's rendering context already implied the date
+(the calendar's selected-day panel shows one date for all its rows). History items span many
+different dates, so reusing the helper unchanged silently dropped the date from every history row -
+caught by looking at the actual screenshot, not by reading the diff, since the code change itself
+was "correct" in isolation (calling an existing function) and only wrong in its rendering *output*.
+Fixed by widening the helper's options to `{ assignAction?; showDate? }` and passing
+`{ showDate: true }` from the history section specifically.
+
+`TrainerSchedulePage.tsx` got the equivalent "Istorija rasporeda" section for past `TrainerSchedule`
+entries (`e.date < today`, calendar-day comparison - a shift that started today and is still
+in-progress is not "past" for this purpose), reusing the exact same collapsed-by-default/toggle/
+reverse-chronological pattern for consistency between the two pages, per the brief's explicit ask
+to check whether the same regression existed there.
+
+**Live verification**: screenshotted `TrainerAppointmentsPage.tsx`'s expanded history section
+twice - once before the date-display fix (confirmed the bug: room/client details present but no
+date on any row, making the list genuinely ambiguous when items share a time-of-day across
+different dates) and once after (confirmed dates now render, list is correctly sorted newest-first,
+6 real historical appointments for `ogi` with room names and client emails all present).
+`TrainerSchedulePage.tsx`'s "Istorija rasporeda" section was exercised via the same toggle button
+and confirmed to render (0 entries for `ogi` in the live dev dataset at verification time, since
+that trainer's seeded/generated schedule rows are all current-or-future - the empty state message
+was confirmed correct, not the populated-list rendering, for that specific page/account
+combination).
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None beyond the DateInput overlap bug (item 2 above, which was explicitly the reported/in-scope
+  bug for this round, not an incidental find) and the `appointmentCard()` missing-date bug found
+  and fixed while implementing item 3 (also directly part of implementing the requested fix, not a
+  separate out-of-scope discovery). No other pre-existing issues were newly encountered this round.
