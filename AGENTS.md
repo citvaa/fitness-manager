@@ -357,7 +357,9 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   (320px) panel positioned `absolute right-0` inside `AppShell`'s `w-64` (256px) `<aside>` (which
   has `overflow-y-auto` for the scroll-containment fix, see below) overflowed the sidebar's left
   edge and was clipped there, since a non-`visible` `overflow-y` clips the other axis too. See
-  `docs/decision-log.md` "Upgrade: notification-bell clipping fix".
+  `docs/decision-log.md` "Upgrade: notification-bell clipping fix". Each entry also renders its
+  `receivedAt` (already tracked, just not shown before) as a localized `HH:mm` timestamp under the
+  message.
 - **Self-service notification preference**: `GET /api/user/me`/`PATCH /api/user/me/notification-
   preference` (no `@RoleRequired` - reachable by any authenticated role, resolved from the JWT) let
   every role view/change their own preference; the pre-existing `PATCH /{id}/notification-
@@ -574,6 +576,19 @@ short-text-out calls, not open-ended reasoning.
 These are open, unresolved items - fair game to pick up in a future session. (Items resolved during
 the `upgrade/claude-code` branch's work are documented, with full fix/verification detail, in
 `docs/decision-log.md` rather than listed here.)
+
+- `AppointmentServiceImpl`'s `findTrainerConflict`/`findRoomConflict` (backing both `create()`'s
+  double-booking validation and the `GET /api/appointment/available-trainers`/`available-rooms`
+  pickers) treat two appointments that only *touch* at a shared boundary as conflicting - both
+  sides of the overlap check are inclusive (`existing.startTime <= newEndTime AND existing.endTime
+  >= newStartTime`), so an existing `09:00-10:00` appointment blocks a candidate `10:00-11:00` one
+  even though they don't overlap. Confirmed live: `DevDataSeeder`'s back-to-back trainer-schedule
+  pattern (`09:00-10:00`/`11:00-12:00`/`13:00-14:00`, no gaps between generated appointments' own
+  boundaries) makes every slot on those trainers' working days - including the genuinely free
+  `10:00-11:00`/`12:00-13:00` gaps - report as fully booked via both the picker endpoints and
+  `create()` itself. Found while live-seeding test notifications, not introduced this session (see
+  `docs/decision-log.md` "Upgrade: notification-bell clipping fix"). Fix is changing one side of
+  each comparison to a strict `<`/`>`.
 
 - Refresh tokens have no rotation and no server-side revocation - a leaked refresh token stays
   valid until its own natural (2h) expiry.

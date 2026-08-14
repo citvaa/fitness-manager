@@ -5,6 +5,10 @@ import { useNotifications } from './NotificationContext'
 const PANEL_WIDTH = 320 // px, matches the panel's w-80
 const VIEWPORT_MARGIN = 8
 
+function formatReceivedAt(receivedAt: number) {
+  return new Date(receivedAt).toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' })
+}
+
 /** Visible proof-of-delivery for PUSH notifications - without this, nothing in the frontend ever
  * rendered a WebSocket notification, so the "PUSH" preference option was a no-op regardless of
  * whether the backend sent anything. See AGENTS.md "Upgrade: notification decisions".
@@ -86,7 +90,8 @@ export function NotificationBell() {
                 <ul className="max-h-80 space-y-1 overflow-y-auto">
                   {notifications.map((n) => (
                     <li key={n.id} className="rounded-md bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
-                      {n.message}
+                      <p>{n.message}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatReceivedAt(n.receivedAt)}</p>
                     </li>
                   ))}
                 </ul>

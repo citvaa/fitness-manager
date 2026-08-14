@@ -3945,3 +3945,32 @@ checked into the repo.
 ### Bugs found, not fixed (reported per session instructions)
 
 - None found beyond the reported clipping bug itself while implementing this fix.
+
+**Follow-up (same session)**: each notification `<li>` now also renders `receivedAt` (already
+tracked by `useNotificationSocket`, just not shown) as a localized `HH:mm` timestamp below the
+message, via `Date(...).toLocaleTimeString('sr-Latn-RS', ...)` - requested live by the user after
+seeing the fixed dropdown. Live-verified the same way (temporary `playwright`, reverted after): a
+real trainer-assignment notification fired via the actual `POST /api/appointment` (a brand-new
+`TrainerSchedule` WORKING row + appointment for trainer `ogi` were created via the real MANAGER
+API first, on a date with zero pre-existing appointments) while `ogi`'s browser tab was open with
+its live STOMP connection - the delivered notification rendered with a real arrival timestamp
+("01:48") under the message.
+
+**Bug found while seeding this test data (not fixed, reported here)**: `findTrainerConflict`/
+`findRoomConflict` (`AppointmentServiceImpl`) use
+`findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(id, date, endTime,
+startTime)` - i.e. an existing appointment conflicts if `existing.startTime <= newEndTime AND
+existing.endTime >= newStartTime`. Both comparisons are inclusive, so two back-to-back
+appointments that only *touch* at a shared boundary (e.g. existing `09:00-10:00` and a candidate
+`10:00-11:00`) are flagged as conflicting even though they don't actually overlap. Confirmed live:
+seeded trainer `ogi` had appointments at `09:00-10:00`/`11:00-12:00`/`13:00-14:00` on
+`2026-08-16`/`08-23`/`08-30` (a `DevDataSeeder`-generated back-to-back pattern), and
+`GET /api/appointment/available-trainers`/`available-rooms` returned an **empty list for every
+slot on those dates**, including the genuinely free `10:00-11:00`/`12:00-13:00` gaps between
+them - both the picker endpoints and `create()`'s own `validateTrainerNotDoubleBooked`/
+`validateRoomNotDoubleBooked` share this same helper, so this isn't a picker-only display bug; a
+manager cannot actually book a trainer/room into a slot that starts or ends exactly when another
+of that trainer's/room's appointments does, anywhere in the app. The fix is changing one side of
+each comparison to strict (`<`/`>`) so touching boundaries no longer count as overlapping - out of
+scope for this session (a UI-clipping fix + a doc-requested UI addition), left for a future
+session.
