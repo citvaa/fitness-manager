@@ -1,4 +1,14 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import type { RoomOccupancyInsight, SessionTypeInsight } from './types'
 import { RATING_COLOR, RATING_LABEL } from './types'
 
@@ -32,12 +42,17 @@ const CHART_TOOLTIP_STYLE = {
   itemStyle: { color: '#e6e9f0' },
 }
 
+// Value labels are rendered outside the bar (to the right), not inside it - a bar can be too
+// short to fit text at a small value, and #e6e9f0 (same light ink as the rest of the dark theme)
+// stays readable against the chart's dark surface either way, unlike text drawn over a fill color.
+const VALUE_LABEL_STYLE = { fill: '#e6e9f0', fontSize: 12, fontWeight: 600 }
+
 export function RoomOccupancyChart({ rooms }: { rooms: RoomOccupancyInsight[] }) {
   const data = [...rooms].sort((a, b) => b.checkIns - a.checkIns)
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44)}>
-      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
+      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 36 }}>
         <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
         <XAxis type="number" stroke="#64748b" fontSize={12} allowDecimals={false} />
         <YAxis type="category" dataKey="roomName" stroke="#94a3b8" fontSize={12} width={110} />
@@ -49,6 +64,7 @@ export function RoomOccupancyChart({ rooms }: { rooms: RoomOccupancyInsight[] })
           {data.map((room) => (
             <Cell key={room.roomName} fill={RATING_COLOR[room.rating]} />
           ))}
+          <LabelList dataKey="checkIns" position="right" style={VALUE_LABEL_STYLE} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -58,7 +74,7 @@ export function RoomOccupancyChart({ rooms }: { rooms: RoomOccupancyInsight[] })
 export function SessionTypeChart({ sessions }: { sessions: SessionTypeInsight[] }) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(120, sessions.length * 56)}>
-      <BarChart data={sessions} layout="vertical" margin={{ left: 8, right: 24 }}>
+      <BarChart data={sessions} layout="vertical" margin={{ left: 8, right: 36 }}>
         <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
         <XAxis type="number" stroke="#64748b" fontSize={12} unit="%" domain={[0, 100]} />
         <YAxis type="category" dataKey="sessionType" stroke="#94a3b8" fontSize={12} width={90} />
@@ -73,6 +89,12 @@ export function SessionTypeChart({ sessions }: { sessions: SessionTypeInsight[] 
           {sessions.map((s) => (
             <Cell key={s.sessionType} fill={RATING_COLOR[s.rating]} />
           ))}
+          <LabelList
+            dataKey="sharePercent"
+            position="right"
+            style={VALUE_LABEL_STYLE}
+            formatter={(value) => `${value}%`}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
