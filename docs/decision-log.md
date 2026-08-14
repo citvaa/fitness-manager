@@ -3657,3 +3657,115 @@ tall enough to overflow a 900px test viewport):
   behavior, to be verified and fixed only if actually broken - it was) and the LoadingIndicator
   import-insertion bug caught and fixed before it ever reached a running build (see above). No
   other pre-existing issues were newly encountered while implementing any of the three items.
+
+## Upgrade: payment debt tracking decisions
+
+Payment creation stays MANAGER-only and price-less (unchanged, per the session brief) - the gap was
+purely on the *reporting* side: nothing compared what a client had actually attended against what
+they'd paid for. Explicitly NOT built on `ClientSessionTracking` (`remainingAppointments`/
+`reservedAppointments`) even though it looks like the obvious source - it's forward-looking
+(`reservedAppointments` increments the moment a client books a *future* appointment, before it
+happens), so a client with several upcoming-but-unpaid bookings would incorrectly read as "owing"
+for sessions that haven't occurred yet. Also explicitly not read from `DevDataSeeder`'s internal
+`bookedCounts` map, per the brief - that map only exists during the seed transaction, not at
+request time; it was used purely as the reference for the *shape* of the comparison (booked/held
+vs. paid, per session grouping), not as a literal implementation source.
+
+New `PaymentServiceImpl.computePaymentStatus(clientId)`: fetches the client's own appointments via
+the pre-existing `AppointmentRepository.findByClientAppointmentsClientIdOrderByDateDescStartTimeDesc`
+(already used by `getMyAppointmentsAsClient()`), filters to ones whose `date`+`endTime` is before
+`LocalDateTime.now()` (i.e. actually already happened, not just booked), and groups the count by
+`Session.getType()` into an `EnumMap<SessionType, Integer>` - deliberately grouped by `SessionType`
+(INDIVIDUAL/GROUP), not by individual `Session` row, per the brief's explicit "po tipu sesije"
+wording (there are 3 seeded `Session` rows - 1 individual, 2 different-capacity group types - and a
+client's held/paid history should read as one INDIVIDUAL number and one GROUP number, not three).
+Paid counts come from `Payment.paidAppointments` summed the same way. `owed = max(0, held - paid)`
+per type, never negative - a client who's paid ahead of what they've attended (the common case,
+paying for a block of future sessions) shows 0 owed for that type, not a negative "credit" framed
+as debt.
+
+Computed in plain Java over two already-small fetched lists (one client's own appointment/payment
+history) rather than a grouped JPQL aggregation query - matches this service's existing style
+(straightforward loops over fetched entities elsewhere in `PaymentServiceImpl`/`AppointmentServiceImpl`)
+and avoids introducing a new projection-interface pattern for what's a small, per-request
+computation, not a table scan.
+
+Two endpoints mirroring the existing self-service/MANAGER-oversight pairing already used elsewhere
+(e.g. progress-insight's `getSummary`/`getMySummary`): `GET /api/payment/status/{clientId}`
+(MANAGER) and `GET /api/payment/me/status` (CLIENT, resolved from the JWT). Frontend: a shared
+`PaymentStatusSummary.tsx` component (`payments/` feature) renders "Plaćeno X/Y individualnih, Z/W
+grupnih" per type (numerator capped at `held` via `Math.min(paid, held)` - a fully-covered type
+reads as "5/5", not an oversized "12/5" from overpayment) plus a red "Duguje N termina" line when
+`owed > 0`; types with neither held nor paid appointments are filtered out of the display entirely
+rather than showing a noisy "0/0" row. `MyPaymentsPage.tsx` fetches and shows its own status
+unconditionally above the payment history table. `ManagerPaymentsPage.tsx` only fetches/shows it
+once a specific client is selected via the page's pre-existing client filter (`SearchableSelect`) -
+debt is inherently a per-client concept, so there's no meaningful "all clients" aggregate to show
+when the filter is empty; the status is also refreshed after recording a new payment, but only if
+that payment was for the currently-filtered client (a payment for a different client doesn't change
+what's on screen).
+
+**Live verification**: hit `GET /api/payment/status/{id}` directly for all 50 seeded clients to
+find one with real debt (client 386, `zoran.pavlovic@fitpro.dev` - `INDIVIDUAL: held=1, paid=0,
+owed=1`; `GROUP: held=4, paid=2, owed=2`) - most seeded clients showed 0 owed at verification time
+even among the ~10% the seeder deliberately underpays, since the seeder's underpayment is relative
+to the WHOLE MONTH's booked count (including future dates), while this feature only counts already-
+HELD (past) appointments as of "now" (2026-08-15, roughly mid-month) - confirming the two are
+deliberately different calculations, not that the feature was broken. Screenshotted both
+`MyPaymentsPage.tsx` (logged in as `zoran.pavlovic@fitpro.dev`) and `ManagerPaymentsPage.tsx`
+(logged in as `admin`, that client selected via the filter) - both rendered the identical
+"Plaćeno 0/1 individualnih" / "Duguje 1 termina" and "Plaćeno 2/4 grupnih" / "Duguje 2 termina"
+breakdown, confirming the MANAGER and CLIENT endpoints agree exactly (same underlying computation,
+different auth path). `tsc -b`/`npm run build`/`mvn -o compile` all clean.
+
+## Upgrade: trainer check-in decisions
+
+Confirmed via `grep` across the whole frontend that no code anywhere called
+`/api/gym/room/{roomId}/check-in`/`check-out` - `DevDataSeeder` was the only caller, exactly as the
+session brief stated. Added the TRAINER-facing entry point at the natural place for it:
+`TrainerAppointmentsPage.tsx`'s "assigned to me" appointment cards (not the "Termini bez trenera"
+list - self-assigning to an open slot and starting a session for it are different actions, and
+check-in only makes sense once a trainer actually owns the appointment) gain a "Započni trening"
+toggle button that expands a per-card `ClientCheckInPanel.tsx` listing that appointment's `clients`
+roster with a Check-in/Check-out button each.
+
+One small backend addition was needed beyond the pre-existing check-in/check-out endpoints: nothing
+exposed "does this client currently have an active check-in" for the frontend to decide which
+button to show. Added `RoomCheckInService.getActiveCheckInForClient(clientId)` (a thin wrapper over
+the already-existing `RoomCheckInRepository.findByClientIdAndCheckedOutAtIsNull`) and
+`GET /api/gym/check-in/active/{clientId}` (MANAGER+TRAINER) - 204 (no body) for "not checked in"
+rather than a 200 with a null/empty body, so the frontend can branch on HTTP status alone rather
+than inspecting response content.
+
+Check-in is a global-per-client, not per-appointment/per-room, concept (enforced by both a service-
+level pre-check and a DB unique partial index - see AGENTS.md's `RoomCheckIn` domain-model entry) -
+`ClientCheckInPanel` respects this by querying each roster client's *actual* active check-in (which
+may be in a different room than this appointment's own) rather than assuming "not checked in"
+by default, and check-out always targets whichever check-in the client actually has open, not one
+inferred from this appointment's room. No new WebSocket wiring was needed - confirmed by reading
+`RoomCheckInServiceImpl.checkIn()`/`checkOut()`, both already call `broadcastOccupancy()`
+unconditionally on every invocation (a pre-existing call, not one added this round), so the panel's
+check-in/check-out calls automatically produce a live floor-plan update with zero additional
+frontend or backend wiring - exactly as the session brief predicted.
+
+**Live verification**: found a real TRAINER appointment with a multi-client roster via the API
+(`ogi`, 2026-08-16 09:00-10:00, room "Svlačionica", 8 clients) and screenshotted the full flow in
+the running app: opening "Započni trening" correctly showed 7 clients with "Check-in" and
+exactly 1 (`ana.petrovic@fitpro.dev`) already showing "Check-out" - this was NOT staged for the
+test; it's the one still-open check-in `DevDataSeeder.seedRoomCheckIns()` always leaves behind
+(see AGENTS.md), confirming the panel correctly detects a real pre-existing active check-in.
+Independently confirmed via `GET /api/gym/check-in/active/357` (ana.petrovic's client id) that her
+actual active check-in is in a DIFFERENT room ("Sala za tegove", id 41) than this appointment's own
+room ("Svlačionica", id 44) - proving the "global, not room-scoped" detection is real, not
+coincidentally matching. Clicked "Check-in" for a different roster client
+(`petar.markovic@fitpro.dev`) and confirmed the button flipped to "Check-out" after the call
+completed (a full round trip through the real backend, not a mocked response); confirmed via
+`GET /api/gym/room/44/occupancy` that `checkedInCount` incremented to 1 as a result, without
+touching any WebSocket/occupancy code - live proof the pre-existing broadcast fired correctly for a
+check-in that originated from this new frontend caller, not just from the seeder. Checked the test
+client back out afterward via a direct API call, to leave the dev dataset as found.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None. Both items in this round were explicitly scoped by the session brief; no additional
+  pre-existing issues were newly encountered while implementing either.

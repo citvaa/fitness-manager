@@ -165,7 +165,24 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   "Upgrade: appointment picker filtering decisions" for the endpoint shape and the room-capacity
   criterion the frontend uses to filter session types once a room is picked.
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
-  driven by `Payment`s.
+  driven by `Payment`s. `PaymentService.getPaymentStatus(clientId)`/`getMyPaymentStatus()` (MANAGER/
+  CLIENT-facing respectively, `GET /api/payment/status/{clientId}`/`GET /api/payment/me/status`)
+  compute a *separate*, debt-focused view - NOT read from `ClientSessionTracking` (whose
+  `remainingAppointments`/`reservedAppointments` count future bookings too, so a client wouldn't
+  read as "owing" for a session that hasn't happened yet). Instead, per `SessionType`
+  (`INDIVIDUAL`/`GROUP`, summed across every `Session` row of that type - `Payment`/
+  `ClientSessionTracking` are per-`Session`, not per-`SessionType`), it compares actually-HELD past
+  appointments (the client's own `ClientAppointment` rows whose `Appointment` has already ended -
+  `date`+`endTime` before now) against PAID appointments (`Payment.paidAppointments`, summed);
+  `owed = max(0, held - paid)`, never negative. See AGENTS.md "Upgrade: payment debt tracking
+  decisions" below and `docs/decision-log.md` for why this queries real Appointment/
+  ClientAppointment/Payment data rather than `DevDataSeeder`'s seed-time-only `bookedCounts` map
+  (whose formula was the reference for the held-vs-paid *shape* of this feature, not its data
+  source). Both `MyPaymentsPage.tsx`/`ManagerPaymentsPage.tsx` render this via a shared
+  `PaymentStatusSummary` component ("Plaćeno X/Y individualnih, Z/W grupnih", with a red "Duguje N
+  termina" callout per type when `owed > 0`) - the manager's view only shows it once a specific
+  client is selected via the existing client filter (debt is inherently per-client, not a
+  meaningful "all clients" aggregate).
 - **GymSchedule** - opening/closing time per `DayOfWeek`; upserted per day (`create` finds-or-builds
   by `DayOfWeek`), not insert-only. `closingTime <= openingTime` means "closes the next calendar
   day at this time" (deliberately allowed, not clamped to midnight) - but that overnight portion
@@ -212,7 +229,20 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   (`uq_room_check_in_one_active_per_client ON room_check_in (client_id) WHERE checked_out_at IS
   NULL`), not just at the service layer. Computed room occupancy additively combines active
   check-ins with clients on in-progress appointments in that room, without deduplication (a client
-  counted both ways is double-counted - a deliberate simplicity trade, not a bug).
+  counted both ways is double-counted - a deliberate simplicity trade, not a bug). The
+  `POST /api/gym/room/{roomId}/check-in`/`check-out` endpoints (MANAGER+TRAINER) existed fully
+  wired since an earlier round but had zero frontend caller - only `DevDataSeeder` ever hit them.
+  A later round added a TRAINER-facing caller: `TrainerAppointmentsPage.tsx`'s "Započni trening"
+  toggle (assigned-to-me appointment cards only) opens `ClientCheckInPanel.tsx`, listing that
+  appointment's roster with a per-client Check-in/Check-out button. A client's check-in status is
+  global (one active check-in anywhere, not per-appointment/room), so the panel queries a new
+  `GET /api/gym/check-in/active/{clientId}` (204 = none active) per roster client on open/refresh
+  rather than assuming "not checked in" by default - a client already checked in elsewhere (e.g.
+  mid-workout before this session) correctly shows "Check-out", targeting whichever check-in they
+  actually have open, not this appointment's room. No extra WebSocket wiring was needed for the
+  live floor-plan view to reflect these check-ins - `RoomCheckInServiceImpl.checkIn()`/`checkOut()`
+  already broadcast the updated occupancy snapshot on every call (pre-existing). See AGENTS.md
+  "Upgrade: trainer check-in decisions" and `docs/decision-log.md` for live verification detail.
 - **ClientProgressEntry** (`model/progress/ClientProgressEntry.java`) - a dated body-measurement
   snapshot for a `Client` (weight, body fat %, waist/chest/hip/thigh/arm circumference, notes) as
   fixed nullable columns, not a JSON/EAV blob.
