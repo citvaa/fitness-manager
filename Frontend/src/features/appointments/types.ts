@@ -16,6 +16,11 @@ export interface ClientSummaryDTO {
   email: string
 }
 
+export interface RoomSummaryDTO {
+  id: number
+  name: string
+}
+
 export interface AppointmentDTO {
   id: number
   date: string // ISO LocalDate
@@ -23,5 +28,9 @@ export interface AppointmentDTO {
   endTime: string // "HH:mm:ss"
   session: SessionDTO
   trainer: TrainerSummaryDTO | null
+  // Present on the wire (backend's shared AppointmentDTO always includes it) but missing from
+  // this feature's local type until the trainer-testing round - see AGENTS.md "Upgrade: trainer
+  // self-assign decisions".
+  room: RoomSummaryDTO | null
   clients: ClientSummaryDTO[]
 }

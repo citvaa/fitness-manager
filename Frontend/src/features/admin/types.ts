@@ -153,10 +153,10 @@ export interface CreateAppointmentRequest {
   startTime: string
   endTime: string
   sessionId: number
-  // Mandatory as of the manager-testing round 3 restructure - an appointment with no trainer/room
-  // made occupancy tracking meaningless (see AGENTS.md "Upgrade: fixed weekly appointment
-  // decisions"). Kept nullable in the type only because the empty/unselected form state briefly
-  // passes null before submit is blocked by the `required` selects.
+  // Room stays mandatory (manager-testing round 3 - an appointment with no room made occupancy
+  // tracking meaningless). Trainer is optional again (trainer self-assign round) - a manager can
+  // create an open "termin bez trenera" slot for a TRAINER to self-assign to later. See AGENTS.md
+  // "Upgrade: trainer self-assign decisions".
   trainerId: number | null
   roomId: number | null
   clientIds?: number[]

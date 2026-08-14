@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
+import { DateInput } from '../../components/DateInput'
 import { MonthCalendar } from '../../components/MonthCalendar'
 import {
   addClientToAppointment,
@@ -229,7 +230,7 @@ export function AppointmentsTab() {
       startTime: `${form.startTime}:00`,
       endTime: `${form.endTime}:00`,
       sessionId: Number(form.sessionId),
-      trainerId: Number(form.trainerId),
+      trainerId: form.trainerId ? Number(form.trainerId) : null,
       roomId: Number(form.roomId),
     }
     try {
@@ -325,12 +326,10 @@ export function AppointmentsTab() {
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           <label className="block text-xs text-slate-400">
             {form.recurring ? 'Datum prvog termina' : 'Datum'}
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, date: v }))}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
           </label>
@@ -357,17 +356,12 @@ export function AppointmentsTab() {
           <label className="block text-xs text-slate-400">
             Trener
             <select
-              required
               disabled={formOptionsLoading}
               value={form.trainerId}
               onChange={(e) => setForm((f) => ({ ...f, trainerId: e.target.value }))}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500 disabled:opacity-60"
             >
-              <option value="" disabled>
-                {formTrainers.length === 0 && form.date && form.startTime && form.endTime && !formOptionsLoading
-                  ? 'Nema dostupnih trenera za ovaj termin'
-                  : 'Izaberi trenera...'}
-              </option>
+              <option value="">Bez trenera (otvoreni termin)</option>
               {formTrainers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.user.email}
