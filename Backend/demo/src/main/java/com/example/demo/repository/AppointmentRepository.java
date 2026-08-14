@@ -27,11 +27,23 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
                                                                                                          LocalTime endTime,
                                                                                                          LocalTime startTime);
 
+    /** Existing appointments for this trainer that overlap the given date/time range - used to
+     * report the exact conflicting appointment's time when rejecting a double-booking, rather than
+     * just "already busy". Same LessThanEqual/GreaterThanEqual overlap semantics (touching
+     * boundaries count as a conflict) as the client-overlap check above, for consistency. */
+    List<Appointment> findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(Integer trainerId,
+                                                                                                 LocalDate date,
+                                                                                                 LocalTime endTime,
+                                                                                                 LocalTime startTime);
+
     List<Appointment> findByTrainerIdAndDate(Integer trainerId, LocalDate date);
 
     List<Appointment> findByStartTimeBetweenAndDate(LocalTime startTime, LocalTime startTime2, LocalDate date);
 
-    /** Appointments in a room that are currently in progress (used for computed room occupancy). */
+    /** Appointments in a room overlapping a date/time range - originally added for computed room
+     * occupancy ("currently in progress", called with now/now), reused as-is for the
+     * room-double-booking check in AppointmentServiceImpl (same LessThanEqual/GreaterThanEqual
+     * overlap semantics as the trainer/client overlap checks above). */
     List<Appointment> findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(Integer roomId, LocalDate date, LocalTime now1, LocalTime now2);
 
     @EntityGraph(attributePaths = {

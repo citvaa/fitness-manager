@@ -17,6 +17,7 @@ import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
+import com.example.demo.service.HolidayService;
 import com.example.demo.service.notification.NotificationService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.AfterEach;
@@ -76,6 +77,8 @@ class AppointmentServiceImplTest {
     private ClientAppointmentRepository clientAppointmentRepository;
     @Mock
     private RoomRepository roomRepository;
+    @Mock
+    private HolidayService holidayService;
 
     private AppointmentServiceImpl service;
 
@@ -83,7 +86,8 @@ class AppointmentServiceImplTest {
     void setUp() {
         service = new AppointmentServiceImpl(sessionRepository, trainerRepository, clientRepository,
                 appointmentRepository, appointmentMapper, gymScheduleRepository, trainerScheduleRepository,
-                clientSessionTrackingRepository, notificationService, clientAppointmentRepository, roomRepository);
+                clientSessionTrackingRepository, notificationService, clientAppointmentRepository, roomRepository,
+                holidayService);
     }
 
     @AfterEach

@@ -20,6 +20,7 @@ import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.AppointmentService;
+import com.example.demo.service.HolidayService;
 import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -69,6 +70,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final NotificationService notificationService;
     private final ClientAppointmentRepository clientAppointmentRepository;
     private final RoomRepository roomRepository;
+    private final HolidayService holidayService;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
@@ -101,6 +103,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public List<AppointmentDTO> createRecurringWeekly(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
         List<AppointmentDTO> created = new ArrayList<>();
+        // Per-date failure reasons, kept regardless of whether the series ends up succeeding -
+        // only surfaced to the caller if the WHOLE series fails (see below). A holiday hit on one
+        // of the 8 weekly dates is expected/normal and must not read as a problem when at least
+        // one other week succeeded - see AGENTS.md "Upgrade: fixed weekly appointment error
+        // reporting decisions".
+        List<String> failureReasons = new ArrayList<>();
         LocalDate firstDate = request.getDate();
 
         for (int week = 0; week < RECURRING_WEEKS_AHEAD; week++) {
@@ -116,12 +124,13 @@ public class AppointmentServiceImpl implements AppointmentService {
                 // keep generating the rest. See AGENTS.md "Upgrade: fixed weekly appointment
                 // decisions".
                 log.warn("⚠️ Skipping recurring occurrence on {}: {}", occurrence.getDate(), e.getMessage());
+                failureReasons.add(occurrence.getDate() + ": " + e.getMessage());
             }
         }
 
         if (created.isEmpty()) {
-            throw new IllegalArgumentException("Nijedna instanca fiksnog termina nije mogla biti kreirana - " +
-                    "provjerite radno vreme, praznike i zauzetost trenera/sobe.");
+            throw new IllegalArgumentException("Nijedna instanca fiksnog termina nije mogla biti kreirana. Razlog po datumu:\n" +
+                    String.join("\n", failureReasons));
         }
 
         return created;
@@ -337,9 +346,23 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new IllegalArgumentException("Soba je obavezna za termin!");
         }
         validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
+        validateNotHoliday(request.getDate());
         validateGymSchedule(request.getDate(), request.getStartTime(), request.getEndTime());
-        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        validateTrainerWorkingSchedule(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        validateTrainerNotDoubleBooked(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        validateRoomNotDoubleBooked(request.getRoomId(), request.getDate(), request.getStartTime(), request.getEndTime());
         validateClientAvailability(request.getClientIds(), request.getDate(), request.getStartTime(), request.getEndTime());
+    }
+
+    /** Holiday is a reason distinct from "gym closed that day of week" or "trainer/room busy" -
+     * checked and reported separately so the caller can tell them apart, rather than a holiday
+     * surfacing as a confusing "trainer already busy" message (the trainer simply has no WORKING
+     * TrainerSchedule row on a holiday). See AGENTS.md "Upgrade: fixed weekly appointment error
+     * reporting decisions". */
+    private void validateNotHoliday(@NotNull LocalDate date) {
+        if (holidayService.isGymClosedOn(date)) {
+            throw new IllegalArgumentException("Teretana je zatvorena " + date + " zbog praznika - termin ne može biti zakazan tog datuma.");
+        }
     }
 
     private void validateDateAndTimeRange(@NotNull LocalDate date, @NotNull LocalTime startTime, @NotNull LocalTime endTime) {
@@ -354,16 +377,59 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void validateGymSchedule(@NotNull LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         GymSchedule gymSchedule = gymScheduleRepository.findByDay(date.getDayOfWeek())
-                .orElseThrow(() -> new IllegalArgumentException("Radno vreme teretane nije definisano za " + date.getDayOfWeek()));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Radno vreme teretane nije definisano za " + date + " (" + date.getDayOfWeek() + ")."));
 
         if (startTime.isBefore(gymSchedule.getOpeningTime()) || endTime.isAfter(gymSchedule.getClosingTime())) {
-            throw new IllegalArgumentException("Termin je van radnog vremena teretane!");
+            throw new IllegalArgumentException("Termin " + date + " od " + startTime + " do " + endTime +
+                    " je van radnog vremena teretane za taj dan (" + gymSchedule.getOpeningTime() +
+                    " - " + gymSchedule.getClosingTime() + ").");
         }
     }
 
-    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
+    /** Checks the trainer actually has a WORKING TrainerSchedule shift covering this time - a
+     * distinct failure reason from "already booked on another appointment" below (an unstaffed
+     * trainer isn't "busy", they're simply not scheduled to work then). See AGENTS.md's Known
+     * issues entry on mandatory trainer/room for why a seeded trainer with no TrainerSchedule rows
+     * hits this. */
+    private void validateTrainerWorkingSchedule(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
         if (id != null && !isTrainerAvailable(id, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trener sa ID " + id + " je već zauzet u ovom terminu!");
+            throw new IllegalArgumentException("Trener sa ID " + id + " nema radnu smenu koja pokriva " +
+                    date + " od " + startTime + " do " + endTime + " - proverite raspored rada trenera za taj dan.");
+        }
+    }
+
+    /** Checks the trainer isn't already booked on a different, time-overlapping appointment -
+     * previously not checked at all (only working-hours coverage was, above), so two overlapping
+     * appointments for the same trainer could both be created as long as one WORKING shift covered
+     * both. Reports the exact conflicting appointment's time rather than a generic "already busy". */
+    private void validateTrainerNotDoubleBooked(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        if (trainerId == null) {
+            return;
+        }
+        List<Appointment> conflicts = appointmentRepository
+                .findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(trainerId, date, endTime, startTime);
+        if (!conflicts.isEmpty()) {
+            Appointment conflict = conflicts.get(0);
+            throw new IllegalArgumentException("Trener je već zauzet " + date + " od " +
+                    conflict.getStartTime() + " do " + conflict.getEndTime() + " drugim terminom.");
+        }
+    }
+
+    /** Rooms had no double-booking check at all before this - only trainers did (and even that
+     * only checked working-hours coverage, see above). A room is now treated the same way a
+     * trainer is: reject if another appointment overlaps this room/time, naming the exact
+     * conflicting appointment's time. */
+    private void validateRoomNotDoubleBooked(Integer roomId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        if (roomId == null) {
+            return;
+        }
+        List<Appointment> conflicts = appointmentRepository
+                .findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(roomId, date, endTime, startTime);
+        if (!conflicts.isEmpty()) {
+            Appointment conflict = conflicts.get(0);
+            throw new IllegalArgumentException("Soba je već zauzeta " + date + " od " +
+                    conflict.getStartTime() + " do " + conflict.getEndTime() + " drugim terminom.");
         }
     }
 
