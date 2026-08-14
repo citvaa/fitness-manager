@@ -222,7 +222,17 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   rooms (including their exact dimensions/capacity) are now defined solely in `DevDataSeeder` (see
   "Conventions" below) rather than a Flyway migration - one of them (`Svlačionica`) had its width
   bumped from 6.0 to 7.5 units as part of this change, since the old value no longer satisfies its
-  own name's computed minimum.
+  own name's computed minimum. The seed room list is 5 training-suitable rooms only (`Sala za
+  tegove`/`Kardio zona`/`Joga studio`/`Boks studio`/`TRX sala`, all `WORKOUT_FLOOR` or `STUDIO`) -
+  `Svlačionica` (`LOCKER_ROOM`) and `Recepcija` (`RECEPTION`) were replaced with `Boks studio`/`TRX
+  sala` in the training-room seed round, since `DevDataSeeder.seedAppointmentsForCurrentMonth()`
+  picks a room for a generated appointment from the *entire* room list with no type filter - a
+  locker room or reception desk hosting a training session read as obviously wrong on the live
+  floor plan/appointment lists. See AGENTS.md "Upgrade: training-room seed decisions" and
+  `docs/decision-log.md` for the room-by-room before/after and why the fix is the room list itself
+  rather than adding a type filter to the picker logic. `RoomType.LOCKER_ROOM`/`RECEPTION`/`OFFICE`
+  remain valid enum values (selectable in the room editor's create/edit form) - nothing else in the
+  codebase assumes a seeded room must be one of them.
 - **RoomCheckIn** (`model/gym/RoomCheckIn.java`) - a manual check-in/check-out event of a `Client`
   into a `Room`; `checkedOutAt == null` means currently inside. At most one active check-in per
   client is enforced **globally** (not per-room) by a DB unique partial index

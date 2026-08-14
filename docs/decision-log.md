@@ -3974,3 +3974,57 @@ of that trainer's/room's appointments does, anywhere in the app. The fix is chan
 each comparison to strict (`<`/`>`) so touching boundaries no longer count as overlapping - out of
 scope for this session (a UI-clipping fix + a doc-requested UI addition), left for a future
 session.
+
+## Upgrade: training-room seed decisions
+
+Session brief: `DevDataSeeder.ensureGymAndRooms()` seeded `Svlačionica` (`LOCKER_ROOM`) and
+`Recepcija` (`RECEPTION`) among the gym's 5 rooms, but
+`seedAppointmentsForCurrentMonth()`'s room-picking logic (the `rooms` list at both the
+already-trainer-booked path, ~line 599, and the trainer-less "open slot" path, ~line 672) draws
+from `roomRepository.findAll()` with no `RoomType` filter - so generated training appointments
+were landing in a locker room or at the reception desk, which reads as an obvious content bug on
+the live floor plan/appointment lists.
+
+**Fix**: replaced the two non-training rooms with two training-appropriate ones, rather than
+adding a type filter to the picker logic (confirmed first, via `grep -rn "LOCKER_ROOM|RECEPTION|OFFICE"`
+across `Backend`/`Frontend`, that nothing else in the codebase assumes a room must be one of these
+three types - the only other hits were the `RoomType` enum/label/icon maps themselves and an
+unrelated `RoomServiceImplTest` room named "Old"/"X" with `RoomType.OFFICE` that has nothing to do
+with seed data). Once every seeded room is itself training-suitable, the unfiltered `findAll()`
+picker is correct by construction and doesn't need to change:
+- `Svlačionica` (`LOCKER_ROOM`, capacity 30, `9.0,11.0` `7.5x6`, `#64748b`) -> **`Boks studio`**
+  (`STUDIO`, capacity 16, same position/size/color) - a boxing/martial-arts studio. Chosen
+  specifically because "Boks studio" is also 11 characters, identical to "Svlačionica" - the
+  existing 7.5x6 footprint was already tuned to exactly `RoomSizingPolicy`'s minimum for an
+  11-character name (see "Upgrade: room minimum-size decisions" above), so it stays valid for the
+  new name with zero resize, verified by hand against both `RoomSizingPolicy.minWidthUnits()`'s
+  formula and `roomSizing.ts`'s `computeMinRoomUnits()` (same 11-char input, same output).
+- `Recepcija` (`RECEPTION`, capacity 8, `17.5,11.0` `8.0x6`, `#f59e0b`) -> **`TRX sala`**
+  (`WORKOUT_FLOOR`, capacity 12, same position/size/color) - a TRX/functional-training room.
+  "TRX sala" is 8 characters, well under "Recepcija"'s own 9 - `RoomSizingPolicy` only requires
+  6.0 width units for an 8-character name (vs. the existing 8.0), so the existing footprint was
+  kept as-is (per the session brief's "existing dims as a starting point") rather than shrunk to
+  match the new, lower minimum.
+
+Neither `RoomSizingPolicy.java` nor `roomSizing.ts` needed a code change - both already compute
+their minimum from the room's name/type at call time; only the seeded room *data* needed updating,
+same as when `Svlačionica`'s width was originally bumped for the room-minimum-size upgrade.
+
+**Live verification**: restarted the backend against the recompiled `DevDataSeeder`, then called
+`POST /api/dev/reseed` (MANAGER JWT) to rebuild the dev dataset from the new room definitions (a
+normal boot skips re-seeding once data exists - `reseed()` is the only way to pick up a seed-data
+change without wiping the Postgres volume). Confirmed via `GET /api/gym/room` that the 5 rooms are
+now `Sala za tegove`/`Kardio zona`/`Joga studio`/`Boks studio`/`TRX sala`, and via a direct query
+(`SELECT r.name, COUNT(*) FROM appointment a JOIN room r ON r.id = a.room_id GROUP BY r.name`) that
+every one of the freshly reseeded month's ~220 appointments landed in one of those 5 rooms - no
+`Svlačionica`/`Recepcija` bookings exist anymore, confirming the fix without needing any picker
+logic change. Installed `playwright` + Chromium temporarily (reverted after, no diff in
+`package.json`/`package-lock.json`) and screenshotted both `/manager/floor-plan` and
+`/manager/room-editor` logged in as `admin`: both `Boks studio` and `TRX sala` tiles render with
+their full name, type label ("STUDIO"/"TERETANA"), progress bar, and count/percent badge - no
+truncation, no overlap, matching every other room tile's layout exactly.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None found while implementing this change - the `grep` sweep for other RECEPTION/LOCKER_ROOM/
+  OFFICE assumptions came back clean (see above).
