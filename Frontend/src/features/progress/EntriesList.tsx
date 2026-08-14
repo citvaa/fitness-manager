@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { deleteEntry, updateEntry } from './api'
 import type { ClientProgressEntryDTO } from './types'
 
@@ -106,11 +107,9 @@ export function EntriesList({
                 <div className="mb-2 grid grid-cols-2 gap-2 md:grid-cols-4">
                   <label className="block text-xs text-slate-400">
                     Datum
-                    <input
-                      type="date"
-              lang="sr-Latn-RS"
+                    <DateInput
                       value={editForm.entryDate}
-                      onChange={(e) => setEditForm((f) => ({ ...f, entryDate: e.target.value }))}
+                      onChange={(v) => setEditForm((f) => ({ ...f, entryDate: v }))}
                       className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-brand-500"
                     />
                   </label>

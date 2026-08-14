@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { isAxiosError } from 'axios'
+import { DateInput } from '../../components/DateInput'
 import { createHoliday, getGymSchedule, getHolidays, upsertGymScheduleDay } from './api'
 import type { DayOfWeek, GymScheduleDTO, HolidayDTO } from './types'
 
@@ -186,12 +187,10 @@ export function GymScheduleHolidaysTab() {
         <form onSubmit={handleCreateHoliday} className="mb-4 flex flex-wrap items-end gap-3">
           <label className="block text-xs text-slate-400">
             Datum
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={holidayDate}
-              onChange={(e) => setHolidayDate(e.target.value)}
+              onChange={setHolidayDate}
               className="mt-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
           </label>

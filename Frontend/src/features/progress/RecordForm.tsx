@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { createRecord } from './api'
 import { RECORD_UNITS, RECORD_UNIT_LABEL } from './types'
 import type { RecordUnit } from './types'
@@ -82,12 +83,10 @@ export function RecordForm({ clientId, onCreated }: { clientId: number; onCreate
 
       <label className="mb-3 block text-xs text-slate-400">
         Datum
-        <input
-          type="date"
-              lang="sr-Latn-RS"
+        <DateInput
           required
           value={recordDate}
-          onChange={(e) => setRecordDate(e.target.value)}
+          onChange={setRecordDate}
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
         />
       </label>

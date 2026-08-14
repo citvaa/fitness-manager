@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { createEntry } from './api'
 
 const FIELDS: { key: keyof typeof EMPTY_NUMS; label: string }[] = [
@@ -61,12 +62,10 @@ export function EntryForm({ clientId, onCreated }: { clientId: number; onCreated
 
       <label className="mb-3 block text-xs text-slate-400">
         Datum
-        <input
-          type="date"
-              lang="sr-Latn-RS"
+        <DateInput
           required
           value={entryDate}
-          onChange={(e) => setEntryDate(e.target.value)}
+          onChange={setEntryDate}
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
         />
       </label>

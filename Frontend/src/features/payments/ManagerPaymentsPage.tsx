@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import { createPayment, getAllPayments, getClientsForPicker, getSessions } from './api'
 import type { ClientSummaryDTO, PaymentDTO, SessionDTO } from './types'
@@ -113,12 +114,10 @@ export function ManagerPaymentsPage() {
           </label>
           <label className="block text-xs text-slate-400">
             Datum uplate
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={setPaymentDate}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
           </label>

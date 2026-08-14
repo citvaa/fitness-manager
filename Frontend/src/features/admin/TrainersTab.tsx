@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { DateInput } from '../../components/DateInput'
 import { createTrainer, deleteTrainer, getTrainers, updateTrainer } from './api'
 import { TrainerScheduleManager } from './TrainerScheduleManager'
 import type { EmploymentStatus, TrainerDTO } from './types'
@@ -98,12 +99,10 @@ export function TrainersTab() {
           </label>
           <label className="block text-xs text-slate-400">
             Datum zaposlenja
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={form.employmentDate}
-              onChange={(e) => setForm((f) => ({ ...f, employmentDate: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, employmentDate: v }))}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
           </label>
@@ -159,13 +158,9 @@ export function TrainersTab() {
                       onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
                       className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
                     />
-                    <input
-                      type="date"
-              lang="sr-Latn-RS"
+                    <DateInput
                       value={editForm.employmentDate}
-                      onChange={(e) =>
-                        setEditForm((f) => ({ ...f, employmentDate: e.target.value }))
-                      }
+                      onChange={(v) => setEditForm((f) => ({ ...f, employmentDate: v }))}
                       className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
                     />
                     <input

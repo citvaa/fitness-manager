@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { isAxiosError } from 'axios'
+import { DateInput } from '../../components/DateInput'
 import {
   createTrainerSchedule,
   createTrainerUnavailability,
@@ -110,12 +111,10 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
             Nova smena
           </h4>
           <div className="flex flex-wrap gap-2">
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
               className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
             <input
@@ -146,20 +145,16 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
             Neradni period
           </h4>
           <div className="flex flex-wrap gap-2">
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={unavailStart}
-              onChange={(e) => setUnavailStart(e.target.value)}
+              onChange={setUnavailStart}
               className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
-            <input
-              type="date"
-              lang="sr-Latn-RS"
+            <DateInput
               required
               value={unavailEnd}
-              onChange={(e) => setUnavailEnd(e.target.value)}
+              onChange={setUnavailEnd}
               className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
             />
             <select
