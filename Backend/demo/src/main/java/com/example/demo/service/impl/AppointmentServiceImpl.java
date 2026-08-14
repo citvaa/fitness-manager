@@ -357,12 +357,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
 
     private void validateAppointment(@NotNull CreateAppointmentRequest request) {
-        // Trainer and room are mandatory as of the manager-testing round 3 restructure - an
-        // unassigned trainer/room made occupancy tracking meaningless. See AGENTS.md "Upgrade:
-        // fixed weekly appointment decisions".
-        if (request.getTrainerId() == null) {
-            throw new IllegalArgumentException("Trener je obavezan za termin!");
-        }
+        // Room stays mandatory (manager-testing round 3) - an unassigned room made occupancy
+        // tracking meaningless. Trainer went back to being OPTIONAL in the trainer-self-assign
+        // round: the "termin bez trenera" marketplace (assign/unassign, already fully wired since
+        // Faza 7) only makes sense if create() can actually produce a trainer-less appointment in
+        // the first place - see AGENTS.md "Upgrade: trainer self-assign decisions".
+        // validateTrainerWorkingSchedule/validateTrainerNotDoubleBooked below are already
+        // null-safe (no-op when trainerId is null), so no other change is needed here.
         if (request.getRoomId() == null) {
             throw new IllegalArgumentException("Soba je obavezna za termin!");
         }

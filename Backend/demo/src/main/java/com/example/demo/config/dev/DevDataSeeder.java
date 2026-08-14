@@ -626,6 +626,35 @@ public class DevDataSeeder implements CommandLineRunner {
                 log.info("🌱 {} client(s) not booked on {} - every trainer/time-slot combination ({} total) was already taken.",
                         skippedForNoFreeSlot, date, totalCombos);
             }
+
+            // A handful of trainer-less "open slots" - the whole point of the TRAINER self-assign
+            // marketplace (POST /api/appointment/{id}/assign, already fully wired since Faza 7)
+            // is meaningless without any actual trainer-less appointment to assign to, and
+            // create()/createRecurringWeekly() reject request.trainerId == null before this round
+            // (see AGENTS.md "Upgrade: trainer self-assign decisions"). ~1 in 4 dates gets one,
+            // reusing occupiedRoomsAtSlot so it can never double-book a room that a real
+            // trainer-led appointment above already claimed at that exact slot on this date - no
+            // trainer/occupiedTrainerSlots check needed since there is no trainer to conflict.
+            if (!rooms.isEmpty() && random.nextInt(100) < 25) {
+                LocalTime openSlot = slots.get(random.nextInt(slots.size()));
+                Set<Integer> usedRoomsAtOpenSlot = occupiedRoomsAtSlot.computeIfAbsent(openSlot, t -> new HashSet<>());
+                int roomStart = random.nextInt(rooms.size());
+                for (int i = 0; i < rooms.size(); i++) {
+                    Room candidate = rooms.get((roomStart + i) % rooms.size());
+                    if (usedRoomsAtOpenSlot.add(candidate.getId())) {
+                        appointmentsToSave.add(Appointment.builder()
+                                .date(date)
+                                .startTime(openSlot)
+                                .endTime(openSlot.plusHours(1))
+                                .session(individual)
+                                .trainer(null)
+                                .room(candidate)
+                                .clientAppointments(new HashSet<>())
+                                .build());
+                        break;
+                    }
+                }
+            }
         }
 
         // Appointments first - ClientAppointment rows reference their generated ids via FK.
