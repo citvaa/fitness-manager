@@ -2819,3 +2819,138 @@ and run every other test, then restoring it unmodified), and `RoomServiceImplTes
 .create_buildsRoomFromRequestAndSaves` fails an assertion against the current room minimum-size
 formula (a "Studio A" room in the test is smaller than that name's computed minimum).
 
+## Upgrade: appointment picker filtering decisions
+
+**Starting complaints from manual testing of `/manager/administracija`'s Termini tab, "Novi
+termin" form**, both about the previous session's appointment-conflict-message work:
+
+1. `createRecurringWeekly()`'s per-date failure breakdown (`date: reason`, one line per attempted
+   week) is genuinely useful, but `AppointmentsTab.tsx` rendered it as `<p>{createError}</p>` - a
+   plain `<p>` collapses `\n` into nothing, so all 8 lines ran together into one unreadable wall of
+   text (confirmed from the reported screenshot).
+2. The "Trener"/"Soba"/"Tip sesije" dropdowns in that same form always listed every trainer/room/
+   session type regardless of the entered date/time, so a manager could easily pick a combination
+   (an unstaffed trainer, an already-booked room, a session type too big for the room) that
+   `create()` would reject anyway - only discoverable after submitting.
+
+**Fix 1 - multi-line error rendering**: added a local `ErrorMessage` component in
+`AppointmentsTab.tsx` that splits the message on `\n`; a single-line message renders as the
+original plain `<p>`, a multi-line one renders its first line as a heading `<p>` followed by a
+`<ul>` of the remaining lines (chosen over one flat bulleted list including the summary sentence,
+since `createRecurringWeekly()`'s actual shape is always "one summary line, then N per-date
+lines" - treating the first line specially reads naturally as "here's what happened, here's why,
+per date" rather than an odd 8-bullet list where the first bullet is a different kind of thing than
+the rest). Applied to both `createError` and `rowError` (the latter's messages are all currently
+single-line, but nothing prevents a future one from being multi-line, and the fix is free to apply
+everywhere a raw backend message is shown in this component - see AGENTS.md's Frontend
+conventions bullet for why this was *not* swept across every other feature module's own
+`extractErrorMessage` call sites, only this one where the problem was actually found).
+
+**Fix 2 - endpoint shape decision**: exposed **two** separate `GET` endpoints rather than one
+combined "form options" endpoint - `GET /api/appointment/available-trainers` and
+`GET /api/appointment/available-rooms`, both taking `date`/`startTime`/`endTime` query params,
+both `MANAGER`-only, both returning the existing `TrainerDTO`/`RoomDTO` shapes (no new backend DTO
+needed - `RoomDTO` already carried `capacity`, which is exactly what the frontend needs for the
+session-type filter below). Two endpoints over one was chosen because trainer-availability and
+room-availability are conceptually independent queries with no shared computation, and REST
+resource naming reads more clearly as two nouns ("available trainers", "available rooms") than one
+combined "picker options" blob the frontend would have to destructure - consistent with this
+codebase's existing preference for small, specific endpoints over combined ones (e.g. the separate
+`getSessionsForPicker`/`getTrainers`/`getRoomsForPicker` calls `AppointmentsTab` already made
+before this change).
+
+**No duplicated validation logic**: both endpoints reuse the *exact* same predicates
+`validateAppointment()` itself calls in `create()` - `isTrainerAvailable()` (working-schedule
+coverage) plus two newly-factored-out helpers, `findTrainerConflict()`/`findRoomConflict()` (used
+by both the `validateXNotDoubleBooked()` throw-path and the new listing methods), so the picker and
+the actual rejection can never disagree about what counts as "available". This was the explicit
+instruction in the request ("ne duplirati je ručno na frontendu, izloži je kroz novi endpoint") -
+the frontend has zero copy of the overlap logic; it only ever renders whatever the backend already
+computed. The backend remains the sole authority regardless: `create()`/`createRecurringWeekly()`
+still run their own full `validateAppointment()` on submit, so a trainer/room that becomes booked
+by someone else between the picker's fetch and the actual submit is still caught there (the picker
+is a UX narrowing to reduce *avoidable* mistakes, not a concurrency guarantee - documented as such
+in both the endpoint javadoc and AGENTS.md).
+
+**Session-type filter criterion**: `sessionType.maxParticipants <= selectedRoom.capacity`, computed
+entirely client-side in `AppointmentsTab.tsx` (no new backend endpoint needed for this part, since
+`RoomOptionDTO` already gained a `capacity` field and the full `SessionDTO[]` list was already
+fetched). `<=` (fits-or-smaller) rather than an exact match, since a session type that needs fewer
+participants than a room's capacity is still perfectly valid to run in that room - the room being
+"too big" for a session type is not a real constraint anywhere else in this codebase (capacity is
+a ceiling, not a target). Shows every session type until a room is picked (there's nothing to
+filter against yet). The reverse dependency - room list is unaffected by which session type is
+selected - was considered and rejected: `Session.maxParticipants` doesn't determine how many rooms
+would fit it in a useful way (small rooms can still legally host small session types), so only the
+room->session direction carries real signal.
+
+**Field reorder**: "Soba" now appears before "Tip sesije" in the form's grid (previously "Tip
+sesije" was the very first select field, before both "Trener" and "Soba") - the *tip sesije*
+picker now depends on the currently-selected room, so it reads more naturally after the room field
+than before it. "Trener" and "Soba" relative order was left as-is (Trener before Soba) since
+neither depends on the other.
+
+**Stale-selection cleanup**: three small `useEffect`s clear `form.trainerId`/`form.roomId`/
+`form.sessionId` whenever the currently-selected value falls out of the now-current filtered list
+(e.g. the manager picks a trainer, then changes the date to one where that trainer isn't free) -
+without this, changing the date/room could leave a stale selection that's no longer visible in the
+dropdown's options but would still silently submit with the create request.
+
+**Readable trainer/room names in error messages (a follow-up correction requested mid-session)**:
+`validateTrainerWorkingSchedule()`'s message named the trainer by bare numeric ID ("Trener sa ID 27
+nema radnu smenu...") - meaningless to a manager reading the error. Added `trainerLabel(id)`/
+`roomLabel(id)` helpers (`AppointmentServiceImpl`) that look up the `Trainer`/`Room` row and use
+the trainer's **email** (`User` has no name field at all in this codebase - see the domain model
+section of AGENTS.md - email is the only human-identifiable field available) or the room's `name`,
+falling back to `"ID " + id` only if the row can't be found (shouldn't happen in practice, since
+trainerId/roomId are validated to exist before these checks run, but avoids an NPE if it ever
+does). Applied to all three trainer/room-related validation messages
+(`validateTrainerWorkingSchedule`/`validateTrainerNotDoubleBooked`/`validateRoomNotDoubleBooked`);
+`validateClientAvailability`'s "Klijent sa ID X..." message was deliberately left as-is - out of
+the explicitly requested scope (trainer/room only), and client ids don't have the same "who even
+is that" problem in a manager-facing UI where the client list is typically cross-referenced by
+email/name via a separate picker anyway.
+
+**Test fixture updates required, not behavior bugs**: `AppointmentServiceImplTest` needed two new
+`@Mock` fields (`TrainerMapper trainerMapper`, `RoomMapper roomMapper`) and the corresponding
+constructor arguments in `setUp()` for the two new mapper dependencies. Two new test cases were
+added (`getAvailableTrainers_excludesTrainerWithoutShiftAndDoubleBookedTrainer`,
+`getAvailableRooms_excludesDoubleBookedRoom`) verifying the picker-filtering methods via
+`ArgumentCaptor` on the mapper call, confirming the excluded trainer/room never reaches
+`trainerMapper.toDto()`/`roomMapper.toDto()`.
+
+**Live verification** (dev backend + seeded/previously-created test data from the prior
+conflict-message session, `admin`/MANAGER JWT, via curl against `localhost:8088`):
+- **Trainer excluded when double-booked**: with trainer 26 already booked 10:00-11:00 (room 26)
+  and 10:30-11:30 (room 27) on 2026-08-21, `GET .../available-trainers?date=2026-08-21&
+  startTime=10:00:00&endTime=11:00:00` returned only trainer 27 (jelena.jovanovic@fitpro.dev) -
+  trainer 26 correctly excluded. Re-queried the same date at 14:00-15:00 (a free slot for trainer
+  26) and trainer 26 reappeared in the result, confirming the exclusion is time-scoped, not a
+  blanket "this trainer is busy today".
+- **Room excluded when double-booked**: with room 26 busy 10:00-11:00 and room 27 busy
+  10:30-11:30 (overlapping the query window) and room 29 busy 10:00-11:00, `GET
+  .../available-rooms?date=2026-08-21&startTime=10:00:00&endTime=11:00:00` returned only room 28
+  (Joga studio) and room 30 (Recepcija) - all three busy rooms correctly excluded, both unbooked
+  rooms correctly included.
+- **Empty-result case**: queried a date with no `TrainerSchedule` rows at all
+  (`date=2026-09-01`) - `available-trainers` returned `[]`, confirming the frontend's "Nema
+  dostupnih trenera za ovaj termin" branch (empty list + all three fields filled) would actually
+  trigger rather than silently rendering a blank dropdown.
+- **Session-type/capacity filter**: confirmed via the real seeded data rather than the UI (see
+  below) - Recepcija (room 30) has `capacity: 8`; the three seeded session types are
+  INDIVIDUAL/max 1, GROUP/max 3, GROUP/max 10. Applying the `maxParticipants <= capacity`
+  criterion by hand against that real data confirms GROUP/max 10 would be correctly excluded from
+  the "Tip sesije" list once Recepcija is selected, while the other two remain - the filter itself
+  is a pure client-side array `.filter()` over data already fetched, type-checked clean by
+  `tsc -b`.
+
+**What could not be visually verified this session**: same limitation as every prior round (see
+"Upgrade: manager-insights dashboard decisions" and earlier) - no Chrome/browser automation tool
+was connected, so the actual on-screen dropdown behavior (options appearing/disappearing as
+date/time/room change, the bulleted per-date error list's real rendering, the disabled/loading
+state while the picker endpoints are in flight) was not screenshotted. Verification was limited to
+the API-level behavior above (which is what actually determines dropdown contents), `tsc -b`
+passing clean, and code review of the render logic against that confirmed API behavior. A real
+look in a browser is still owed before considering the picker UX fully done, same standing note as
+every previous round.
+

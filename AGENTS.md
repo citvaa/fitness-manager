@@ -138,13 +138,25 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   overlapping appointments for one trainer could previously both be created as long as one
   `WORKING` shift covered both), room-double-booking (same overlap check, newly added - rooms had
   **no** conflict check at all before this session), then client availability. Both double-booking
-  messages name the exact conflicting appointment's date/time, not a generic "already busy". See
-  `docs/decision-log.md`'s "Upgrade: appointment conflict-message decisions" for the full
-  before/after and how each was live-verified. `createRecurringWeekly()`'s final "nothing could be
-  created" error is now a per-date breakdown (`date: reason`, one line per attempted week) instead
-  of one generic sentence - a holiday hit on one of the 8 dates is not itself reported as a
-  "problem" unless it's part of why the *whole* series failed (see the decision log for why this
-  falls out naturally from always collecting reasons but only surfacing them on total failure).
+  messages name the exact conflicting appointment's date/time, not a generic "already busy" - and
+  name the trainer/room by their *email*/*name* (`trainerLabel()`/`roomLabel()` helpers, looked up
+  only when a message is actually being built), not a bare numeric ID, since a manager has no way
+  to map an ID to a person/room from the error text alone. See `docs/decision-log.md`'s "Upgrade:
+  appointment conflict-message decisions" for the full before/after and how each was
+  live-verified. `createRecurringWeekly()`'s final "nothing could be created" error is now a
+  per-date breakdown (`date: reason`, one line per attempted week) instead of one generic sentence
+  - a holiday hit on one of the 8 dates is not itself reported as a "problem" unless it's part of
+  why the *whole* series failed (see the decision log for why this falls out naturally from always
+  collecting reasons but only surfacing them on total failure). `GET
+  /api/appointment/available-trainers`/`/available-rooms` (both `date`/`startTime`/`endTime` query
+  params, MANAGER-only) expose exactly the trainer-working-schedule/trainer-double-booking/
+  room-double-booking predicates `validateAppointment()` itself uses (factored into shared private
+  helpers, not reimplemented) - they back the admin "new appointment" form's trainer/room pickers
+  so a manager can't even select a doomed combination, but are a UX narrowing only: `create()`/
+  `createRecurringWeekly()` still re-validate from scratch and remain the sole authority (a
+  concurrent booking between listing and submit is still caught there). See `docs/decision-log.md`
+  "Upgrade: appointment picker filtering decisions" for the endpoint shape and the room-capacity
+  criterion the frontend uses to filter session types once a room is picked.
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
   driven by `Payment`s.
 - **GymSchedule** - opening/closing time per `DayOfWeek`; upserted per day (`create` finds-or-builds
@@ -370,8 +382,15 @@ short-text-out calls, not open-ended reasoning.
   existed for either need. A shared `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`
-  messages in the UI. Destructive actions use the browser's native `window.confirm(...)`, not a
-  custom modal (no modal/dialog pattern exists in this frontend). Multi-role accounts get a role
+  messages in the UI. A backend error message can be multi-line (`\n`-joined, e.g.
+  `createRecurringWeekly()`'s per-date breakdown - see "Upgrade: appointment conflict-message
+  decisions" in `docs/decision-log.md`) - a plain `<p>{message}</p>` silently collapses those
+  newlines into an unreadable single line, so any component that renders a raw backend error string
+  should render it through a small heading-plus-bulleted-list helper instead (see
+  `AppointmentsTab.tsx`'s local `ErrorMessage` component) rather than a bare paragraph; this has not
+  yet been swept across every feature that calls `extractErrorMessage`, only the appointment form
+  where the multi-line message was found. Destructive actions use the browser's native
+  `window.confirm(...)`, not a custom modal (no modal/dialog pattern exists in this frontend). Multi-role accounts get a role
   *switcher*, not a merged view - one "active role" at a time gates routes/nav
   (`RequireActiveRole`). `AdminPage`'s tabs (`features/admin/`) each own one domain: `UsersTab`
   is the full cross-role account list (search/edit/delete/toggle MANAGER); `ManagersTab`/
