@@ -2,6 +2,9 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../auth/store'
 import type { Role } from '../auth/types'
 import clsx from 'clsx'
+import { NotificationProvider } from '../features/notifications/NotificationContext'
+import { NotificationBell } from '../features/notifications/NotificationBell'
+import { NotificationPreferenceSelect } from '../features/notifications/NotificationPreferenceSelect'
 
 // ADMIN is additive to MANAGER, never a switchable active role on its own (see
 // auth/types.ts) - it has no entry in ROLE_PRIORITY/the role switcher and these two maps'
@@ -50,11 +53,15 @@ export function AppShell() {
   const switchableRoles = user.roles.filter((r) => r !== 'ADMIN')
 
   return (
+    <NotificationProvider>
     <div className="flex h-screen bg-slate-950 text-slate-100">
       <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900/40">
-        <div className="flex items-center gap-2 px-5 py-5">
-          <span className="text-xl">🏋️</span>
-          <span className="font-semibold">Fitness Manager</span>
+        <div className="flex items-center justify-between gap-2 px-5 py-5">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🏋️</span>
+            <span className="font-semibold">Fitness Manager</span>
+          </div>
+          <NotificationBell />
         </div>
 
         {switchableRoles.length > 1 && (
@@ -98,7 +105,8 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-slate-800 px-4 py-4">
-          <p className="truncate text-xs text-slate-500">{user.email}</p>
+          <NotificationPreferenceSelect />
+          <p className="mt-3 truncate text-xs text-slate-500">{user.email}</p>
           <button
             onClick={clear}
             className="mt-2 w-full rounded-lg border border-slate-800 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
@@ -112,5 +120,6 @@ export function AppShell() {
         <Outlet />
       </main>
     </div>
+    </NotificationProvider>
   )
 }
