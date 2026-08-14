@@ -43,12 +43,26 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class ClientProgressInsightServiceImpl implements ClientProgressInsightService {
 
+    // Restructured from a single 3-5 sentence narrative paragraph into "short intro + bullets" -
+    // see AGENTS.md "Upgrade: progress-insight readability decisions". Deliberately still a plain
+    // string (not a structured JSON response): the frontend only needs to tell "intro" from
+    // "bullet points" apart, and a fixed "- " bullet prefix (the same convention already used
+    // elsewhere in this codebase, e.g. AppointmentsTab.tsx's ErrorMessage) does that reliably
+    // without a JSON round-trip or a fragile multi-field regex.
     private static final String SYSTEM_PROMPT = """
             You are a supportive fitness coach's assistant. You are given a client's body-
-            measurement history and personal exercise records, already computed. Write a short
-            (3-5 sentence) narrative summary of their progress and one concrete, encouraging
-            recommendation for what to focus on next. Do not invent numbers beyond what is given.
-            No markdown, plain prose only.
+            measurement history and personal exercise records, already computed.
+
+            Respond in exactly this shape, nothing else:
+            1. A short intro of 1-2 sentences summarizing their overall progress so far.
+            2. A blank line.
+            3. Between 2 and 4 bullet points, each on its own line starting with "- ", each one
+               short (max ~1 sentence) and calling out one specific, concrete observation or
+               recommendation (e.g. a specific measurement trend, or what to focus on next).
+
+            Do not invent numbers beyond what is given. Do not use any other markdown (no bold,
+            no headers, no numbered lists) - plain text only, with the "- " bullet prefix exactly
+            as specified above.
             Respond in Serbian (srpski jezik), written in the Latin alphabet (latinica) - the
             rest of the application's UI is Serbian Latin script, so the summary must match it
             exactly; do not use Cyrillic (ćirilica).
