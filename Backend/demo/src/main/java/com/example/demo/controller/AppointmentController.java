@@ -2,6 +2,8 @@ package com.example.demo.controller;
 
 import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.gym.RoomDTO;
+import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.service.AppointmentService;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -10,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
@@ -66,6 +70,26 @@ public class AppointmentController {
     @GetMapping
     public ResponseEntity<List<AppointmentDTO>> getAll() {
         return ResponseEntity.ok(appointmentService.getAll());
+    }
+
+    /** Backs the "new appointment" form's trainer picker - narrows the dropdown to trainers who
+     * would actually pass create()'s validation for this date/time, so a manager can't even select
+     * a doomed combination. UX narrowing only; create() re-validates from scratch regardless (see
+     * AGENTS.md "Upgrade: appointment picker filtering decisions" for why this is not a substitute
+     * for that check - e.g. a concurrent booking between listing and submit). */
+    @RoleRequired("MANAGER")
+    @GetMapping("/available-trainers")
+    public ResponseEntity<List<TrainerDTO>> getAvailableTrainers(
+            @RequestParam LocalDate date, @RequestParam LocalTime startTime, @RequestParam LocalTime endTime) {
+        return ResponseEntity.ok(appointmentService.getAvailableTrainers(date, startTime, endTime));
+    }
+
+    /** Same reasoning as getAvailableTrainers() above, for the room picker. */
+    @RoleRequired("MANAGER")
+    @GetMapping("/available-rooms")
+    public ResponseEntity<List<RoomDTO>> getAvailableRooms(
+            @RequestParam LocalDate date, @RequestParam LocalTime startTime, @RequestParam LocalTime endTime) {
+        return ResponseEntity.ok(appointmentService.getAvailableRooms(date, startTime, endTime));
     }
 
     @RoleRequired({"MANAGER", "CLIENT"})

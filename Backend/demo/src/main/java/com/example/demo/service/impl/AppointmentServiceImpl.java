@@ -1,8 +1,12 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.gym.RoomDTO;
+import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
+import com.example.demo.mapper.gym.RoomMapper;
+import com.example.demo.mapper.user.TrainerMapper;
 import com.example.demo.model.*;
 import com.example.demo.model.gym.Room;
 import com.example.demo.model.schedule.GymSchedule;
@@ -71,6 +75,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final ClientAppointmentRepository clientAppointmentRepository;
     private final RoomRepository roomRepository;
     private final HolidayService holidayService;
+    private final TrainerMapper trainerMapper;
+    private final RoomMapper roomMapper;
 
     @Transactional
     public AppointmentDTO create(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
@@ -327,6 +333,21 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .toList();
     }
 
+    public List<TrainerDTO> getAvailableTrainers(LocalDate date, LocalTime startTime, LocalTime endTime) {
+        List<Trainer> available = trainerRepository.findAll().stream()
+                .filter(t -> isTrainerAvailable(t.getId(), date, startTime, endTime))
+                .filter(t -> findTrainerConflict(t.getId(), date, startTime, endTime).isEmpty())
+                .toList();
+        return trainerMapper.toDto(available);
+    }
+
+    public List<RoomDTO> getAvailableRooms(LocalDate date, LocalTime startTime, LocalTime endTime) {
+        List<Room> available = roomRepository.findAll().stream()
+                .filter(r -> findRoomConflict(r.getId(), date, startTime, endTime).isEmpty())
+                .toList();
+        return roomMapper.toDto(available);
+    }
+
 
 
 
@@ -394,7 +415,7 @@ public class AppointmentServiceImpl implements AppointmentService {
      * hits this. */
     private void validateTrainerWorkingSchedule(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
         if (id != null && !isTrainerAvailable(id, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trener sa ID " + id + " nema radnu smenu koja pokriva " +
+            throw new IllegalArgumentException("Trener " + trainerLabel(id) + " nema radnu smenu koja pokriva " +
                     date + " od " + startTime + " do " + endTime + " - proverite raspored rada trenera za taj dan.");
         }
     }
@@ -407,13 +428,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (trainerId == null) {
             return;
         }
-        List<Appointment> conflicts = appointmentRepository
-                .findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(trainerId, date, endTime, startTime);
-        if (!conflicts.isEmpty()) {
-            Appointment conflict = conflicts.get(0);
-            throw new IllegalArgumentException("Trener je već zauzet " + date + " od " +
+        findTrainerConflict(trainerId, date, startTime, endTime).ifPresent(conflict -> {
+            throw new IllegalArgumentException("Trener " + trainerLabel(trainerId) + " je već zauzet " + date + " od " +
                     conflict.getStartTime() + " do " + conflict.getEndTime() + " drugim terminom.");
-        }
+        });
     }
 
     /** Rooms had no double-booking check at all before this - only trainers did (and even that
@@ -424,13 +442,46 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (roomId == null) {
             return;
         }
-        List<Appointment> conflicts = appointmentRepository
-                .findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(roomId, date, endTime, startTime);
-        if (!conflicts.isEmpty()) {
-            Appointment conflict = conflicts.get(0);
-            throw new IllegalArgumentException("Soba je već zauzeta " + date + " od " +
+        findRoomConflict(roomId, date, startTime, endTime).ifPresent(conflict -> {
+            throw new IllegalArgumentException("Soba " + roomLabel(roomId) + " je već zauzeta " + date + " od " +
                     conflict.getStartTime() + " do " + conflict.getEndTime() + " drugim terminom.");
-        }
+        });
+    }
+
+    /** Shared by validateTrainerNotDoubleBooked() above and getAvailableTrainers() below - the one
+     * place that knows what "trainer overlap" means, so the picker-filtering endpoint and the
+     * create()-time rejection can never disagree. Same LessThanEqual/GreaterThanEqual overlap
+     * semantics as the pre-existing client-overlap check (touching boundaries count as a
+     * conflict). */
+    private Optional<Appointment> findTrainerConflict(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        return appointmentRepository
+                .findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(trainerId, date, endTime, startTime)
+                .stream().findFirst();
+    }
+
+    /** Shared by validateRoomNotDoubleBooked() above and getAvailableRooms() below - see
+     * findTrainerConflict()'s javadoc for why this is factored out rather than re-checked
+     * separately on the frontend. */
+    private Optional<Appointment> findRoomConflict(Integer roomId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        return appointmentRepository
+                .findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(roomId, date, endTime, startTime)
+                .stream().findFirst();
+    }
+
+    /** Human-readable trainer identifier for error messages - the trainer's email (User has no
+     * name field, see AGENTS.md's domain model section), falling back to a bare "ID X" only if the
+     * trainer row itself can't be found (should not happen in practice since trainerId is
+     * validated to exist before these checks run, but avoids an NPE if it ever does). */
+    private String trainerLabel(Integer id) {
+        return trainerRepository.findById(id)
+                .map(t -> t.getUser() != null && t.getUser().getEmail() != null ? t.getUser().getEmail() : "ID " + id)
+                .orElse("ID " + id);
+    }
+
+    /** Human-readable room identifier for error messages - the room's name, same fallback
+     * reasoning as trainerLabel() above. */
+    private String roomLabel(Integer id) {
+        return roomRepository.findById(id).map(Room::getName).orElse("ID " + id);
     }
 
     private void validateClientAvailability(Set<Integer> ids, LocalDate date, LocalTime startTime, LocalTime endTime) {

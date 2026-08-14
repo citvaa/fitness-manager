@@ -1,9 +1,14 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.gym.RoomDTO;
+import com.example.demo.dto.user.TrainerDTO;
+import com.example.demo.enums.WorkStatus;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.Session;
+import com.example.demo.model.gym.Room;
+import com.example.demo.model.schedule.TrainerSchedule;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.ClientSessionTracking;
@@ -79,6 +84,10 @@ class AppointmentServiceImplTest {
     private RoomRepository roomRepository;
     @Mock
     private HolidayService holidayService;
+    @Mock
+    private com.example.demo.mapper.user.TrainerMapper trainerMapper;
+    @Mock
+    private com.example.demo.mapper.gym.RoomMapper roomMapper;
 
     private AppointmentServiceImpl service;
 
@@ -87,7 +96,7 @@ class AppointmentServiceImplTest {
         service = new AppointmentServiceImpl(sessionRepository, trainerRepository, clientRepository,
                 appointmentRepository, appointmentMapper, gymScheduleRepository, trainerScheduleRepository,
                 clientSessionTrackingRepository, notificationService, clientAppointmentRepository, roomRepository,
-                holidayService);
+                holidayService, trainerMapper, roomMapper);
     }
 
     @AfterEach
@@ -550,6 +559,63 @@ class AppointmentServiceImplTest {
         assertThat(appointment.getClientAppointments()).hasSize(2);
         verify(clientRepository, never()).findById(1);
         verify(clientSessionTrackingRepository).save(any(ClientSessionTracking.class));
+    }
+
+    // ---- getAvailableTrainers/getAvailableRooms (appointment picker filtering) ----
+
+    @Test
+    void getAvailableTrainers_excludesTrainerWithoutShiftAndDoubleBookedTrainer() {
+        LocalDate date = LocalDate.now().plusDays(1);
+        LocalTime start = LocalTime.of(10, 0);
+        LocalTime end = LocalTime.of(11, 0);
+        Trainer available = Trainer.builder().id(1).build();
+        Trainer noShift = Trainer.builder().id(2).build();
+        Trainer doubleBooked = Trainer.builder().id(3).build();
+        when(trainerRepository.findAll()).thenReturn(List.of(available, noShift, doubleBooked));
+
+        TrainerSchedule shift = TrainerSchedule.builder()
+                .status(WorkStatus.WORKING).startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(18, 0)).build();
+        when(trainerScheduleRepository.findByTrainerIdAndDate(1, date)).thenReturn(List.of(shift));
+        when(trainerScheduleRepository.findByTrainerIdAndDate(2, date)).thenReturn(List.of());
+        when(trainerScheduleRepository.findByTrainerIdAndDate(3, date)).thenReturn(List.of(shift));
+
+        when(appointmentRepository.findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(1, date, end, start))
+                .thenReturn(List.of());
+        Appointment conflict = Appointment.builder().id(99)
+                .startTime(LocalTime.of(10, 30)).endTime(LocalTime.of(11, 30)).build();
+        when(appointmentRepository.findByTrainerIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(3, date, end, start))
+                .thenReturn(List.of(conflict));
+        when(trainerMapper.toDto(anyList())).thenReturn(List.of(new TrainerDTO()));
+
+        service.getAvailableTrainers(date, start, end);
+
+        ArgumentCaptor<List<Trainer>> captor = ArgumentCaptor.forClass(List.class);
+        verify(trainerMapper).toDto(captor.capture());
+        assertThat(captor.getValue()).containsExactly(available);
+    }
+
+    @Test
+    void getAvailableRooms_excludesDoubleBookedRoom() {
+        LocalDate date = LocalDate.now().plusDays(1);
+        LocalTime start = LocalTime.of(10, 0);
+        LocalTime end = LocalTime.of(11, 0);
+        Room free = Room.builder().id(1).build();
+        Room busy = Room.builder().id(2).build();
+        when(roomRepository.findAll()).thenReturn(List.of(free, busy));
+
+        when(appointmentRepository.findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(1, date, end, start))
+                .thenReturn(List.of());
+        Appointment conflict = Appointment.builder().id(50)
+                .startTime(LocalTime.of(9, 30)).endTime(LocalTime.of(10, 30)).build();
+        when(appointmentRepository.findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(2, date, end, start))
+                .thenReturn(List.of(conflict));
+        when(roomMapper.toDto(anyList())).thenReturn(List.of(new RoomDTO()));
+
+        service.getAvailableRooms(date, start, end);
+
+        ArgumentCaptor<List<Room>> captor = ArgumentCaptor.forClass(List.class);
+        verify(roomMapper).toDto(captor.capture());
+        assertThat(captor.getValue()).containsExactly(free);
     }
 
     private HashSet<ClientAppointment> setOf(ClientAppointment... items) {

@@ -1,6 +1,8 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.gym.RoomDTO;
+import com.example.demo.dto.user.TrainerDTO;
 import com.example.demo.model.Appointment;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -57,4 +59,17 @@ public interface AppointmentService {
     Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date);
 
     List<Appointment> findAppointmentsStartingBetween(LocalTime start, LocalTime end, LocalDate date);
+
+    /** Trainers that both have a WORKING TrainerSchedule shift covering this date/time range and
+     * aren't already booked on another overlapping appointment - i.e. exactly the set that would
+     * pass validateTrainerWorkingSchedule()/validateTrainerNotDoubleBooked() in create(). Backs the
+     * "new appointment" form's trainer picker so a manager can't even select a combination the
+     * backend would reject - a UX narrowing, not a new authority; create() still re-validates from
+     * scratch (see AGENTS.md "Upgrade: appointment picker filtering decisions"). */
+    List<TrainerDTO> getAvailableTrainers(LocalDate date, LocalTime startTime, LocalTime endTime);
+
+    /** Rooms not already booked by another overlapping appointment in this date/time range - same
+     * check as validateRoomNotDoubleBooked() in create(), exposed for the same reason as
+     * getAvailableTrainers() above. */
+    List<RoomDTO> getAvailableRooms(LocalDate date, LocalTime startTime, LocalTime endTime);
 }
