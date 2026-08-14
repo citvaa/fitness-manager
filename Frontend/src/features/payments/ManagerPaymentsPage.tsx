@@ -3,6 +3,7 @@ import { DateInput } from '../../components/DateInput'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import { createPayment, getAllPayments, getClientsForPicker, getSessions } from './api'
 import type { ClientSummaryDTO, PaymentDTO, SessionDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
 
@@ -146,7 +147,7 @@ export function ManagerPaymentsPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : payments.length === 0 ? (
           <p className="text-sm text-slate-500">Nema uplata.</p>
         ) : (

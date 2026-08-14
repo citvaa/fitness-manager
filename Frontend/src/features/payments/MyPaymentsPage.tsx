@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getMyPayments } from './api'
 import type { PaymentDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
 
@@ -21,7 +22,7 @@ export function MyPaymentsPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : payments.length === 0 ? (
           <p className="text-sm text-slate-500">Još nema evidentiranih uplata.</p>
         ) : (

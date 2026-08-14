@@ -3,6 +3,7 @@ import { DateInput } from '../../components/DateInput'
 import { createTrainer, deleteTrainer, getTrainers, updateTrainer } from './api'
 import { TrainerScheduleManager } from './TrainerScheduleManager'
 import type { EmploymentStatus, TrainerDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const STATUS_LABEL: Record<EmploymentStatus, string> = {
   FULL_TIME: 'Puno radno vreme',
@@ -144,7 +145,7 @@ export function TrainersTab() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-300">Treneri ({trainers.length})</h3>
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : trainers.length === 0 ? (
           <p className="text-sm text-slate-500">Nema trenera.</p>
         ) : (

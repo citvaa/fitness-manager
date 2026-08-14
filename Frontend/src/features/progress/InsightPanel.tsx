@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ClientProgressInsightDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 /**
  * Parses the "short intro + bullets" shape the backend prompt now asks for (see AGENTS.md
@@ -68,7 +69,7 @@ export function InsightPanel({
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Učitavanje...</p>
+        <LoadingIndicator className="text-sm text-slate-500" />
       ) : insight ? (
         <>
           <div className="space-y-2 text-sm leading-relaxed text-slate-200">

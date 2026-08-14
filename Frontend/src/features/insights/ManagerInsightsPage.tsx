@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getManagerInsights, refreshManagerInsights } from './api'
 import type { ManagerInsightsDTO } from './types'
 import { RatingBadge, RoomOccupancyChart, SessionTypeChart, StatTile } from './InsightCharts'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 function formatGeneratedAt(iso: string) {
   return new Date(iso).toLocaleString('sr-RS', {
@@ -66,7 +67,7 @@ export function ManagerInsightsPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-slate-400">Učitavanje...</div>
+    return <LoadingIndicator className="p-8 text-slate-400" />
   }
 
   return (

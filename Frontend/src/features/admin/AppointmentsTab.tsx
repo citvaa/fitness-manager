@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { DateInput } from '../../components/DateInput'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
 import {
   addClientToAppointment,
@@ -475,7 +476,7 @@ export function AppointmentsTab() {
           {rowError && <ErrorMessage message={rowError} className="mb-3 text-xs text-red-400" />}
 
           {loading ? (
-            <p className="text-sm text-slate-500">Učitavanje...</p>
+            <LoadingIndicator className="text-sm text-slate-500" />
           ) : visible.length === 0 ? (
             <p className="text-sm text-slate-500">Nema termina za prikaz na izabrani dan/filtere.</p>
           ) : (

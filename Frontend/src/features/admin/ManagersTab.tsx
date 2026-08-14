@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import { useAuthStore } from '../../auth/store'
 import { addUserRole, createUser, getUsers } from './api'
 import type { UserDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 /** See the same helper in features/schedule/TrainerSchedulePage.tsx - surfaces
  * GlobalExceptionHandler's real validation/access-denied message instead of failing silently. */
@@ -108,7 +109,7 @@ export function ManagersTab() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-300">Menadžeri ({managers.length})</h3>
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : managers.length === 0 ? (
           <p className="text-sm text-slate-500">Nema menadžera.</p>
         ) : (

@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import { DateInput } from '../../components/DateInput'
 import { createHoliday, getGymSchedule, getHolidays, upsertGymScheduleDay } from './api'
 import type { DayOfWeek, GymScheduleDTO, HolidayDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   if (isAxiosError(err) && typeof err.response?.data?.message === 'string') {
@@ -114,7 +115,7 @@ export function GymScheduleHolidaysTab() {
         </p>
         {scheduleError && <p className="mb-3 text-xs text-red-400">{scheduleError}</p>}
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

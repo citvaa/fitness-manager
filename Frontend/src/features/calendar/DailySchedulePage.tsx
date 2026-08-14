@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MonthCalendar } from '../../components/MonthCalendar'
 import { getDailySchedule, getRoomsForFilter, getTrainersForFilter } from './api'
 import type { AppointmentDTO, RoomSummaryDTO, TrainerSummaryDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
 
@@ -100,7 +101,7 @@ export function DailySchedulePage() {
           </div>
 
           {loading ? (
-            <p className="text-sm text-slate-500">Učitavanje...</p>
+            <LoadingIndicator className="text-sm text-slate-500" />
           ) : error ? (
             <p className="text-sm text-red-400">{error}</p>
           ) : visible.length === 0 ? (

@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { DateInput } from '../../components/DateInput'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
 import {
   createMySchedule,
@@ -308,7 +309,7 @@ export function TrainerSchedulePage() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
             <h3 className="mb-3 text-sm font-semibold text-slate-300">Raspored za {selectedDate}</h3>
             {loading ? (
-              <p className="text-sm text-slate-500">Učitavanje...</p>
+              <LoadingIndicator className="text-sm text-slate-500" />
             ) : entriesForDate.length === 0 ? (
               <p className="text-sm text-slate-500">Ništa uneto za ovaj dan.</p>
             ) : (
@@ -342,7 +343,7 @@ export function TrainerSchedulePage() {
               Da li se poklapaju sa radnim vremenom iznad - ako termin nije pokriven trenutnom smenom, dopuni raspored.
             </p>
             {loading ? (
-              <p className="text-sm text-slate-500">Učitavanje...</p>
+              <LoadingIndicator className="text-sm text-slate-500" />
             ) : appointmentsForDate.length === 0 ? (
               <p className="text-sm text-slate-500">Nema dodeljenih termina za ovaj dan.</p>
             ) : (

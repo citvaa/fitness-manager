@@ -5,6 +5,7 @@ import { createRoom, deleteRoom, getGym, listRooms, updateRoom, upsertGym } from
 import type { GymDTO, RoomDTO, RoomType } from './types'
 import { ROOM_TYPES, ROOM_TYPE_LABEL } from './types'
 import { computeMinRoomUnits } from './roomSizing'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const PX_PER_UNIT = 20 // rendering scale: 1 geometry unit ("meter") = 20px on canvas
 const CANVAS_WIDTH = 900
@@ -187,7 +188,7 @@ export function RoomEditorPage() {
   const selectedRoom = rooms.find((r) => r.id === selectedId) ?? null
 
   if (loading) {
-    return <div className="p-8 text-slate-400">Učitavanje...</div>
+    return <LoadingIndicator className="p-8 text-slate-400" />
   }
 
   if (!gym) {

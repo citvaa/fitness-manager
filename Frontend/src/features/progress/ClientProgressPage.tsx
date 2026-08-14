@@ -5,6 +5,7 @@ import { EntriesList } from './EntriesList'
 import { PersonalRecordChart, PersonalRecordsList } from './PersonalRecordsList'
 import { InsightPanel } from './InsightPanel'
 import type { ClientPersonalRecordDTO, ClientProgressEntryDTO, ClientProgressInsightDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 export function ClientProgressPage() {
   const [entries, setEntries] = useState<ClientProgressEntryDTO[]>([])
@@ -30,7 +31,7 @@ export function ClientProgressPage() {
   }, [])
 
   if (loading) {
-    return <div className="p-8 text-slate-400">Učitavanje...</div>
+    return <LoadingIndicator className="p-8 text-slate-400" />
   }
 
   return (

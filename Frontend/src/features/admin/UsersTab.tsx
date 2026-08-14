@@ -4,6 +4,7 @@ import type { Role } from '../../auth/types'
 import { useAuthStore } from '../../auth/store'
 import { addUserRole, deleteUser, getUsers, removeUserRole, updateUser } from './api'
 import type { UserDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 /** See the same helper in features/schedule/TrainerSchedulePage.tsx - surfaces
  * GlobalExceptionHandler's real validation/access-denied message instead of failing silently. */
@@ -137,7 +138,7 @@ export function UsersTab() {
         </form>
 
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : users.length === 0 ? (
           <p className="text-sm text-slate-500">Nema korisnika.</p>
         ) : (

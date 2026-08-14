@@ -6,6 +6,7 @@ import { ProgressCharts } from './ProgressCharts'
 import { EntriesList } from './EntriesList'
 import { PersonalRecordChart, PersonalRecordsList } from './PersonalRecordsList'
 import { InsightPanel } from './InsightPanel'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 import type {
   ClientPersonalRecordDTO,
   ClientProgressEntryDTO,
@@ -60,7 +61,7 @@ export function TrainerProgressPage() {
   )
 
   if (loadingClients) {
-    return <div className="p-8 text-slate-400">Učitavanje...</div>
+    return <LoadingIndicator className="p-8 text-slate-400" />
   }
 
   return (
@@ -97,7 +98,7 @@ export function TrainerProgressPage() {
         {!selectedId ? (
           <p className="text-sm text-slate-500">Izaberi klijenta sa leve strane.</p>
         ) : loadingDetail ? (
-          <div className="text-slate-400">Učitavanje...</div>
+          <LoadingIndicator className="text-slate-400" />
         ) : (
           <div className="space-y-6">
             <h1 className="text-lg font-semibold text-slate-100">

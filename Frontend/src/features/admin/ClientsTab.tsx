@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { createClient, getClients } from './api'
 import type { ClientDTO } from './types'
+import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 /**
  * No edit/delete here - ClientController never had those endpoints (only create + the getAll
@@ -75,7 +76,7 @@ export function ClientsTab() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-300">Klijenti ({clients.length})</h3>
         {loading ? (
-          <p className="text-sm text-slate-500">Učitavanje...</p>
+          <LoadingIndicator className="text-sm text-slate-500" />
         ) : clients.length === 0 ? (
           <p className="text-sm text-slate-500">Nema klijenata.</p>
         ) : (
