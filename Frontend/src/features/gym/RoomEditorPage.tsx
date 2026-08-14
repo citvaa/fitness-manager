@@ -4,17 +4,11 @@ import type Konva from 'konva'
 import { createRoom, deleteRoom, getGym, listRooms, updateRoom, upsertGym } from './api'
 import type { GymDTO, RoomDTO, RoomType } from './types'
 import { ROOM_TYPES, ROOM_TYPE_LABEL } from './types'
+import { computeMinRoomUnits } from './roomSizing'
 
 const PX_PER_UNIT = 20 // rendering scale: 1 geometry unit ("meter") = 20px on canvas
 const CANVAS_WIDTH = 900
 const CANVAS_HEIGHT = 600
-
-// Smallest a room may be resized to (in geometry units/"meters") - small enough for a real
-// closet-sized room, but large enough that the name label (e.g. "Recepcija") and the live-view
-// occupancy count rendered on top of the rectangle always stay inside its bounds instead of
-// spilling out. See AGENTS.md ("Upgrade: manager-testing fixes").
-const MIN_ROOM_WIDTH_UNITS = 4
-const MIN_ROOM_HEIGHT_UNITS = 2.5
 
 const DEFAULT_COLOR = '#2f83fb'
 
@@ -31,6 +25,11 @@ function RoomShape({
 }) {
   const shapeRef = useRef<Konva.Rect>(null)
   const trRef = useRef<Konva.Transformer>(null)
+
+  // Recomputed from this room's own current name/type on every render, not a fixed constant for
+  // all rooms - see roomSizing.ts. Re-run automatically whenever the name changes (e.g. via the
+  // "Naziv" field), so a longer name on an already-valid room immediately raises the resize floor.
+  const { minWidthUnits, minHeightUnits } = computeMinRoomUnits(room.name, room.type)
 
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
@@ -72,8 +71,8 @@ function RoomShape({
             onChange({
               posX: node.x() / PX_PER_UNIT,
               posY: node.y() / PX_PER_UNIT,
-              width: Math.max(MIN_ROOM_WIDTH_UNITS, (node.width() * scaleX) / PX_PER_UNIT),
-              height: Math.max(MIN_ROOM_HEIGHT_UNITS, (node.height() * scaleY) / PX_PER_UNIT),
+              width: Math.max(minWidthUnits, (node.width() * scaleX) / PX_PER_UNIT),
+              height: Math.max(minHeightUnits, (node.height() * scaleY) / PX_PER_UNIT),
               rotationDegrees: node.rotation(),
             })
           }}
@@ -93,8 +92,7 @@ function RoomShape({
           rotateEnabled
           flipEnabled={false}
           boundBoxFunc={(oldBox, newBox) =>
-            newBox.width < MIN_ROOM_WIDTH_UNITS * PX_PER_UNIT ||
-            newBox.height < MIN_ROOM_HEIGHT_UNITS * PX_PER_UNIT
+            newBox.width < minWidthUnits * PX_PER_UNIT || newBox.height < minHeightUnits * PX_PER_UNIT
               ? oldBox
               : newBox
           }
@@ -136,15 +134,17 @@ export function RoomEditorPage() {
 
   async function handleAddRoom() {
     if (!gym) return
+    const defaultName = `Nova sala ${rooms.length + 1}`
+    const { minWidthUnits, minHeightUnits } = computeMinRoomUnits(defaultName, 'WORKOUT_FLOOR')
     const created = await createRoom({
       gymId: gym.id,
-      name: `Nova sala ${rooms.length + 1}`,
+      name: defaultName,
       type: 'WORKOUT_FLOOR',
       capacity: 10,
       posX: 2,
       posY: 2,
-      width: 6,
-      height: 4,
+      width: Math.max(6, minWidthUnits),
+      height: Math.max(4, minHeightUnits),
       rotationDegrees: 0,
       color: DEFAULT_COLOR,
     })
@@ -154,6 +154,16 @@ export function RoomEditorPage() {
 
   async function persistPatch(room: RoomDTO, patch: Partial<RoomDTO>) {
     const next = { ...room, ...patch }
+    // Renaming (or retyping) a room re-checks the content-based minimum size, not just resizing -
+    // a longer name on an already-valid room must not silently save at a size too small to fit it
+    // on /manager/plan-uzivo. Auto-grow here rather than just letting the backend 400: the backend
+    // check (RoomServiceImpl) is what actually enforces this, this just avoids a surprising error
+    // for the common case of typing a longer name without touching the rectangle.
+    if (patch.name !== undefined || patch.type !== undefined) {
+      const { minWidthUnits, minHeightUnits } = computeMinRoomUnits(next.name, next.type)
+      next.width = Math.max(next.width, minWidthUnits)
+      next.height = Math.max(next.height, minHeightUnits)
+    }
     setRooms((prev) => prev.map((r) => (r.id === room.id ? next : r)))
     await updateRoom(room.id, {
       name: next.name,

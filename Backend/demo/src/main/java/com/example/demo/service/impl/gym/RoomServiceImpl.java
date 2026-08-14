@@ -31,6 +31,8 @@ public class RoomServiceImpl implements RoomService {
         Gym gym = gymRepository.findById(request.getGymId())
                 .orElseThrow(() -> new EntityNotFoundException("Teretana nije pronađena"));
 
+        validateMinSize(request.getName(), request.getWidth(), request.getHeight());
+
         Room room = Room.builder()
                 .gym(gym)
                 .name(request.getName())
@@ -52,6 +54,8 @@ public class RoomServiceImpl implements RoomService {
     public RoomDTO update(Integer id, UpdateRoomRequest request) {
         Room room = roomRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Soba nije pronađena"));
+
+        validateMinSize(request.getName(), request.getWidth(), request.getHeight());
 
         room.setName(request.getName());
         room.setType(request.getType());
@@ -85,5 +89,22 @@ public class RoomServiceImpl implements RoomService {
     @Override
     public List<RoomDTO> getAll() {
         return roomMapper.toDto(roomRepository.findAll());
+    }
+
+    /**
+     * Rejects a width/height too small for this room's own name to fit on the live floor-plan
+     * view without truncating/spilling out - see {@link RoomSizingPolicy}. Re-checked on every
+     * create/update (not just when width/height change), since a longer name on an
+     * already-valid room must not be savable without a matching size increase.
+     */
+    private void validateMinSize(String name, Double width, Double height) {
+        double minWidth = RoomSizingPolicy.minWidthUnits(name);
+        double minHeight = RoomSizingPolicy.minHeightUnits();
+        if (width == null || width < minWidth || height == null || height < minHeight) {
+            throw new IllegalArgumentException(String.format(
+                    "Soba je premala za naziv \"%s\" - minimalna dimenzija je %.1fm x %.1fm, "
+                            + "inače naziv/podaci neće stati na prikazu uživo.",
+                    name, minWidth, minHeight));
+        }
     }
 }

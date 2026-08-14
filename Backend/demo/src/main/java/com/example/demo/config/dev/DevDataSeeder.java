@@ -283,13 +283,19 @@ public class DevDataSeeder implements CommandLineRunner {
                 room(gym, "Sala za tegove", RoomType.WORKOUT_FLOOR, 25, 0.0, 0.0, 12.0, 10.0, "#2f83fb"),
                 room(gym, "Kardio zona", RoomType.WORKOUT_FLOOR, 20, 13.0, 0.0, 10.0, 10.0, "#0ea5e9"),
                 room(gym, "Joga studio", RoomType.STUDIO, 15, 0.0, 11.0, 8.0, 6.0, "#a855f7"),
-                room(gym, "Svlačionica", RoomType.LOCKER_ROOM, 30, 9.0, 11.0, 6.0, 6.0, "#64748b"),
+                // Width bumped from 6.0 to 7.5 - the room minimum-size validation added in the
+                // room-minimum-size upgrade (RoomServiceImpl/RoomSizingPolicy) requires 7.5 for an
+                // 11-character name like "Svlačionica" so it doesn't truncate on
+                // /manager/plan-uzivo. See AGENTS.md "Upgrade: room minimum-size decisions".
+                room(gym, "Svlačionica", RoomType.LOCKER_ROOM, 30, 9.0, 11.0, 7.5, 6.0, "#64748b"),
                 // Previously 7x4 via migration V1.0021's retroactive minimum-size patch - still
                 // visually narrow/cramped next to the other rooms, and capacity 5 looked odd
                 // against that footprint. Now that this seeder owns the canonical definition,
                 // widened to 8x6 (well above the 4x2.5 editor floor) with a more realistic
                 // reception-desk headcount. See AGENTS.md "Upgrade: dev-data ownership decisions".
-                room(gym, "Recepcija", RoomType.RECEPTION, 8, 16.0, 11.0, 8.0, 6.0, "#f59e0b")));
+                // posX bumped from 16.0 to 17.5 to keep a gap now that Svlačionica is wider (its
+                // right edge moved from x=15 to x=16.5).
+                room(gym, "Recepcija", RoomType.RECEPTION, 8, 17.5, 11.0, 8.0, 6.0, "#f59e0b")));
     }
 
     private Room room(Gym gym, String name, RoomType type, int capacity,
