@@ -351,7 +351,13 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   new self-lookup endpoints, `GET /api/trainer/me`/`GET /api/client/me` (id-only, same JWT-email
   idiom as every other self-service endpoint), and a `NotificationBell` in the sidebar header
   renders an unread-count badge plus a dropdown history (capped at 30) - the actual visible proof
-  that a PUSH notification arrived.
+  that a PUSH notification arrived. The dropdown panel renders via `createPortal` into
+  `document.body` with `position: fixed` coordinates computed from the bell button's own
+  `getBoundingClientRect()`, rather than `absolute` inside the bell's own wrapper - a `w-80`
+  (320px) panel positioned `absolute right-0` inside `AppShell`'s `w-64` (256px) `<aside>` (which
+  has `overflow-y-auto` for the scroll-containment fix, see below) overflowed the sidebar's left
+  edge and was clipped there, since a non-`visible` `overflow-y` clips the other axis too. See
+  `docs/decision-log.md` "Upgrade: notification-bell clipping fix".
 - **Self-service notification preference**: `GET /api/user/me`/`PATCH /api/user/me/notification-
   preference` (no `@RoleRequired` - reachable by any authenticated role, resolved from the JWT) let
   every role view/change their own preference; the pre-existing `PATCH /{id}/notification-
@@ -578,11 +584,12 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   the log, never the user - found live during the notification-audit round (see
   `docs/decision-log.md` "Upgrade: notification decisions"). The other ~49 generated clients/4
   trainers have realistic `@fitpro.dev` addresses and are unaffected.
-- `NotificationBell`/`NotificationPreferenceSelect` (added in the notification-audit round) were
-  verified via `tsc -b` and a live Node/STOMP script that confirmed the WebSocket frames they'd
-  render actually arrive, but were never screenshotted in a real browser - no browser-automation
-  tool was available in that session. Worth a visual pass with one before trusting the rendered
-  layout/interaction, not just the data path.
+- `NotificationPreferenceSelect` (added in the notification-audit round) was verified via `tsc -b`
+  and a live Node/STOMP script confirming the underlying data path, but never screenshotted in a
+  real browser - no browser-automation tool was available in that session.
+  `NotificationBell` *was* since screenshotted (see "Upgrade: notification-bell clipping fix" in
+  `docs/decision-log.md`), which is how its dropdown-clipping bug was actually found - worth the
+  same visual pass for `NotificationPreferenceSelect` before trusting its rendered layout too.
 - Claude's manager-insights JSON response occasionally slips a Cyrillic-alphabet word into an
   otherwise-Latin-script Serbian sentence (e.g. "занетост" mid-sentence) despite the system prompt
   explicitly saying "latinica... do not use ćirilica" - observed live during the manager-insights

@@ -3902,3 +3902,46 @@ watches which frames arrive:
   the user, never an exception the caller sees. `DevDataSeeder`'s other ~49 generated clients/4
   trainers all have realistic `@fitpro.dev`-style addresses and are unaffected. Pre-existing (not
   introduced this session) - `DevDataSeeder`'s marker-account block is the fix point if picked up.
+
+## Upgrade: notification-bell clipping fix
+
+Bug report: `NotificationBell`'s dropdown panel was unreadable when opened - the left portion of
+every line (including the "Nema obaveštenja" empty state) was cut off, leaving only a right-hand
+"tail" of text visible.
+
+**Root cause**: the panel was `w-80` (320px), positioned `absolute right-0` inside the bell
+button's own small `<div className="relative">` wrapper. That wrapper lives inside `AppShell`'s
+`<aside>`, which is only `w-64` (256px) wide and has `overflow-y-auto` (the pre-existing scroll-
+containment fix - see "Upgrade: AppShell scroll-containment fix" above). A 320px panel right-
+aligned inside a 256px column always extends ~64px past the column's own left edge; a container
+with `overflow-y` set to anything other than `visible` also clips the *other* axis (`overflow-x`
+effectively becomes non-visible too, per the CSS spec's overflow-pairing behavior), so that
+overhanging left portion was silently clipped rather than rendered on top of the sidebar.
+
+**Fix**: the panel (and its click-outside-to-close overlay) now render through `createPortal` into
+`document.body`, with `position: fixed` coordinates computed from the bell button's own
+`getBoundingClientRect()` in a `useLayoutEffect` that re-runs on scroll/resize while open - the
+same approach a standard Popover/Menu library uses, and this codebase's first use of a portal
+(confirmed via `grep -rn "createPortal" Frontend/src` before this change: zero hits). Rendering
+outside the sidebar's DOM subtree means the panel is no longer subject to `<aside>`'s overflow
+context at all, regardless of sidebar width or nav item count. The panel's horizontal position is
+also clamped to stay within the viewport (`Math.min`/`Math.max` against `window.innerWidth`) rather
+than assuming there's always 320px of room to its left, so it can't newly clip off the *right* edge
+on a narrow viewport either.
+
+**Live verification**: installed `playwright` + Chromium temporarily (`npm install -D playwright`,
+`npx playwright install chromium`; both reverted after - `git diff --stat -- package.json
+package-lock.json` shows no changes post-revert). Logged in as `citva` (CLIENT) through the real
+running app (`localhost:5173` against the real backend on `:8088`), opened the bell with zero
+notifications and screenshotted the empty state (fully readable "Nema obaveštenja", not clipped),
+then - while the browser page stayed open with its real STOMP connection live - fired a real
+`POST /api/payment` for citva via a second, script-side admin session to trigger an actual push
+notification over the wire (not a mocked/injected one), reopened the bell, and confirmed via both
+a screenshot and a `boundingBox()` assertion (`x: 17`, fully positive, entirely within the
+1440px-wide viewport) that the delivered notification's text renders completely, left edge
+included. Both screenshots and the temporary script were discarded after verification - not
+checked into the repo.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None found beyond the reported clipping bug itself while implementing this fix.
