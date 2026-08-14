@@ -128,7 +128,23 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   8 weeks ahead from its `date`, each independently validated - one week's conflict is skipped, not
   fatal to the series. There is no persisted appointment status column - "cancelled"/"never
   booked" are indistinguishable after the fact; state is entirely implicit (capacity reached or
-  not, trainer assigned or not).
+  not, trainer assigned or not). `AppointmentServiceImpl.validateAppointment()` runs, in order: a
+  holiday check (`HolidayService.isGymClosedOn`, separate from gym-hours - a holiday on a day the
+  gym is normally open must not read as "gym closed that day of week"), gym-hours (message states
+  the exact date and that day's opening/closing time), trainer-working-schedule coverage (a
+  `TrainerSchedule` `WORKING` row must cover the slot - message is honest that this is "no shift",
+  not "already busy"), trainer-double-booking (a genuine appointment-vs-appointment time overlap
+  check - this did not exist before this session, only the working-schedule check did, so two
+  overlapping appointments for one trainer could previously both be created as long as one
+  `WORKING` shift covered both), room-double-booking (same overlap check, newly added - rooms had
+  **no** conflict check at all before this session), then client availability. Both double-booking
+  messages name the exact conflicting appointment's date/time, not a generic "already busy". See
+  `docs/decision-log.md`'s "Upgrade: appointment conflict-message decisions" for the full
+  before/after and how each was live-verified. `createRecurringWeekly()`'s final "nothing could be
+  created" error is now a per-date breakdown (`date: reason`, one line per attempted week) instead
+  of one generic sentence - a holiday hit on one of the 8 dates is not itself reported as a
+  "problem" unless it's part of why the *whole* series failed (see the decision log for why this
+  falls out naturally from always collecting reasons but only surfacing them on total failure).
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
   driven by `Payment`s.
 - **GymSchedule** - opening/closing time per `DayOfWeek`; upserted per day (`create` finds-or-builds
@@ -444,10 +460,29 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
 - Making trainer/room mandatory on appointment creation (manager-testing round 3) surfaced that no
   seeded trainer has any `TrainerSchedule` row - `DevDataSeeder`'s generated appointments are
   inserted directly via the repository, bypassing `AppointmentServiceImpl.create()`'s
-  `validateTrainerAvailability` check entirely, so it never mattered before. A manager creating a
-  brand-new appointment for a dev-seeded trainer via the admin Termini form will get "Trener ... je
-  već zauzet" until that trainer has a matching `WORKING` `TrainerSchedule` row for that date/time
-  (create one via the `/manager/dnevni-raspored` trainer-schedule tab first). This is the correct
-  existing business rule, not a bug - just worth knowing before assuming appointment creation is
-  broken. `DevDataSeeder` could be extended to seed matching `TrainerSchedule` rows for its
-  generated trainers; left out of this round's scope.
+  `validateTrainerWorkingSchedule` check (renamed from `validateTrainerAvailability` - see
+  "Upgrade: appointment conflict-message decisions" in `docs/decision-log.md`) entirely, so it
+  never mattered before. A manager creating a brand-new appointment for a dev-seeded trainer via
+  the admin Termini form will get "Trener sa ID ... nema radnu smenu koja pokriva ..." until that
+  trainer has a matching `WORKING` `TrainerSchedule` row for that date/time (create one via the
+  `/manager/dnevni-raspored` trainer-schedule tab first). This is the correct existing business
+  rule, not a bug - just worth knowing before assuming appointment creation is broken.
+  `DevDataSeeder` could be extended to seed matching `TrainerSchedule` rows for its generated
+  trainers; left out of this round's scope.
+- `ManagerInsightsServiceImplTest` (`src/test/java/.../service/impl/insights/`) does not compile
+  against the current `ManagerInsightsServiceImpl`/`ManagerInsightsDTO` shape - it still constructs
+  the service with a 5-arg constructor (missing the `ObjectMapper` param) and asserts on a
+  `dto.getInsightText()` getter that no longer exists on the structured DTO. This blocks `mvn test`
+  for the **entire module** (a test-compile failure is global), not just this one test class -
+  confirmed pre-existing on `main`/before the appointment-conflict-message session's changes (via
+  `git stash`), not caused by any session's work. Left unfixed as out of scope for the appointment
+  work that found it; whoever picks this up next should update the test to match the current
+  constructor/DTO shape from the "Upgrade: manager-insights dashboard decisions" entry in
+  `docs/decision-log.md`.
+- `RoomServiceImplTest.create_buildsRoomFromRequestAndSaves` fails (not a compile error, an
+  assertion/thrown-exception failure) against the current room minimum-size formula - it builds a
+  room named "Studio A" that the "Upgrade: room minimum-size decisions" formula now rejects as
+  smaller than the computed minimum (6.0m x 5.0m) for that name. Found while running the full
+  suite to verify the appointment-conflict-message changes above; not caused by this session's
+  appointment work and left unfixed as out of scope - the fix is either changing the test's room
+  dimensions/name or reviewing whether the minimum-size formula is too strict for that case.

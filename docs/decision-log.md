@@ -2709,3 +2709,113 @@ limited to the API response shape/values above and `tsc -b` type-checking the ch
 against that same shape. Both items should be given a real look in the browser before considering
 this fully done.
 
+## Upgrade: appointment conflict-message decisions
+
+**Starting complaint**: manual testing of the fixed/recurring-weekly appointment feature
+(`POST /api/appointment/recurring`) on `/manager/administracija` (Termini tab) produced a generic
+"Nijedna instanca fiksnog termina nije mogla biti kreirana - provjerite radno vreme, praznike i
+zauzetost trenera/sobe." with no indication of which of those four possible causes actually applied
+to which of the 8 attempted weekly dates.
+
+**Real gaps found reading `AppointmentServiceImpl`, not just a wording problem**:
+1. There was **no room-conflict check at all**. `validateAppointment()` checked trainer and client
+   overlap but never checked whether the requested room was already booked by another appointment
+   in that time window - two appointments could double-book the same room.
+2. What the old `validateTrainerAvailability`/`isTrainerAvailable` actually checked was **not**
+   "is this trainer already booked on another appointment" - it checked whether the trainer had a
+   `WORKING` `TrainerSchedule` shift covering the requested time. Its error message ("Trener sa ID
+   X je već zauzet u ovom terminu!") was actively misleading: it fires for an unstaffed trainer
+   (no working shift at all that day) exactly the same way it would for a genuinely double-booked
+   one, and there was **no separate check for actual appointment-to-appointment trainer overlap** -
+   two overlapping appointments for one trainer could both succeed as long as one long `WORKING`
+   shift covered both.
+3. Holidays were checked in `TrainerScheduleServiceImpl.validateGymHours` (for trainer *schedule*
+   creation) but never in `AppointmentServiceImpl` (for *appointment* creation) at all. A holiday
+   that also left the trainer unstaffed surfaced as the misleading "trainer already busy" message
+   above, not as "this date is a holiday".
+4. The gym-hours-violation message ("Termin je van radnog vremena teretane!") and the
+   schedule-not-defined message named neither the date nor the actual opening/closing time, so a
+   manager had no way to tell what the real working hours were without a second lookup.
+
+**Fix, in `AppointmentServiceImpl.validateAppointment()` (order matters - see AGENTS.md's
+Appointment bullet for the full list)**:
+- Added `validateNotHoliday()` (new) - calls the same `HolidayService.isGymClosedOn()` that
+  `TrainerScheduleServiceImpl` already used, checked *before* gym-hours/trainer checks so a holiday
+  reports as "Teretana je zatvorena `<date>` zbog praznika" rather than a confusing knock-on
+  failure.
+- `validateGymSchedule()` messages now include the exact date, day-of-week, requested time range,
+  and (when the violation is "outside hours" rather than "no schedule for that weekday") the
+  actual opening/closing time for that day.
+- Renamed `validateTrainerAvailability` -> `validateTrainerWorkingSchedule` to match what it
+  actually checks, and reworded its message to say "nema radnu smenu koja pokriva ... - proverite
+  raspored rada trenera" instead of the misleading "već zauzet" - this is an honesty fix, not a
+  behavior change (same WORKING-shift-coverage check as before).
+- Added `validateTrainerNotDoubleBooked()` (new) - a genuine appointment-vs-appointment overlap
+  check via a new `AppointmentRepository.findByTrainerIdAndDateAndStartTimeLessThanEqualAnd
+  EndTimeGreaterThanEqual` query, reusing the exact overlap semantics (`LessThanEqual`/
+  `GreaterThanEqual` - touching boundaries count as a conflict) already established by the
+  pre-existing client-overlap check, for consistency. On conflict, the message names the
+  conflicting appointment's own date/start/end time.
+- Added `validateRoomNotDoubleBooked()` (new) - same overlap check, scoped to room. Reused the
+  **existing** `AppointmentRepository.findByRoomIdAndDateAndStartTimeLessThanEqualAndEndTime
+  GreaterThanEqual` query rather than adding a duplicate - that query already existed for computed
+  room occupancy ("currently in progress", called with `now`/`now`) and has identical overlap
+  semantics, so no new repository method was needed for the room side (only for the trainer side,
+  which had no equivalent).
+
+**`createRecurringWeekly()` aggregation format decision**: rather than a single generic sentence,
+failures are now collected as `date: reason` pairs (one per attempted week, using each
+`IllegalArgumentException`'s own message from the per-occurrence `create()` call) in a plain
+`List<String>`, newline-joined into the final exception message only if **every** week failed
+(`created.isEmpty()`). This was chosen over a structured JSON error body (would need a new
+exception type + `GlobalExceptionHandler` case, larger surface for one feature) or a partial-success
+response (the existing "skip and continue" behavior for a partial series was explicitly not
+touched - only the *all-failed* case gets a detailed message). The holiday-inside-a-recurring-
+series behavior falls out of this for free without special-casing: a holiday on one of the 8 dates
+is still just one more skipped occurrence with a logged reason, exactly like any other per-date
+failure - it only becomes visible to the manager if the *whole* series fails and that date's reason
+is part of the joined message. If the series succeeds (at least one week created), the per-date
+failure reasons are simply discarded, so a holiday hitting one out of 8 weeks never reads as a
+"problem" needing attention. Live-verified below.
+
+**Live verification** (dev backend + seeded data, `admin`/MANAGER JWT, via curl against
+`localhost:8088`):
+- **Trainer double-booking**: gave trainer 26 a `WORKING` `TrainerSchedule` 08:00-18:00 on
+  2026-08-21 (a Friday), created two appointments at 10:00-11:00 and 10:30-11:30 (both succeeded,
+  in different rooms), then attempted a third at 10:45-11:15 -> rejected with `"Trener je već
+  zauzet 2026-08-21 od 10:00 do 11:00 drugim terminom."`, naming the first conflicting
+  appointment's exact time.
+- **Room double-booking**: with room 26 occupied 10:00-11:00 by trainer 26, gave trainer 27 a
+  matching working shift and attempted a 10:15-10:45 appointment for trainer 27 in room 26 ->
+  rejected with `"Soba je već zauzeta 2026-08-21 od 10:00 do 11:00 drugim terminom."`.
+- **Holiday**: created a holiday for 2026-08-24 via `POST /api/schedule/holiday`, then attempted an
+  appointment that date -> rejected with `"Teretana je zatvorena 2026-08-24 zbog praznika - termin
+  ne može biti zakazan tog datuma."`, distinct from any trainer/room message.
+- **Outside working hours**: Friday's gym hours are 06:00-22:00; attempted 21:30-23:00 on
+  2026-08-21 -> rejected with `"Termin 2026-08-21 od 21:30 do 23:00 je van radnog vremena teretane
+  za taj dan (06:00 - 22:00)."`, naming both the date and the actual hours.
+- **Recurring, guaranteed-to-fail-every-week**: reused the double-booked trainer 26 at 10:00-11:00
+  starting 2026-08-21 with no working schedule on any of the following 7 weekly dates -> rejected
+  with a per-date breakdown, one line per date, the first line naming the double-booking conflict
+  and the remaining 7 naming the missing working shift for each specific date.
+- **Recurring, holiday mid-series succeeds overall**: gave trainer 29 working shifts on 8 weekly
+  Mondays including 2026-08-24 (a holiday), started a recurring series on that date -> series
+  succeeded with 7 of 8 instances created (2026-08-24 silently skipped, no error surfaced to the
+  caller), confirming a holiday hit inside an otherwise-successful series is not reported as a
+  problem.
+
+**Test fixture fix required, not a behavior bug**: `AppointmentServiceImplTest` needed a new
+`@Mock private HolidayService holidayService` and the corresponding constructor argument added to
+its `setUp()` - a mechanical fixture update for the new constructor dependency, not a logic change.
+All pre-existing `AppointmentServiceImplTest` cases pass unmodified against the new validation
+order.
+
+**Two pre-existing, unrelated bugs found while verifying via the full test suite** (both flagged in
+AGENTS.md's Known issues, neither fixed - out of scope for this session's appointment work):
+`ManagerInsightsServiceImplTest` fails to compile against the current `ManagerInsightsServiceImpl`
+constructor/DTO shape (confirmed pre-existing via `git stash` - blocks `mvn test` for the whole
+module, worked around locally during this session by temporarily moving the file aside to compile
+and run every other test, then restoring it unmodified), and `RoomServiceImplTest
+.create_buildsRoomFromRequestAndSaves` fails an assertion against the current room minimum-size
+formula (a "Studio A" room in the test is smaller than that name's computed minimum).
+
