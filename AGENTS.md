@@ -414,7 +414,19 @@ short-text-out calls, not open-ended reasoning.
   session type) - reusing that date's own `occupiedRoomsAtSlot` map so it can never double-book a
   room a trainer-led appointment above already claimed at that exact slot; these back the TRAINER
   self-assign marketplace's "Termini bez trenera" screen with real data (see "Upgrade: trainer
-  self-assign decisions").
+  self-assign decisions"). `seedAppointmentsForCurrentMonth()` also builds one `TrainerSchedule`
+  `WORKING` row per (trainer, date) it actually books someone into that day (spanning that
+  weekday's whole `slotsFor()` range, saved via `trainerScheduleRepository.saveAll(...)` after the
+  date loop) - **this did not happen at all before a later fix**: `trainerScheduleRepository` was
+  otherwise only ever used for the `reseed()` wipe, so every seeded appointment looked
+  "uncovered" against the (always-empty) real `TrainerSchedule` table, even though the seeder only
+  ever assigns a trainer to a date within their own fixed `TRAINER_WORKDAY_SETS` pattern. A seeder
+  gap only, not a real validation gap - `AppointmentServiceImpl.validateTrainerWorkingSchedule`
+  already requires genuine coverage for any appointment created through the actual API/UI; this
+  only ever mattered for the newer client-side coverage check
+  (`TrainerSchedulePage.tsx`'s "Termini dodeljeni od menadžera" panel) reading directly from a
+  seeded-but-incomplete `TrainerSchedule` table. See `docs/decision-log.md` "Upgrade: dev-seeder
+  trainer-schedule gap fix".
 - **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*` or
   `db/dev-data/V1.00XX__*`) - their checksums are locked once applied. If schema changes are
   needed, add a new `V1.00XX__*.sql` file (either location - they share one version sequence).
@@ -425,14 +437,15 @@ short-text-out calls, not open-ended reasoning.
   Termini tab, `/manager/dnevni-raspored`, and - as of the trainer-testing round - both TRAINER
   self-service pages, `TrainerSchedulePage`/`TrainerAppointmentsPage`), `SearchableSelect` (a
   from-scratch filterable combobox, used by Plaćanja's client picker), and `DateInput` (see below)
-  - all built without adding a dependency, since none existed for any of these needs. Both TRAINER
-  pages that pair a `MonthCalendar` day-picker with the trainer's own history
-  (`TrainerAppointmentsPage.tsx`/`TrainerSchedulePage.tsx`) also carry a collapsible, always-
-  reachable "Istorija ..." section (a plain `useState` toggle, collapsed by default) below the
-  calendar - a calendar alone is a poor history browser (finding "what did I do last month"
-  requires navigating month-by-month and clicking each date individually), so a day-picker and a
-  flat reverse-chronological list are complementary here, not substitutes for each other. See
-  `docs/decision-log.md` "Upgrade: appointment/schedule history visibility decisions". A shared
+  - all built without adding a dependency, since none existed for any of these needs. On both
+  TRAINER pages that pair a `MonthCalendar` day-picker with the trainer's own history
+  (`TrainerAppointmentsPage.tsx`/`TrainerSchedulePage.tsx`), clicking ANY day on the calendar -
+  including a past one - shows that day's appointments/schedule below it; this alone is the
+  history view (no separate "Istorija ..." section) - a brief detour through a collapsible
+  always-visible history list (see `docs/decision-log.md` "Upgrade: appointment/schedule history
+  visibility decisions" for that attempt) was reverted (`docs/decision-log.md` "Upgrade:
+  history-section revert") once it turned out the calendar's per-day click-through was already the
+  correct, sufficient behavior. A shared
   `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`

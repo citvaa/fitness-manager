@@ -3388,3 +3388,100 @@ combination).
   bug for this round, not an incidental find) and the `appointmentCard()` missing-date bug found
   and fixed while implementing item 3 (also directly part of implementing the requested fix, not a
   separate out-of-scope discovery). No other pre-existing issues were newly encountered this round.
+
+## Upgrade: history-section revert
+
+The immediately preceding round's "Upgrade: appointment/schedule history visibility decisions"
+(commit `b89cd48`) added collapsible "Istorija dodeljenih termina"/"Istorija rasporeda" sections to
+`TrainerAppointmentsPage.tsx`/`TrainerSchedulePage.tsx`, on the premise that the `MonthCalendar`
+day-picker alone couldn't show past items without navigating month-by-month. That premise was
+wrong - clicking any day on the calendar, including a past one, already renders that day's
+appointments/schedule below it (`visibleForDate`/`entriesForDate`, unchanged since the original
+calendar restructure); the calendar's dot indicators even mark which days have anything to show.
+The "problem" being solved didn't actually exist as described - the calendar was always a
+complete, if click-driven, history browser, not a specific-date-only tool.
+
+Reverted `Frontend/src/features/appointments/TrainerAppointmentsPage.tsx` and
+`Frontend/src/features/schedule/TrainerSchedulePage.tsx` to their exact pre-`b89cd48` state via
+`git checkout b89cd48~1 -- <files>` (confirmed via `git log -- <file>` that `b89cd48` was the last
+commit to touch either file, so this is a clean, lossless revert - no other change since then
+needed to be preserved or reconciled). Only the calendar + selected-day panel remain on both
+pages; no `showHistory` state, no `pastMine`/`pastEntries` derivations, no extra section.
+
+**Live verification**: `npx tsc -b` clean after the revert (confirms no other code still
+references the removed `showHistory` state/`appointmentCard`'s `showDate` option/etc. - there
+wasn't any, since both pages' only consumers of that code were themselves). Also visually
+confirmed via a Playwright screenshot of `TrainerSchedulePage.tsx` after clicking a past
+highlighted date (2026-08-02, before the "current" 2026-08-14 date in the seeded dev dataset) -
+that date's schedule entry and its 3 assigned appointments rendered correctly below the calendar
+with no separate history section present anywhere on the page.
+
+## Upgrade: dev-seeder trainer-schedule gap fix
+
+**Confirmed scope, per the session brief's explicit ask**: this is a `DevDataSeeder`-only gap, not
+a real validation gap. `AppointmentServiceImpl.validateAppointment()` ->
+`validateTrainerWorkingSchedule()` already rejects any appointment created through the real
+`create()`/`createRecurringWeekly()` API paths unless a genuine `TrainerSchedule` `WORKING` row
+covers the requested slot, and the `available-trainers` picker-filtering endpoint (from an earlier
+round) additionally narrows the admin UI's trainer dropdown to only trainers who'd actually pass
+that check - confirmed by re-reading both, neither was touched. The bug is specifically that
+`seedAppointmentsForCurrentMonth()` bypasses `AppointmentServiceImpl.create()` entirely (writes
+`Appointment`/`ClientAppointment` rows directly via their repositories, as already documented in
+AGENTS.md - this is not new information) and, before this fix, never wrote a single
+`TrainerSchedule` row anywhere - `trainerScheduleRepository` appeared exactly once in the whole
+class, in `wipeAllDevData()`'s `deleteAllInBatch()` call. Every seeded appointment therefore always
+failed a coverage check against the real `TrainerSchedule` table (which was simply empty after
+every seed/reseed), regardless of the seeder's own `TRAINER_WORKDAY_SETS`/`trainerWorkdays` logic
+having already decided, correctly, which trainer "works" which weekday.
+
+Fix: track a `Set<Trainer> bookedTrainersToday` per date inside `seedAppointmentsForCurrentMonth()`
+main loop, populated whenever the (slot, trainer) combo-walk actually assigns a trainer to a new
+appointment (right after the existing `if (trainer == null) { ...; continue; }` null-check, so it's
+populated with exactly the trainers who ended up with real bookings that date - not the full
+`workingTrainers` list, since a trainer eligible to work a given weekday can still end up with zero
+appointments on a specific date if there aren't enough clients/combos that day). After the client
+loop, for each trainer in that set, build one `TrainerSchedule` row
+(`trainer`/`date`/`status=WORKING`) spanning that weekday's full `slotsFor()` range (first slot's
+start to last slot's end) rather than a tight per-trainer min/max of only their own assigned slots
+- chosen for simplicity (one row per trainer/date, not a variable-length list of narrower ranges)
+and because it's always a safe superset of what needs covering; the session brief explicitly left
+this choice open ("tvoja procena"). All rows are batched into `trainerScheduleToSave` and saved
+once via `trainerScheduleRepository.saveAll(...)` after the date loop, in the same "collect
+everything, one `saveAll` per entity type" style the rest of this method already uses for
+`Appointment`/`ClientAppointment`. Trainer-less "open slot" appointments (from a previous round)
+need no matching schedule row and get none, since there's no trainer to cover.
+
+Considered, and rejected: generating a `TrainerSchedule` row for every `(trainer, weekday)` in
+`trainerWorkdays` up front regardless of whether that trainer actually got booked that specific
+date - would be simpler (no `bookedTrainersToday` tracking needed) but writes schedule rows with no
+corresponding appointment on plenty of dates, which is realistic in principle (a trainer's fixed
+weekly pattern doesn't require a booking every single day) but adds rows unrelated to the actual
+bug being fixed (every seeded appointment being "uncovered") - kept the fix minimal and tied
+directly to what needed covering.
+
+**Live verification**:
+- Backend recompiled clean (`mvn -o compile`), app restarted, `POST /api/dev/reseed` run against
+  the live dev database via `admin`'s MANAGER JWT.
+- Direct SQL against Postgres (`docker exec postgres_db psql`): `select count(*) from
+  trainer_schedule` went from 0 (pre-fix, confirmed by the bug report itself) to **49** rows after
+  reseed. A correlated `NOT EXISTS` query joining every trainer-led `appointment` row against
+  `trainer_schedule` for a covering `WORKING` row (`status = 'WORKING' AND date = a.date AND
+  start_time <= a.start_time AND end_time >= a.end_time`) - the exact same predicate
+  `AppointmentServiceImpl.isTrainerAvailable()` and the frontend's `isCoveredByWorkingSchedule()`
+  both use - returned **0 uncovered rows** out of **208** trainer-led appointments (out of 220
+  total, the remainder being trainer-less open slots).
+- Cross-checked via the actual API rather than just SQL: fetched `ogi`'s own
+  `GET /api/schedule/trainer/me` (5 rows) and `GET /api/appointment/trainer/me` (15 appointments)
+  and re-ran the identical coverage predicate in a small Node script - 0 uncovered, matching the
+  SQL-level check exactly.
+- Screenshotted `TrainerSchedulePage.tsx`'s "Moj raspored" as `ogi`, clicked a date with a dot
+  indicator (2026-08-02): "Raspored za 2026-08-02" showed "09:00–14:00 · Radi", and all 3
+  appointments listed under "Termini dodeljeni od menadžera za 2026-08-02" (09:00, 11:00, 13:00)
+  showed "✓ pokriven rasporedom" - the exact coverage badge the original bug report said was
+  incorrectly showing "⚠ nije pokriven trenutnim rasporedom" for every seeded appointment.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None. Both items in this round were explicitly pre-identified by the user (the history-section
+  revert and the seeder gap); no additional pre-existing issues were newly encountered while
+  implementing either.
