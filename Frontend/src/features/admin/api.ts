@@ -128,6 +128,13 @@ export function createAppointment(request: CreateAppointmentRequest) {
   return http.post<AppointmentDTO>('/api/appointment', request).then((r) => r.data)
 }
 
+/** Backs the "fiksni termin" (weekly-recurring) option in the create form - see AGENTS.md
+ * "Upgrade: fixed weekly appointment decisions" for how many weekly instances the backend
+ * generates from `request.date` onward. */
+export function createRecurringAppointment(request: CreateAppointmentRequest) {
+  return http.post<AppointmentDTO[]>('/api/appointment/recurring', request).then((r) => r.data)
+}
+
 export function assignTrainerToAppointment(appointmentId: number, trainerId: number) {
   return http
     .post<AppointmentDTO>(`/api/appointment/${appointmentId}/add-trainer`, null, { params: { trainerId } })

@@ -1,4 +1,5 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { SearchableSelect } from '../../components/SearchableSelect'
 import { createPayment, getAllPayments, getClientsForPicker, getSessions } from './api'
 import type { ClientSummaryDTO, PaymentDTO, SessionDTO } from './types'
 
@@ -19,6 +20,8 @@ export function ManagerPaymentsPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
+  const clientOptions = useMemo(() => clients.map((c) => ({ value: c.id, label: c.email })), [clients])
+
   async function reload(clientFilter?: number) {
     setLoading(true)
     try {
@@ -34,8 +37,7 @@ export function ManagerPaymentsPage() {
     getSessions().then(setSessions)
   }, [])
 
-  function handleFilterChange(value: string) {
-    const id = value ? Number(value) : ''
+  function handleFilterChange(id: number | '') {
     setFilterClientId(id)
     void reload(id || undefined)
   }
@@ -74,19 +76,13 @@ export function ManagerPaymentsPage() {
         <div className="grid gap-3 md:grid-cols-4">
           <label className="block text-xs text-slate-400">
             Klijent
-            <select
+            <SearchableSelect
               required
+              options={clientOptions}
               value={clientId}
-              onChange={(e) => setClientId(e.target.value ? Number(e.target.value) : '')}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
-            >
-              <option value="">Izaberi...</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.email}
-                </option>
-              ))}
-            </select>
+              onChange={setClientId}
+              placeholder="Pretraži klijenta..."
+            />
           </label>
           <label className="block text-xs text-slate-400">
             Tip sesije
@@ -140,18 +136,14 @@ export function ManagerPaymentsPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-300">Istorija uplata</h3>
-          <select
-            value={filterClientId}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
-          >
-            <option value="">Svi klijenti</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.email}
-              </option>
-            ))}
-          </select>
+          <div className="w-64">
+            <SearchableSelect
+              options={clientOptions}
+              value={filterClientId}
+              onChange={handleFilterChange}
+              placeholder="Svi klijenti (pretraži)..."
+            />
+          </div>
         </div>
 
         {loading ? (

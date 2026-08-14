@@ -149,7 +149,14 @@ export interface CreateAppointmentRequest {
   startTime: string
   endTime: string
   sessionId: number
-  trainerId?: number | null
-  roomId?: number | null
+  // Mandatory as of the manager-testing round 3 restructure - an appointment with no trainer/room
+  // made occupancy tracking meaningless (see AGENTS.md "Upgrade: fixed weekly appointment
+  // decisions"). Kept nullable in the type only because the empty/unselected form state briefly
+  // passes null before submit is blocked by the `required` selects.
+  trainerId: number | null
+  roomId: number | null
   clientIds?: number[]
+  /** When true, `date` is the first occurrence of a weekly-recurring slot - backend generates
+   * further weekly instances (see AGENTS.md). Only meaningful for createRecurringAppointment(). */
+  recurring?: boolean
 }

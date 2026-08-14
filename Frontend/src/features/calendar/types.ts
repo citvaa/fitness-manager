@@ -8,6 +8,11 @@ export interface TrainerSummaryDTO {
   email: string
 }
 
+export interface RoomSummaryDTO {
+  id: number
+  name: string
+}
+
 export interface SessionDTO {
   id: number
   type: 'INDIVIDUAL' | 'GROUP'
@@ -21,6 +26,10 @@ export interface AppointmentDTO {
   endTime: string
   session: SessionDTO | null
   trainer: TrainerSummaryDTO | null
+  // Present on the wire (backend's shared AppointmentDTO always includes it) but missing from
+  // this feature's local type until the manager-testing round 3 calendar restructure - see
+  // AGENTS.md.
+  room: RoomSummaryDTO | null
   clients: ClientSummaryDTO[] | null
 }
 
