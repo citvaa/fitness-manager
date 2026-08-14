@@ -32,7 +32,10 @@ export function LoginPage() {
       if (isAxiosError(err) && err.response?.status === 401) {
         setError('Neispravan email ili lozinka.')
       } else {
-        setError('Prijava nije uspela. Provjerite da je backend pokrenut na :8088.')
+        // No mention of "backend"/port here - the user shouldn't need to know or care that
+        // there's a backend at all. See AGENTS.md "Upgrade: fixed weekly appointment decisions" /
+        // manager-testing round 3 for why this was changed from a technical, port-leaking string.
+        setError('Prijava nije uspela. Provjerite email i lozinku ili pokušajte ponovo za trenutak.')
       }
     } finally {
       setSubmitting(false)
