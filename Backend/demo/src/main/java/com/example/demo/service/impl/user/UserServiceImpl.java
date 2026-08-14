@@ -361,4 +361,27 @@ public class UserServiceImpl implements UserService {
         user.setNotificationPreference(notificationPreference);
         userRepository.save(user);
     }
+
+    public UserDTO getMe() {
+        return userMapper.toDto(getCurrentUser());
+    }
+
+    @Transactional
+    public void updateMyNotificationPreference(NotificationPreference notificationPreference) {
+        User user = getCurrentUser();
+        user.setNotificationPreference(notificationPreference);
+        userRepository.save(user);
+    }
+
+    /** Same JWT-email idiom as {@link #isCurrentlyAuthenticatedUser} - resolves "the current
+     * user" for self-service endpoints that have no id in the path/body. */
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Neovlašćen pristup!");
+        }
+        String email = jwt.getClaim("email");
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Korisnik nije pronađen"));
+    }
 }

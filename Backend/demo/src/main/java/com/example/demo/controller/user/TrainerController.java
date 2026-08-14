@@ -60,4 +60,11 @@ public class TrainerController {
     public ResponseEntity<List<ClientSummaryDTO>> getMyClients() {
         return ResponseEntity.ok(trainerService.getMyClients());
     }
+
+    /** Lets the frontend learn its own trainer id, e.g. for subscribing to /topic/trainer{id}. */
+    @RoleRequired("TRAINER")
+    @GetMapping("/me")
+    public ResponseEntity<TrainerDTO> getMe() {
+        return ResponseEntity.ok(trainerService.getMe());
+    }
 }

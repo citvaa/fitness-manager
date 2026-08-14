@@ -34,4 +34,11 @@ public class ClientController {
     public ResponseEntity<List<ClientDTO>> getAll() {
         return ResponseEntity.ok(clientService.getAll());
     }
+
+    /** Lets the frontend learn its own client id, e.g. for subscribing to /topic/client{id}. */
+    @RoleRequired("CLIENT")
+    @GetMapping("/me")
+    public ResponseEntity<ClientDTO> getMe() {
+        return ResponseEntity.ok(clientService.getMe());
+    }
 }

@@ -39,4 +39,8 @@ public interface UserService {
     User findOrCreateUser(CreateUserRequest request);
 
     void updateNotificationPreference(Integer id, NotificationPreference notificationPreference);
+
+    UserDTO getMe();
+
+    void updateMyNotificationPreference(NotificationPreference notificationPreference);
 }

@@ -1,11 +1,14 @@
 package com.example.demo.service.impl.notification;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.PaymentDTO;
 import com.example.demo.dto.gym.RoomOccupancyDTO;
 import com.example.demo.dto.notification.TrainerAssignmentNotificationDTO;
 import com.example.demo.dto.notification.ClientAppointmentReminderNotificationDTO;
 import com.example.demo.dto.notification.TrainerScheduleNotificationDTO;
 import com.example.demo.dto.notification.ClientUpcomingAppointmentNotificationDTO;
+import com.example.demo.dto.notification.PaymentConfirmationNotificationDTO;
+import com.example.demo.dto.notification.ManagerAlertNotificationDTO;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.model.user.User;
@@ -32,10 +35,20 @@ public class NotificationServiceImpl implements NotificationService {
     private final EmailService emailService;
     private final UserRepository userRepository;
 
-    public void sendTrainerAssignmentNotification(Integer trainerId, AppointmentDTO appointmentDTO) {
+    public void sendTrainerAssignmentNotification(@NotNull Trainer trainer, AppointmentDTO appointmentDTO) {
         String jsonPayload = JsonUtil.convertToJson(new TrainerAssignmentNotificationDTO(appointmentDTO));
 
-        messagingTemplate.convertAndSend("/topic/trainer" + trainerId, jsonPayload);
+        User user = userRepository.findById(trainer.getUser().getId())
+                .orElseThrow(() -> new RuntimeException("Korisnik nije pronađen"));
+
+        switch (user.getNotificationPreference()) {
+            case BOTH -> {
+                emailService.sendTrainerAssignmentEmail(trainer.getUser().getEmail(), appointmentDTO);
+                messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), jsonPayload);
+            }
+            case EMAIL -> emailService.sendTrainerAssignmentEmail(trainer.getUser().getEmail(), appointmentDTO);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/trainer" + trainer.getId(), jsonPayload);
+        }
     }
 
     public void sendTrainerScheduleNotification(@NotNull Trainer trainer, List<AppointmentDTO> appointments) {
@@ -79,7 +92,39 @@ public class NotificationServiceImpl implements NotificationService {
 
     public void sendClientUpcomingAppointmentNotification(@NotNull Client client, AppointmentDTO appointment) {
         String jsonPayload = JsonUtil.convertToJson(new ClientUpcomingAppointmentNotificationDTO(appointment));
-        messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+
+        User user = userRepository.findById(client.getUser().getId())
+                .orElseThrow(() -> new RuntimeException("Korisnik nije pronađen"));
+
+        switch (user.getNotificationPreference()) {
+            case BOTH -> {
+                emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment);
+                messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+            }
+            case EMAIL -> emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+        }
+    }
+
+    public void sendPaymentConfirmationNotification(@NotNull Client client, PaymentDTO payment) {
+        String jsonPayload = JsonUtil.convertToJson(new PaymentConfirmationNotificationDTO(payment));
+
+        User user = userRepository.findById(client.getUser().getId())
+                .orElseThrow(() -> new RuntimeException("Korisnik nije pronađen"));
+
+        switch (user.getNotificationPreference()) {
+            case BOTH -> {
+                emailService.sendPaymentConfirmationEmail(client.getUser().getEmail(), payment);
+                messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+            }
+            case EMAIL -> emailService.sendPaymentConfirmationEmail(client.getUser().getEmail(), payment);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+        }
+    }
+
+    public void sendManagerAlert(String message) {
+        String jsonPayload = JsonUtil.convertToJson(ManagerAlertNotificationDTO.builder().message(message).build());
+        messagingTemplate.convertAndSend("/topic/manager", jsonPayload);
     }
 
     public void sendGymOccupancyUpdate(List<RoomOccupancyDTO> occupancies) {

@@ -23,4 +23,8 @@ public interface TrainerService {
      * {@code TrainerClientAccessGuard}. Backs the trainer progress-tracking client list.
      */
     List<ClientSummaryDTO> getMyClients();
+
+    /** Resolves the currently logged-in trainer (from the JWT) - lets the frontend learn its own
+     * trainer id for subscribing to /topic/trainer{id} push notifications. */
+    TrainerDTO getMe();
 }

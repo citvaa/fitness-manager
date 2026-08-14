@@ -15,6 +15,7 @@ import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.service.PaymentService;
+import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -42,6 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SessionRepository sessionRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final AppointmentRepository appointmentRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public PaymentDTO create(@NotNull CreatePaymentRequest request) {
@@ -54,7 +56,11 @@ public class PaymentServiceImpl implements PaymentService {
         updateClientSessionTracking(tracking, request.getPaidAppointments());
 
         Payment payment = createPayment(client, session, request);
-        return paymentMapper.toDto(paymentRepository.save(payment));
+        PaymentDTO paymentDTO = paymentMapper.toDto(paymentRepository.save(payment));
+
+        notificationService.sendPaymentConfirmationNotification(client, paymentDTO);
+
+        return paymentDTO;
     }
 
     public List<PaymentDTO> getAll(Integer clientId) {

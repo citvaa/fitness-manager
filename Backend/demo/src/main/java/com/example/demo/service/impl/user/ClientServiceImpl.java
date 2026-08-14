@@ -10,8 +10,13 @@ import com.example.demo.service.user.ClientService;
 import com.example.demo.service.user.UserService;
 import com.example.demo.service.params.request.user.CreateUserRequest;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,5 +55,17 @@ public class ClientServiceImpl implements ClientService {
 
     public List<ClientDTO> getAll() {
         return clientMapper.toDto(clientRepository.findAll());
+    }
+
+    public ClientDTO getMe() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Neovlašćen pristup!");
+        }
+        String email = jwt.getClaim("email");
+        Client client = clientRepository.findByUserEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Klijent nije pronađen za prijavljenog korisnika!"));
+
+        return clientMapper.toDto(client);
     }
 }

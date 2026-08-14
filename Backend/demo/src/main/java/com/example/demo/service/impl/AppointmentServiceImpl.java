@@ -100,7 +100,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
 
         if (trainer != null) {
-            notificationService.sendTrainerAssignmentNotification(trainer.getId(), appointmentDTO);
+            notificationService.sendTrainerAssignmentNotification(trainer, appointmentDTO);
         }
 
         return appointmentDTO;
@@ -245,7 +245,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         ClientAppointment clientAppointment = createClientAppointment(client, appointment);
         appointment.getClientAppointments().add(clientAppointment);
 
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(appointment));
+        notificationService.sendManagerAlert("Nova rezervacija: " + client.getUser().getEmail()
+                + " je zakazao/la termin " + appointmentDTO.getDate() + " u " + appointmentDTO.getStartTime());
+
+        return appointmentDTO;
     }
 
     @Transactional
@@ -286,7 +290,13 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentDTO assign(Integer appointmentId) {
         Pair<Trainer, Appointment> trainerAppointment = getAuthenticatedTrainerAndAppointment(appointmentId);
         trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
-        return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+        AppointmentDTO appointmentDTO = appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+
+        Trainer trainer = trainerAppointment.getFirst();
+        notificationService.sendManagerAlert("Trener " + trainer.getUser().getEmail()
+                + " je preuzeo/la termin bez trenera " + appointmentDTO.getDate() + " u " + appointmentDTO.getStartTime());
+
+        return appointmentDTO;
     }
 
     @Transactional

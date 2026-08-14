@@ -120,4 +120,18 @@ public class TrainerServiceImpl implements TrainerService {
                 .toList();
     }
 
+    public TrainerDTO getMe() {
+        return trainerMapper.toDto(getAuthenticatedTrainer());
+    }
+
+    private Trainer getAuthenticatedTrainer() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AccessDeniedException("Neovlašćen pristup!");
+        }
+        String email = jwt.getClaim("email");
+        return trainerRepository.findByUserEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen za prijavljenog korisnika!"));
+    }
+
 }

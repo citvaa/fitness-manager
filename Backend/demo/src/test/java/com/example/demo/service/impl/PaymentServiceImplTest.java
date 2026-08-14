@@ -6,10 +6,12 @@ import com.example.demo.model.Payment;
 import com.example.demo.model.Session;
 import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientSessionTracking;
+import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
+import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,13 +56,17 @@ class PaymentServiceImplTest {
     private SessionRepository sessionRepository;
     @Mock
     private ClientSessionTrackingRepository clientSessionTrackingRepository;
+    @Mock
+    private AppointmentRepository appointmentRepository;
+    @Mock
+    private NotificationService notificationService;
 
     private PaymentServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PaymentServiceImpl(paymentMapper, paymentRepository, clientRepository,
-                sessionRepository, clientSessionTrackingRepository);
+                sessionRepository, clientSessionTrackingRepository, appointmentRepository, notificationService);
     }
 
     @AfterEach
