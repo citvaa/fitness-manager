@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getMyEntries, getMyInsight, getMyRecords } from './api'
 import { ProgressCharts } from './ProgressCharts'
 import { EntriesList } from './EntriesList'
-import { PersonalRecordsList } from './PersonalRecordsList'
+import { PersonalRecordChart, PersonalRecordsList } from './PersonalRecordsList'
 import { InsightPanel } from './InsightPanel'
 import type { ClientPersonalRecordDTO, ClientProgressEntryDTO, ClientProgressInsightDTO } from './types'
 
@@ -43,6 +43,7 @@ export function ClientProgressPage() {
       </div>
 
       <ProgressCharts entries={entries} />
+      <PersonalRecordChart records={records} />
       <EntriesList entries={entries} />
       <PersonalRecordsList records={records} />
       <InsightPanel insight={insight} loading={false} onRefresh={async () => setInsight(await getMyInsight())} />

@@ -4,7 +4,28 @@ import { createRecord } from './api'
 import { RECORD_UNITS, RECORD_UNIT_LABEL } from './types'
 import type { RecordUnit } from './types'
 
-export function RecordForm({ clientId, onCreated }: { clientId: number; onCreated: () => void }) {
+/** Fixed id for the datalist below - safe as a literal since only one RecordForm renders at a
+ * time on any given page (TrainerProgressPage shows one for the currently-selected client). */
+const EXERCISE_NAMES_LIST_ID = 'record-form-exercise-names'
+
+/**
+ * `existingExerciseNames` (this client's own distinct exercise names, from their record history)
+ * back a `<datalist>` on the exercise-name input - suggests already-used names (so "Bench press"
+ * doesn't accidentally get typed as "Benč" on a later entry, splitting the personal-record chart's
+ * history for that exercise into two series) while still accepting a brand-new free-text name on
+ * first use. A plain `<select>` was considered and rejected - it can't take arbitrary new text, so
+ * every client's very first record of a new exercise would be blocked. See AGENTS.md
+ * "Upgrade: exercise-name dropdown decisions".
+ */
+export function RecordForm({
+  clientId,
+  existingExerciseNames,
+  onCreated,
+}: {
+  clientId: number
+  existingExerciseNames?: string[]
+  onCreated: () => void
+}) {
   const [exerciseName, setExerciseName] = useState('')
   const [value, setValue] = useState('')
   const [unit, setUnit] = useState<RecordUnit>('KG')
@@ -46,11 +67,17 @@ export function RecordForm({ clientId, onCreated }: { clientId: number; onCreate
         Vežba
         <input
           required
+          list={EXERCISE_NAMES_LIST_ID}
           value={exerciseName}
           onChange={(e) => setExerciseName(e.target.value)}
           placeholder="npr. Bench press"
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-brand-500"
         />
+        <datalist id={EXERCISE_NAMES_LIST_ID}>
+          {(existingExerciseNames ?? []).map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
       </label>
 
       <div className="mb-3 grid grid-cols-2 gap-2">

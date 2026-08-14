@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getEntriesForClient, getInsightForClient, getMyClients, getRecordsForClient } from './api'
 import { EntryForm } from './EntryForm'
 import { RecordForm } from './RecordForm'
 import { ProgressCharts } from './ProgressCharts'
 import { EntriesList } from './EntriesList'
-import { PersonalRecordsList } from './PersonalRecordsList'
+import { PersonalRecordChart, PersonalRecordsList } from './PersonalRecordsList'
 import { InsightPanel } from './InsightPanel'
 import type {
   ClientPersonalRecordDTO,
@@ -52,6 +52,13 @@ export function TrainerProgressPage() {
     if (selectedId != null) void loadDetail(selectedId)
   }, [selectedId])
 
+  // Own history's distinct exercise names, offered as RecordForm's dropdown suggestions - see
+  // AGENTS.md "Upgrade: exercise-name dropdown decisions".
+  const existingExerciseNames = useMemo(
+    () => [...new Set(records.map((r) => r.exerciseName))].sort((a, b) => a.localeCompare(b)),
+    [records],
+  )
+
   if (loadingClients) {
     return <div className="p-8 text-slate-400">Učitavanje...</div>
   }
@@ -98,10 +105,15 @@ export function TrainerProgressPage() {
             </h1>
 
             <ProgressCharts entries={entries} />
+            <PersonalRecordChart records={records} />
 
             <div className="grid gap-4 md:grid-cols-2">
               <EntryForm clientId={selectedId} onCreated={() => void loadDetail(selectedId)} />
-              <RecordForm clientId={selectedId} onCreated={() => void loadDetail(selectedId)} />
+              <RecordForm
+                clientId={selectedId}
+                existingExerciseNames={existingExerciseNames}
+                onCreated={() => void loadDetail(selectedId)}
+              />
             </div>
 
             <EntriesList

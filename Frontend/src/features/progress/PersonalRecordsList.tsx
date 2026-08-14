@@ -32,8 +32,13 @@ function formatShortDate(iso: string) {
  * (defaulting to whichever has the most history) is a smaller UI footprint than a small multiple
  * per exercise, and still lets a client/trainer compare trend shape across exercises by simply
  * switching the selection. See AGENTS.md "Upgrade: personal-records chart decisions".
+ *
+ * Exported and rendered by the page components (TrainerProgressPage/ClientProgressPage)
+ * alongside ProgressCharts at the top of the page, ABOVE the entry/record forms - not rendered
+ * from inside PersonalRecordsList below, even though it's defined in this file. See AGENTS.md
+ * "Upgrade: progress-page chart placement decisions".
  */
-function PersonalRecordChart({ records }: { records: ClientPersonalRecordDTO[] }) {
+export function PersonalRecordChart({ records }: { records: ClientPersonalRecordDTO[] }) {
   const exerciseNames = useMemo(() => {
     const counts = new Map<string, number>()
     for (const r of records) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1)
@@ -160,9 +165,7 @@ export function PersonalRecordsList({
   }
 
   return (
-    <>
-      <PersonalRecordChart records={records} />
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
       <h3 className="mb-3 text-sm font-semibold text-slate-300">Lični rekordi</h3>
       {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
       {sorted.length === 0 ? (
@@ -276,7 +279,6 @@ export function PersonalRecordsList({
           )}
         </ul>
       )}
-      </div>
-    </>
+    </div>
   )
 }
