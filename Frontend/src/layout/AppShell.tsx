@@ -50,8 +50,8 @@ export function AppShell() {
   const switchableRoles = user.roles.filter((r) => r !== 'ADMIN')
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100">
-      <aside className="flex w-64 flex-col border-r border-slate-800 bg-slate-900/40">
+    <div className="flex h-screen bg-slate-950 text-slate-100">
+      <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900/40">
         <div className="flex items-center gap-2 px-5 py-5">
           <span className="text-xl">🏋️</span>
           <span className="font-semibold">Fitness Manager</span>
