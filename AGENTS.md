@@ -72,12 +72,18 @@ session - this file is the current-state summary; the decision log is the detail
      bind-mounted volume.
 3. Run the app from `Backend/demo/`: `./mvnw spring-boot:run` (Windows: `mvnw.cmd spring-boot:run`).
    Default active profile is `dev` (`spring.profiles.active: dev` in `application.yaml`), which
-   additionally loads `db/dev-data` Flyway migrations (seed trainer/client test accounts, see
-   `V1.0009__insert_test_data.sql`) and runs `DevDataSeeder` - a `@Profile("dev")`
-   `CommandLineRunner` (not a migration - it needs a "now"-relative dataset) that seeds ~110
-   realistic appointments across past/future weeks plus matching payments, room check-ins, and
-   progress entries on first boot. Idempotent: it skips entirely on a second run (checked via a
-   marker trainer's email).
+   additionally loads `db/dev-data` Flyway migrations (kept only for their historical role on a
+   truly fresh Postgres volume - see "Conventions" below) and runs `DevDataSeeder` - a
+   `@Profile("dev")` `CommandLineRunner` (not a migration - it needs a "now"-relative dataset) that
+   is the **sole source of truth** for a seeded dev database: the Gym and its 5 rooms, the
+   `admin`/`ogi`/`citva` accounts (find-or-create, not assumed-to-exist), 4 more trainers, ~50
+   clients, ~110-225 realistic appointments across the current calendar month plus matching
+   payments, room check-ins, and progress entries. Idempotent on first boot (skips entirely if a
+   marker trainer's email already exists) - and, on the `dev` profile only, can be re-run **at any
+   time** without a container restart or volume wipe via `POST /api/dev/reseed` (MANAGER JWT
+   required): wipes every table it owns and rebuilds from scratch. See `docs/decision-log.md`
+   ("Upgrade: manager-testing round 3 decisions") for why this moved off Flyway and how the wipe is
+   ordered.
 4. App listens on port `8088`. Swagger UI: `http://localhost:8088/swagger-ui/index.html`. OpenAPI
    JSON: `http://localhost:8088/v3/api-docs`.
 5. Frontend: from `Frontend/`, `npm install` then `npm run dev` (Vite, default port `5173` - matches
@@ -112,12 +118,17 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   (INDIVIDUAL/1, GROUP/3, GROUP/10) - not created via the API. Neither `Session` nor `Payment` has
   a price/amount column - manager-insights "revenue" is a paid-appointment-count proxy, not
   currency.
-- **Appointment** - date/start/end time, belongs to a `Session` type, optionally a `Trainer`
-  (nullable - can exist unassigned) and a `Room` (nullable), and a set of `ClientAppointment`s.
-  `AppointmentDTO`/`CreateAppointmentRequest` expose the room as an optional `roomId`/
-  `RoomSummaryDTO`. There is no persisted appointment status column - "cancelled"/"never booked"
-  are indistinguishable after the fact; state is entirely implicit (capacity reached or not,
-  trainer assigned or not).
+- **Appointment** - date/start/end time, belongs to a `Session` type, a `Trainer`, and a `Room`,
+  plus a set of `ClientAppointment`s. `Trainer`/`Room` are still nullable **columns** (an
+  appointment can lose its trainer via `removeTrainer`, and DB rows created before this changed
+  can exist without one) but `CreateAppointmentRequest.trainerId`/`roomId` are mandatory as of the
+  manager-testing round 3 restructure - `AppointmentServiceImpl.create()` rejects either being null
+  before any other validation runs (see `docs/decision-log.md`). `POST /api/appointment/recurring`
+  (`CreateAppointmentRequest.recurring = true`) generates weekly-repeating instances of one request
+  8 weeks ahead from its `date`, each independently validated - one week's conflict is skipped, not
+  fatal to the series. There is no persisted appointment status column - "cancelled"/"never
+  booked" are indistinguishable after the fact; state is entirely implicit (capacity reached or
+  not, trainer assigned or not).
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
   driven by `Payment`s.
 - **GymSchedule** - opening/closing time per `DayOfWeek`; upserted per day (`create` finds-or-builds
@@ -142,7 +153,9 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   rooms are overwhelmingly rectangular and `react-konva`'s `Rect` maps to this directly. The room
   editor (`RoomEditorPage`) enforces a 4m x 2.5m minimum resize floor client-side only (no backend
   validation) so the name label/occupancy count rendered on top never spills outside the
-  rectangle - not enforced retroactively against rooms already smaller than that.
+  rectangle - not enforced retroactively against rooms already smaller than that. The 5 seed rooms
+  (including their exact dimensions/capacity) are now defined solely in `DevDataSeeder` (see
+  "Conventions" below) rather than a Flyway migration.
 - **RoomCheckIn** (`model/gym/RoomCheckIn.java`) - a manual check-in/check-out event of a `Client`
   into a `Room`; `checkedOutAt == null` means currently inside. At most one active check-in per
   client is enforced **globally** (not per-room) by a DB unique partial index
@@ -300,17 +313,31 @@ short-text-out calls, not open-ended reasoning.
   MANAGER is exempt. Authorization on update/delete is always checked against the entity's own
   already-persisted `clientId`, never a request body's `clientId` (which may be attacker-controlled
   and is otherwise ignored for that purpose).
-- Dev-only data that must be expressed relative to "now" (e.g. weeks of appointment history
-  before/after today) is seeded by a `@Profile("dev")` `CommandLineRunner` (`DevDataSeeder`), not a
-  Flyway migration - a static SQL file's "now" would be frozen at write time. It is idempotent via
-  a marker-record existence check, the same spirit as the `WHERE NOT EXISTS`-guarded dev-data
-  Flyway migrations that seed static rows.
-- **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*`) - their checksums are
-  locked once applied. If schema changes are needed, add a new `V1.00XX__*.sql` file. Dev-only seed
-  data lives in the separate `db/dev-data/` location, only loaded on the `dev` profile.
+- **`DevDataSeeder` is the sole source of truth for all dev/test data** (as of manager-testing
+  round 3 - see `docs/decision-log.md`) - Gym/Rooms, `admin`/`ogi`/`citva` accounts, trainers,
+  clients, appointments/payments/check-ins/progress. `db/dev-data/*.sql` Flyway migrations are
+  never edited/deleted (checksums locked) and still create their original rows on a truly fresh
+  Postgres volume, but every value they insert is now find-or-create-redundant with what
+  `DevDataSeeder` builds - and on a `reseed()` (below), those migrations don't run again, so the
+  seeder alone recreates everything. Flyway migrations (`db/migration` **and** `db/dev-data`)
+  should only ever contain schema changes and static reference data going forward - actual
+  test/demo rows belong in `DevDataSeeder`. The seed body lives in a private `seedAll()`, shared by
+  `run()` (guarded by a marker-record check on first boot, matching the `WHERE NOT EXISTS` spirit
+  of the legacy dev-data migrations) and the public `reseed()` (unconditional: bulk-deletes every
+  table this class owns in FK-safe order, then calls `seedAll()` again) - exposed as `POST
+  /api/dev/reseed`, `@Profile("dev")` + `@RoleRequired("MANAGER")`, so a manager can rebuild a
+  clean dataset on the live dev database at any time without touching Docker.
+- **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*` or
+  `db/dev-data/V1.00XX__*`) - their checksums are locked once applied. If schema changes are
+  needed, add a new `V1.00XX__*.sql` file (either location - they share one version sequence).
 - Frontend (`Frontend/`): one feature module per concern under `src/features/<name>/{types,api}.ts`
-  plus one page per screen; flat per-page routes in `App.tsx` (no nested layouts/routes). A shared
-  `extractErrorMessage(err, fallback)` helper (duplicated per feature; reads
+  plus one page per screen; flat per-page routes in `App.tsx` (no nested layouts/routes). A small
+  `src/components/` directory (new in manager-testing round 3) holds the first genuinely
+  cross-feature UI - `MonthCalendar` (a from-scratch month-grid day picker, used by the admin
+  Termini tab and `/manager/dnevni-raspored`) and `SearchableSelect` (a from-scratch filterable
+  combobox, used by Plaćanja's client picker) - both built without adding a dependency, since none
+  existed for either need. A shared `extractErrorMessage(err, fallback)` helper (duplicated per
+  feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`
   messages in the UI. Destructive actions use the browser's native `window.confirm(...)`, not a
   custom modal (no modal/dialog pattern exists in this frontend). Multi-role accounts get a role
@@ -393,3 +420,13 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   tracking participant counts in an `IdentityHashMap` and saving `ClientAppointment` rows directly
   via their own repository instead of through the entity's `Set` field - not a general fix, just
   the same per-call-site workaround pattern used elsewhere in the codebase for this issue.
+- Making trainer/room mandatory on appointment creation (manager-testing round 3) surfaced that no
+  seeded trainer has any `TrainerSchedule` row - `DevDataSeeder`'s generated appointments are
+  inserted directly via the repository, bypassing `AppointmentServiceImpl.create()`'s
+  `validateTrainerAvailability` check entirely, so it never mattered before. A manager creating a
+  brand-new appointment for a dev-seeded trainer via the admin Termini form will get "Trener ... je
+  već zauzet" until that trainer has a matching `WORKING` `TrainerSchedule` row for that date/time
+  (create one via the `/manager/dnevni-raspored` trainer-schedule tab first). This is the correct
+  existing business rule, not a bug - just worth knowing before assuming appointment creation is
+  broken. `DevDataSeeder` could be extended to seed matching `TrainerSchedule` rows for its
+  generated trainers; left out of this round's scope.

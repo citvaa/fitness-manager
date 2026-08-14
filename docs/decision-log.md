@@ -2409,3 +2409,141 @@ were verified through direct backend API calls, database queries, and (for 7) a 
 end-to-end run - not through clicking in a browser, but exercising the real running application
 and its real database rather than reasoning about the code alone.
 
+## Upgrade: manager-testing round 3 decisions
+
+A third round, driven by a specific written brief (2026-08-14) covering four items: moving all
+dev/test data out of Flyway and into `DevDataSeeder` with a live "reseed" mechanism, restructuring
+the admin Termini screen (mandatory trainer/room, weekly-recurring appointments, a calendar day
+picker) and applying the same calendar treatment to `/manager/dnevni-raspored`, a searchable client
+dropdown on Plaćanja, and a non-technical login error message. Chrome browser automation was again
+unavailable this session (extension reported not connected) - see "what could not be visually
+verified" at the end of this section for exactly what that limits.
+
+1. **Dev-data ownership moved from Flyway to `DevDataSeeder`, plus a live reseed endpoint.**
+   `db/dev-data/*.sql` migrations are explicitly untouched (checksums locked, never edited per
+   AGENTS.md) - they still create their rows once, on a truly fresh Postgres volume. What changed
+   is that `DevDataSeeder` no longer assumes those rows already exist: `ensureGymAndRooms()` and
+   `ensureAdminUser()` are new find-or-create methods (Gym/5 Rooms; the `admin` user with MANAGER+
+   ADMIN roles), and the existing `ogi`/`citva` lookups (`trainerRepository.findByUserEmail("ogi")`
+   /`clientRepository.findByUserEmail("citva")`) became find-or-create too instead of
+   `Optional.ifPresent`. The seeding body was extracted from `run()` into a private `seedAll()`,
+   and a new public `reseed()` = `wipeAllDevData()` (bulk `deleteAllInBatch()` on every table this
+   seeder owns, in FK-safe children-before-parents order - `ClientPersonalRecord`/
+   `ClientProgressEntry`/`RoomCheckIn`/`ClientAppointment`/`Appointment`/`Payment`/
+   `ClientSessionTracking`/`TrainerSchedule`/`Client`/`Trainer`/`UserRole`/`User`/`Room`/`Gym`/
+   `GymSchedule`/`Holiday` - deliberately **not** `Session`, which is base reference data) followed
+   by `seedAll()` again. Exposed as `POST /api/dev/reseed` (new `DevDataController`,
+   `@Profile("dev")` class-level so the route doesn't exist as a bean at all outside dev, **plus**
+   `@RoleRequired("MANAGER")` on the endpoint itself - chose defense-in-depth over "dev profile
+   alone is enough" since this is a genuinely destructive whole-table wipe and the extra check is
+   nearly free). This also resolves the "Recepcija looks too small" complaint as a side effect:
+   since the seeder is now the sole owner of room geometry, `Recepcija` was redefined at 8x6m
+   (capacity 8) instead of the old migration-owned 7x4m/capacity 5, which looked visually narrow
+   next to the other rooms.
+   - **Real bug found and fixed along the way**: the first live `reseed()` call failed with `409`
+     ("Već postoji unos sa ovim podacima"). Root cause: `user_role_aud`'s check constraint
+     (`V1.0010`) only ever allowed `MANAGER`/`TRAINER`/`CLIENT` - `ADMIN` (added later by `V1.0020`)
+     was never added to it, because `V1.0020` grants that role via a raw SQL `INSERT` that bypasses
+     Hibernate Envers entirely (no audit row, no constraint hit). `ensureAdminUser()`'s new
+     `userRoleRepository.save(...)` call for the ADMIN role *is* Envers-audited, and
+     `wipeAllDevData()`'s bulk delete of `UserRole` is too - both now insert/delete rows in
+     `user_role_aud` and immediately hit the stale constraint. Fixed with a new migration,
+     `V1.0022__fix_user_role_aud_check_constraint_for_admin.sql` (drop + recreate the check
+     constraint including `ADMIN`) - a real, previously-latent schema gap this change exposed, not
+     something introduced by it.
+   - **Verified live** end to end against the actual dev database (not a throwaway instance this
+     time, since the whole point was proving the mechanism works on the real thing): captured
+     pre-reseed state (`Recepcija` 7x4/cap 5, 3 clients, 3 trainers - stale data from before this
+     session's seeder changes), applied the new migration by restarting the app, called `POST
+     /api/dev/reseed` with an admin JWT (`200`, ~7-8s), and confirmed post-reseed state matched the
+     seeder's canonical shape: `Recepcija` 8x6/cap 8, 50 clients, 5 trainers, 225 appointments, and
+     `admin`/`ogi`/`citva` all still logging in successfully with the same known dev password.
+     Called `reseed()` a second time immediately after to confirm it's safely repeatable (still
+     `200`, still 50 clients) - not a one-shot operation that only works once per process lifetime.
+
+2. **Admin Termini restructure: mandatory trainer/room, weekly-recurring appointments, calendar
+   day picker.** `CreateAppointmentRequest.trainerId`/`roomId` are no longer nullable-and-optional
+   at the validation layer - `AppointmentServiceImpl.validateAppointment` now throws
+   `IllegalArgumentException` ("Trener je obavezan..."/"Soba je obavezna...") if either is missing,
+   before any of the existing gym-hours/trainer-overlap/client-overlap checks run. A new
+   `recurring: boolean` field on the same request, plus `AppointmentService.createRecurringWeekly`
+   / `POST /api/appointment/recurring`, generates weekly instances of one request starting at its
+   `date` for **8 weeks ahead** (~2 months) - chosen over "rest of this month" (too short if
+   created near month-end) and over unbounded generation (one click could otherwise silently create
+   years of rows); a manager can call it again later with a new starting date to extend the series.
+   Each week's occurrence is created through the same `create()` path used for a single
+   appointment, so it gets full validation; a single week's conflict (holiday, that trainer already
+   booked that week, gym closed that day) is caught and skipped (logged, not surfaced) rather than
+   aborting the whole series - only if *every* occurrence fails does the endpoint itself return
+   `400`. The frontend (`AppointmentsTab.tsx`) replaced the flat scrollable appointment list with a
+   new shared `MonthCalendar` component (`components/MonthCalendar.tsx`, built from scratch - no
+   date-picker dependency existed in this codebase and the actual need, "pick one day, show a dot
+   on days that have data", didn't justify adding one) plus trainer/room/session-type filter
+   `<select>`s; the list below only ever renders the selected day's (filtered) appointments.
+   - **Real pre-existing gap surfaced by making trainer mandatory**: `validateTrainerAvailability`
+     requires an actual `TrainerSchedule` row with `status=WORKING` covering the requested time
+     range - and `DevDataSeeder`'s generated appointments have never gone through this validation
+     (they're inserted directly via `appointmentRepository.saveAll(...)`, bypassing
+     `AppointmentServiceImpl.create()` entirely), so no seeded trainer has any `TrainerSchedule`
+     rows at all. Before this change, trainer being optional meant this never mattered in practice
+     for the admin create form. It is not a bug in this change - a trainer genuinely needing a
+     working-hours entry before being bookable is the correct existing business rule
+     (`TrainerScheduleServiceImpl`/`/manager/dnevni-raspored`'s trainer-schedule tab is exactly
+     where a manager is meant to set that up) - but it means live-testing appointment creation now
+     requires seeding a `TrainerSchedule` row first, which the dev seeder does not currently do.
+     Left as-is rather than having the seeder start writing `TrainerSchedule` rows too (out of
+     scope for this round's brief); noted here so a future session doesn't mistake it for a new
+     regression.
+   - **Verified live**: created a `TrainerSchedule` WORKING row (08:00-22:00) for one trainer
+     across 8 upcoming Wednesdays via `POST /api/schedule/trainer`, then called `POST
+     /api/appointment/recurring` with that trainer/a room/`recurring:true` starting on the next
+     Wednesday - got `201` with exactly 8 created instances, dated 2026-08-19 through 2026-10-07
+     (7-day spacing, 8 total). Confirmed `GET /api/calendar?date=2026-08-19` returns one of the new
+     appointments with both `trainer` and `room` populated.
+
+3. **Same calendar day-picker + filters applied to `/manager/dnevni-raspored`.**
+   `DailySchedulePage.tsx` swapped its native `<input type="date">` for the same `MonthCalendar`
+   component, plus trainer/room/session-type filters (fetched via two new small duplicate-shaped
+   calls, `getTrainersForFilter()`/`getRoomsForFilter()` in `features/calendar/api.ts`, matching
+   this codebase's existing convention of small per-feature duplication over cross-feature
+   imports). This also surfaced that `features/calendar/types.ts`'s local `AppointmentDTO` was
+   missing the `room` field entirely - the backend's shared `AppointmentDTO` (used by both
+   `/api/appointment` and `/api/calendar`) has always included it, this feature's hand-duplicated
+   type had simply never been updated to match. Added `RoomSummaryDTO`/`room` to close that gap.
+   Unlike the admin Termini tab, this calendar has no month-wide appointment list already loaded to
+   derive "which days have data" dots from (the `/api/calendar` endpoint is single-day-at-a-time),
+   so `MonthCalendar`'s optional `highlightedDates` prop is simply omitted here - the calendar still
+   works as a day picker, it just doesn't show dots.
+   - **Verified live**: `GET /api/calendar?date=2026-08-19` (same date as the recurring appointment
+     created above) confirmed the `room` field is present on the wire with `id`/`name`/`type`,
+     matching the new frontend type.
+
+4. **Searchable client dropdown on Plaćanja.** New from-scratch `components/SearchableSelect.tsx`
+   (no combobox library was a dependency in this codebase - `@headlessui/react`/`downshift`/etc.
+   were never installed, and the actual need, "type to filter a flat option list, select one", is
+   small enough not to justify adding one) - a text input that shows the selected option's label
+   when closed and a live-filtered dropdown list when focused, with a "clear selection" row when
+   something is already selected. Replaced both client `<select>`s in `ManagerPaymentsPage.tsx`
+   (the create-payment form's required client field, and the payment-history filter's optional
+   "all clients" field) - the same component serves both despite one being required and one not,
+   since "no selection" is just `''` either way.
+
+5. **Login error message no longer leaks backend/port details.** `LoginPage.tsx`'s non-401 catch
+   branch changed from `'Prijava nije uspela. Provjerite da je backend pokrenut na :8088.'` to
+   `'Prijava nije uspela. Provjerite email i lozinku ili pokušajte ponovo za trenutak.'` - a user
+   has no reason to know or care that there's a "backend" or which port it listens on. Grepped the
+   rest of `Frontend/src` for similar technical/leaky wording (`backend`, `8088`, `port`) in
+   user-facing strings across `RegisterPage`/`ForgotPasswordPage`/`ResetPasswordPage` and every
+   other page/feature - this was the only offending string in the whole frontend; every other
+   `backend`/`8088` hit is a code comment, not rendered UI.
+
+**What could not be visually verified this session**: no Chrome/browser automation tool was
+connected (same limitation as round 2), so the calendar day-picker's actual on-screen appearance on
+both screens, the searchable dropdown's filter-as-you-type UX, and the login page's error banner
+text were not screenshotted in a real browser. All backend-facing behavior (items 1's reseed
+mechanism and its schema fix, item 2's mandatory-field validation and recurring-appointment
+generation, item 3's `/api/calendar` `room` field) was verified live against the real running
+backend and real dev database as detailed above; items 4 and 5 were verified by `tsc -b` + `npm run
+build` succeeding cleanly (no type errors across the new component and its two call sites) and by
+direct code/diff review, not by clicking through the UI.
+
