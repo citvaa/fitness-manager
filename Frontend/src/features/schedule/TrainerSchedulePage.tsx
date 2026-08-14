@@ -88,6 +88,11 @@ function isCoveredByWorkingSchedule(entries: TrainerScheduleDTO[], apt: MyAppoin
  *   covered by a current shift (B2) - so a trainer editing their fixed schedule doesn't have to
  *   separately open "Moji termini" to notice they'd be leaving an already-assigned appointment
  *   unstaffed.
+ * - A collapsible "Istorija rasporeda" section restores an always-reachable, one-click view of
+ *   past schedule entries (same regression/fix reasoning as TrainerAppointmentsPage.tsx's
+ *   "Istorija dodeljenih termina" - see AGENTS.md "Upgrade: appointment/schedule history
+ *   visibility decisions") - the calendar alone would otherwise require clicking through each past
+ *   date individually to see older entries.
  */
 export function TrainerSchedulePage() {
   const [entries, setEntries] = useState<TrainerScheduleDTO[]>([])
@@ -95,6 +100,7 @@ export function TrainerSchedulePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso())
+  const [showHistory, setShowHistory] = useState(false)
 
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
@@ -180,6 +186,15 @@ export function TrainerSchedulePage() {
   const appointmentsForDate = useMemo(
     () => appointments.filter((a) => a.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [appointments, selectedDate],
+  )
+
+  const today = todayIso()
+  const pastEntries = useMemo(
+    () =>
+      entries
+        .filter((e) => e.date < today)
+        .sort((a, b) => (b.date + b.startTime).localeCompare(a.date + a.startTime)),
+    [entries, today],
   )
 
   return (
@@ -369,6 +384,33 @@ export function TrainerSchedulePage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-300">Istorija rasporeda ({pastEntries.length})</h3>
+          <button
+            onClick={() => setShowHistory((s) => !s)}
+            className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+          >
+            {showHistory ? 'Sakrij' : 'Prikaži'}
+          </button>
+        </div>
+        {showHistory &&
+          (loading ? (
+            <p className="text-sm text-slate-500">Učitavanje...</p>
+          ) : pastEntries.length === 0 ? (
+            <p className="text-sm text-slate-500">Još nema starijeg unetog rasporeda.</p>
+          ) : (
+            <ul className="max-h-[28rem] space-y-1 overflow-y-auto text-sm">
+              {pastEntries.map((e) => (
+                <li key={e.id} className="rounded-lg bg-slate-950/60 px-3 py-2 text-slate-400">
+                  {e.date} · {e.startTime.slice(0, 5)}–{e.endTime.slice(0, 5)} ·{' '}
+                  <span className="text-slate-500">{STATUS_LABEL[e.status]}</span>
+                </li>
+              ))}
+            </ul>
+          ))}
       </div>
     </div>
   )
