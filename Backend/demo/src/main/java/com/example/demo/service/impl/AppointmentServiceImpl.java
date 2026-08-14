@@ -25,6 +25,7 @@ import com.example.demo.service.params.request.appointment.CreateAppointmentRequ
 import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.data.util.Pair;
 import org.springframework.security.access.AccessDeniedException;
@@ -37,16 +38,25 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AppointmentServiceImpl implements AppointmentService {
+
+    /** How many weekly occurrences a "fixed weekly appointment" generates ahead of its first date
+     * - see AGENTS.md "Upgrade: fixed weekly appointment decisions" for why 8 (~2 months) was
+     * chosen over "rest of this month" (too short near month-end) or unbounded (would let one
+     * click silently create months/years of rows). The manager can create the same recurring slot
+     * again later to extend it. */
+    private static final int RECURRING_WEEKS_AHEAD = 8;
 
     private final SessionRepository sessionRepository;
     private final TrainerRepository trainerRepository;
@@ -86,6 +96,35 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return appointmentDTO;
+    }
+
+    @Transactional
+    public List<AppointmentDTO> createRecurringWeekly(@NotNull CreateAppointmentRequest request) throws JsonProcessingException {
+        List<AppointmentDTO> created = new ArrayList<>();
+        LocalDate firstDate = request.getDate();
+
+        for (int week = 0; week < RECURRING_WEEKS_AHEAD; week++) {
+            CreateAppointmentRequest occurrence = new CreateAppointmentRequest(
+                    firstDate.plusWeeks(week), request.getStartTime(), request.getEndTime(),
+                    request.getSessionId(), request.getTrainerId(), request.getRoomId(),
+                    request.getClientIds(), false);
+            try {
+                created.add(create(occurrence));
+            } catch (IllegalArgumentException e) {
+                // One week's occurrence conflicting (holiday, trainer already booked, gym closed
+                // that day, etc.) must not abort the whole series - skip just that occurrence and
+                // keep generating the rest. See AGENTS.md "Upgrade: fixed weekly appointment
+                // decisions".
+                log.warn("⚠️ Skipping recurring occurrence on {}: {}", occurrence.getDate(), e.getMessage());
+            }
+        }
+
+        if (created.isEmpty()) {
+            throw new IllegalArgumentException("Nijedna instanca fiksnog termina nije mogla biti kreirana - " +
+                    "provjerite radno vreme, praznike i zauzetost trenera/sobe.");
+        }
+
+        return created;
     }
 
     @Transactional
@@ -288,6 +327,15 @@ public class AppointmentServiceImpl implements AppointmentService {
 
 
     private void validateAppointment(@NotNull CreateAppointmentRequest request) {
+        // Trainer and room are mandatory as of the manager-testing round 3 restructure - an
+        // unassigned trainer/room made occupancy tracking meaningless. See AGENTS.md "Upgrade:
+        // fixed weekly appointment decisions".
+        if (request.getTrainerId() == null) {
+            throw new IllegalArgumentException("Trener je obavezan za termin!");
+        }
+        if (request.getRoomId() == null) {
+            throw new IllegalArgumentException("Soba je obavezna za termin!");
+        }
         validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
         validateGymSchedule(request.getDate(), request.getStartTime(), request.getEndTime());
         validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());

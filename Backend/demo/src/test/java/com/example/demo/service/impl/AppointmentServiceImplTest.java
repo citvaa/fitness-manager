@@ -357,7 +357,7 @@ class AppointmentServiceImplTest {
         LocalDate date = LocalDate.now().plusDays(1);
         com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
                 new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
-                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, 3, null);
+                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, 9, 3, null, false);
 
         com.example.demo.model.schedule.GymSchedule gymSchedule = com.example.demo.model.schedule.GymSchedule.builder()
                 .openingTime(LocalTime.of(8, 0)).closingTime(LocalTime.of(22, 0)).build();
@@ -365,6 +365,11 @@ class AppointmentServiceImplTest {
         when(sessionRepository.findById(1)).thenReturn(Optional.of(session(3)));
         com.example.demo.model.gym.Room room = com.example.demo.model.gym.Room.builder().id(3).build();
         when(roomRepository.findById(3)).thenReturn(Optional.of(room));
+        when(trainerRepository.findById(9)).thenReturn(Optional.of(Trainer.builder().id(9).build()));
+        com.example.demo.model.schedule.TrainerSchedule workingShift = com.example.demo.model.schedule.TrainerSchedule.builder()
+                .status(com.example.demo.enums.WorkStatus.WORKING)
+                .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(22, 0)).build();
+        when(trainerScheduleRepository.findByTrainerIdAndDate(9, date)).thenReturn(List.of(workingShift));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
 
@@ -375,26 +380,35 @@ class AppointmentServiceImplTest {
         assertThat(captor.getValue().getRoom()).isSameAs(room);
     }
 
+    // Trainer and room became mandatory as of the manager-testing round 3 restructure (see
+    // AGENTS.md "Upgrade: fixed weekly appointment decisions") - an unassigned trainer/room made
+    // occupancy tracking meaningless. These two tests replace the old
+    // "create_leavesRoomNullWhenRoomIdOmitted" test, which exercised behavior that is no longer
+    // legal.
     @Test
-    void create_leavesRoomNullWhenRoomIdOmitted() throws Exception {
+    void create_rejectsMissingRoom() {
         LocalDate date = LocalDate.now().plusDays(1);
         com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
                 new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
-                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, null, null);
+                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, 9, null, null, false);
 
-        com.example.demo.model.schedule.GymSchedule gymSchedule = com.example.demo.model.schedule.GymSchedule.builder()
-                .openingTime(LocalTime.of(8, 0)).closingTime(LocalTime.of(22, 0)).build();
-        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(gymSchedule));
-        when(sessionRepository.findById(1)).thenReturn(Optional.of(session(3)));
-        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Soba");
+        verify(appointmentRepository, never()).save(any());
+    }
 
-        service.create(request);
+    @Test
+    void create_rejectsMissingTrainer() {
+        LocalDate date = LocalDate.now().plusDays(1);
+        com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
+                new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
+                        date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, 3, null, false);
 
-        verify(roomRepository, never()).findById(any());
-        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(captor.capture());
-        assertThat(captor.getValue().getRoom()).isNull();
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Trener");
+        verify(appointmentRepository, never()).save(any());
     }
 
     // ---------- getAll (MANAGER slot management, Faza 9) ----------

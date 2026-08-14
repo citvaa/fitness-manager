@@ -27,4 +27,10 @@ public class CreateAppointmentRequest {
     private Integer trainerId = null;
     private Integer roomId = null;
     private Set<Integer> clientIds;
+
+    /** When true, {@code date} is treated as the first occurrence of a weekly-recurring slot
+     * (e.g. "every Wednesday 18-19h") - see AppointmentService#createRecurringWeekly and
+     * AGENTS.md "Upgrade: fixed weekly appointment decisions" for how many instances get
+     * generated. Ignored by the plain single-appointment create(). */
+    private boolean recurring = false;
 }

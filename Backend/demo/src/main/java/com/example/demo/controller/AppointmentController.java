@@ -28,6 +28,13 @@ public class AppointmentController {
     }
 
     @RoleRequired("MANAGER")
+    @PostMapping("/recurring")
+    public ResponseEntity<List<AppointmentDTO>> createRecurring(@RequestBody CreateAppointmentRequest request) throws JsonProcessingException {
+        List<AppointmentDTO> created = appointmentService.createRecurringWeekly(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @RoleRequired("MANAGER")
     @PostMapping("/{appointmentId}/add-trainer")
     public ResponseEntity<AppointmentDTO> addTrainer(@PathVariable Integer appointmentId, @RequestParam Integer trainerId) {
         AppointmentDTO updatedAppointment = appointmentService.addTrainer(appointmentId, trainerId);

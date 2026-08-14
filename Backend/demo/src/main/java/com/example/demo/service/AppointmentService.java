@@ -14,6 +14,13 @@ import java.util.Set;
 public interface AppointmentService {
     AppointmentDTO create(CreateAppointmentRequest request) throws JsonProcessingException;
 
+    /** Generates weekly-recurring instances of {@code request} starting at its {@code date} (same
+     * weekday/time/session/trainer/room every week) - see AGENTS.md "Upgrade: fixed weekly
+     * appointment decisions" for how far ahead this generates and how per-occurrence conflicts
+     * (e.g. the trainer already booked on one specific week) are handled. Returns only the
+     * occurrences that were actually created. */
+    List<AppointmentDTO> createRecurringWeekly(CreateAppointmentRequest request) throws JsonProcessingException;
+
     AppointmentDTO addTrainer(Integer appointmentId, Integer trainerId);
 
     AppointmentDTO removeTrainer(Integer id);
