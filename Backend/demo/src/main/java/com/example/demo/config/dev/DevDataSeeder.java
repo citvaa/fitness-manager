@@ -4,11 +4,13 @@ import com.example.demo.enums.EmploymentStatus;
 import com.example.demo.enums.NotificationPreference;
 import com.example.demo.enums.RecordUnit;
 import com.example.demo.enums.Role;
+import com.example.demo.enums.RoomType;
 import com.example.demo.enums.SessionType;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.Holiday;
 import com.example.demo.model.Payment;
 import com.example.demo.model.Session;
+import com.example.demo.model.gym.Gym;
 import com.example.demo.model.gym.Room;
 import com.example.demo.model.gym.RoomCheckIn;
 import com.example.demo.model.progress.ClientPersonalRecord;
@@ -24,16 +26,19 @@ import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.HolidayRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
+import com.example.demo.repository.gym.GymRepository;
 import com.example.demo.repository.gym.RoomCheckInRepository;
 import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.repository.progress.ClientPersonalRecordRepository;
 import com.example.demo.repository.progress.ClientProgressEntryRepository;
 import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.repository.user.ClientAppointmentRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.user.UserRepository;
+import com.example.demo.repository.user.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -111,6 +116,9 @@ public class DevDataSeeder implements CommandLineRunner {
     private final RoomCheckInRepository roomCheckInRepository;
     private final ClientProgressEntryRepository clientProgressEntryRepository;
     private final ClientPersonalRecordRepository clientPersonalRecordRepository;
+    private final GymRepository gymRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final TrainerScheduleRepository trainerScheduleRepository;
 
     private final java.util.Random random = new java.util.Random(42); // fixed seed: same-shaped dataset every fresh run
 
@@ -121,9 +129,63 @@ public class DevDataSeeder implements CommandLineRunner {
             log.info("🌱 Dev data already seeded (marker trainer {} exists) - skipping.", MARKER_EMAIL);
             return;
         }
+        seedAll();
+    }
 
-        log.info("🌱 Seeding realistic dev data (manager, trainers, clients, appointments, payments, check-ins, progress)...");
+    /**
+     * Wipes every dev/test row this seeder owns and reseeds from scratch, without needing a
+     * container restart or a Docker volume wipe - see AGENTS.md "Upgrade: dev-data ownership
+     * decisions" for why this exists and how it's exposed ({@code POST /api/dev/reseed}, wired up
+     * in {@code DevDataController}). Safe to call at any time on the {@code dev} profile: schema
+     * (Flyway) is untouched, only the rows this class is responsible for are deleted and rebuilt.
+     */
+    @Transactional
+    public void reseed() {
+        log.info("♻️ Reseeding dev data: wiping existing dev/test rows and rebuilding from scratch...");
+        wipeAllDevData();
+        seedAll();
+        log.info("✅ Reseed complete.");
+    }
 
+    /**
+     * Deletes every row this seeder is responsible for, in FK-safe (children-before-parents)
+     * order - see AGENTS.md for the full dependency reasoning. Deliberately does NOT touch
+     * {@code Session} rows (seeded by a base Flyway migration, referenced by surviving
+     * Appointment/Payment/ClientSessionTracking FKs conceptually but not actually populated once
+     * this runs first) or the {@code role} reference table.
+     */
+    private void wipeAllDevData() {
+        clientPersonalRecordRepository.deleteAllInBatch();
+        clientProgressEntryRepository.deleteAllInBatch();
+        roomCheckInRepository.deleteAllInBatch();
+        clientAppointmentRepository.deleteAllInBatch();
+        appointmentRepository.deleteAllInBatch();
+        paymentRepository.deleteAllInBatch();
+        clientSessionTrackingRepository.deleteAllInBatch();
+        trainerScheduleRepository.deleteAllInBatch();
+        clientRepository.deleteAllInBatch();
+        trainerRepository.deleteAllInBatch();
+        userRoleRepository.deleteAllInBatch();
+        userRepository.deleteAllInBatch();
+        roomRepository.deleteAllInBatch();
+        gymRepository.deleteAllInBatch();
+        gymScheduleRepository.deleteAllInBatch();
+        holidayRepository.deleteAllInBatch();
+    }
+
+    /** The actual seed logic, shared by {@link #run} (first-boot, guarded by the marker check)
+     * and {@link #reseed} (unconditional, called right after {@link #wipeAllDevData}). This
+     * method alone is now the single source of truth for what a "freshly seeded" dev database
+     * looks like - including what used to be the Flyway dev-data migrations' job (Gym/Room
+     * creation, the admin/ogi/citva accounts, admin's ADMIN role, room sizes). Those migrations
+     * are left in place (never edited/deleted - Flyway checksums are locked) since they still run
+     * on a truly fresh Postgres volume, but every value they insert is now redundant with - and,
+     * on a reseed, actually replaced by - what this method builds. */
+    private void seedAll() {
+        log.info("🌱 Seeding realistic dev data (gym, admin, manager, trainers, clients, appointments, payments, check-ins, progress)...");
+
+        ensureGymAndRooms();
+        ensureAdminUser();
         ensureGymSchedule();
         ensureHolidays();
 
@@ -198,11 +260,80 @@ public class DevDataSeeder implements CommandLineRunner {
         holidayRepository.save(holiday);
     }
 
+    // --------------------------------------------------------------------------- gym / rooms / admin
+
+    /** Creates the single Gym row and its 5 rooms if none exist yet - this used to be the Flyway
+     * dev-data migration V1.0016's job (see AGENTS.md "Upgrade: dev-data ownership decisions").
+     * Guarded by "does a Gym already exist" rather than a marker check, since a fresh Postgres
+     * volume still runs that migration first (never edited/deleted), so this only actually
+     * inserts rows itself after a {@link #reseed()} wipe. */
+    private void ensureGymAndRooms() {
+        Gym gym = gymRepository.findAll().stream().findFirst().orElseGet(() -> gymRepository.save(Gym.builder()
+                .name("FitPro Gym")
+                .address("Bulevar oslobođenja 12, Novi Sad")
+                .contactEmail("info@fitpro.rs")
+                .contactPhone("+381601234567")
+                .primaryColor("#2f83fb")
+                .timezone("Europe/Belgrade")
+                .build()));
+
+        if (!roomRepository.findByGymId(gym.getId()).isEmpty()) return;
+
+        roomRepository.saveAll(List.of(
+                room(gym, "Sala za tegove", RoomType.WORKOUT_FLOOR, 25, 0.0, 0.0, 12.0, 10.0, "#2f83fb"),
+                room(gym, "Kardio zona", RoomType.WORKOUT_FLOOR, 20, 13.0, 0.0, 10.0, 10.0, "#0ea5e9"),
+                room(gym, "Joga studio", RoomType.STUDIO, 15, 0.0, 11.0, 8.0, 6.0, "#a855f7"),
+                room(gym, "Svlačionica", RoomType.LOCKER_ROOM, 30, 9.0, 11.0, 6.0, 6.0, "#64748b"),
+                // Previously 7x4 via migration V1.0021's retroactive minimum-size patch - still
+                // visually narrow/cramped next to the other rooms, and capacity 5 looked odd
+                // against that footprint. Now that this seeder owns the canonical definition,
+                // widened to 8x6 (well above the 4x2.5 editor floor) with a more realistic
+                // reception-desk headcount. See AGENTS.md "Upgrade: dev-data ownership decisions".
+                room(gym, "Recepcija", RoomType.RECEPTION, 8, 16.0, 11.0, 8.0, 6.0, "#f59e0b")));
+    }
+
+    private Room room(Gym gym, String name, RoomType type, int capacity,
+                       double posX, double posY, double width, double height, String color) {
+        return Room.builder().gym(gym).name(name).type(type).capacity(capacity)
+                .posX(posX).posY(posY).width(width).height(height).rotationDegrees(0.0).color(color).build();
+    }
+
+    /** Creates the "admin" account (MANAGER + ADMIN roles) if it doesn't already exist - this
+     * used to be split across migrations V1.0002/V1.0003/V1.0017/V1.0020 (see AGENTS.md "Upgrade:
+     * dev-data ownership decisions"). Those migrations still create/activate it on a truly fresh
+     * Postgres volume; this only actually runs after a {@link #reseed()} wipe. */
+    private void ensureAdminUser() {
+        if (userRepository.findByEmail("admin").isPresent()) return;
+
+        User admin = User.builder()
+                .email("admin")
+                .password(passwordEncoder.encode(DEV_PASSWORD))
+                .isActivated(true)
+                .notificationPreference(NotificationPreference.PUSH)
+                .userRoles(new HashSet<>())
+                .build();
+        admin = userRepository.save(admin);
+
+        // Two roles on one user hits the same BaseEntity id-less equals()/hashCode() landmine as
+        // ClientAppointment (see class Javadoc "Appointment/payment scheme") if both UserRole
+        // instances are added to a Set before either is persisted - save each individually via
+        // its own repository instead, same workaround pattern used elsewhere in this class.
+        userRoleRepository.save(newUserRole(admin, Role.MANAGER));
+        userRoleRepository.save(newUserRole(admin, Role.ADMIN));
+    }
+
+    private UserRole newUserRole(User user, Role role) {
+        UserRole userRole = new UserRole();
+        userRole.setUser(user);
+        userRole.setRole(role);
+        return userRole;
+    }
+
     // ------------------------------------------------------------------------------------ manager
 
     /** One ordinary MANAGER (no ADMIN role) - a real example of the non-super-admin manager
      * account introduced alongside Role.ADMIN (see AGENTS.md "Upgrade: manager-hierarchy
-     * decisions"). Only the pre-existing "admin" account (V1.0020 migration) gets ADMIN. */
+     * decisions"). Only "admin" (see {@link #ensureAdminUser()}) gets ADMIN. */
     private void seedManager() {
         createActivatedUser("milan.milic@fitpro.dev", Role.MANAGER);
     }
@@ -215,9 +346,13 @@ public class DevDataSeeder implements CommandLineRunner {
         trainers.add(createTrainer("jelena.jovanovic@fitpro.dev", LocalDate.now().minusYears(1).minusMonths(4), 1993, EmploymentStatus.FULL_TIME));
         trainers.add(createTrainer("nikola.nikolic@fitpro.dev", LocalDate.now().minusMonths(8), 1996, EmploymentStatus.CONTRACT));
         trainers.add(createTrainer("dragan.dragic@fitpro.dev", LocalDate.now().minusYears(2), 1990, EmploymentStatus.FULL_TIME));
-        // Include the pre-existing Phase 1-6 dev trainer too, so the seeded appointments give
-        // "ogi" (the account every earlier phase's docs/screenshots reference) real data as well.
-        trainerRepository.findByUserEmail("ogi").ifPresent(trainers::add);
+        // Include "ogi" too, so the seeded appointments give it (the account every earlier
+        // phase's docs/screenshots reference) real data as well - find-or-create since this
+        // seeder now owns that account (see ensureAdminUser()/AGENTS.md "Upgrade: dev-data
+        // ownership decisions"); migration V1.0009 still creates it on a truly fresh volume, but
+        // a reseed() wipe removes it and this recreates it identically.
+        trainers.add(trainerRepository.findByUserEmail("ogi")
+                .orElseGet(() -> createTrainer("ogi", LocalDate.now().minusYears(3), 1990, EmploymentStatus.FULL_TIME)));
         return trainers;
     }
 
@@ -258,9 +393,9 @@ public class DevDataSeeder implements CommandLineRunner {
             clients.add(createClient(email));
             usedEmails.add(email);
         }
-        // Same reasoning as including "ogi" above: the pre-existing dev CLIENT account should
-        // also show up with real booking/payment/progress history, not just the brand-new ones.
-        clientRepository.findByUserEmail("citva").ifPresent(clients::add);
+        // Same reasoning/find-or-create pattern as "ogi" above: "citva" should also show up with
+        // real booking/payment/progress history, not just the brand-new clients.
+        clients.add(clientRepository.findByUserEmail("citva").orElseGet(() -> createClient("citva")));
 
         // i%30/i%20 modulo pairing can coincidentally reproduce one of the explicit emails above
         // (e.g. i=3 -> "milica.ilic@fitpro.dev") - skip forward past any such collision rather
