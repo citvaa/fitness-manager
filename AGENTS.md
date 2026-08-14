@@ -434,11 +434,13 @@ short-text-out calls, not open-ended reasoning.
   plus one page per screen; flat per-page routes in `App.tsx` (no nested layouts/routes). A small
   `src/components/` directory (new in manager-testing round 3, grown in the trainer-testing round)
   holds cross-feature UI: `MonthCalendar` (a from-scratch month-grid day picker, used by the admin
-  Termini tab, `/manager/dnevni-raspored`, and - as of the trainer-testing round - both TRAINER
-  self-service pages, `TrainerSchedulePage`/`TrainerAppointmentsPage`), `SearchableSelect` (a
-  from-scratch filterable combobox, used by Plaćanja's client picker), and `DateInput` (see below)
-  - all built without adding a dependency, since none existed for any of these needs. On both
-  TRAINER pages that pair a `MonthCalendar` day-picker with the trainer's own history
+  Termini tab, `/manager/dnevni-raspored`, both TRAINER self-service pages
+  (`TrainerSchedulePage`/`TrainerAppointmentsPage`), and - as of a later round - both CLIENT
+  appointment pages (`ClientBookingPage`/`ClientAppointmentsPage`, see below)), `SearchableSelect`
+  (a from-scratch filterable combobox, used by Plaćanja's client picker), `DateInput` (see below),
+  and `LoadingIndicator`/`Spinner` (see below) - all built without adding a dependency, since none
+  existed for any of these needs. On both TRAINER pages that pair a `MonthCalendar` day-picker with
+  the trainer's own history
   (`TrainerAppointmentsPage.tsx`/`TrainerSchedulePage.tsx`), clicking ANY day on the calendar -
   including a past one - shows that day's appointments/schedule below it; this alone is the
   history view (no separate "Istorija ..." section) - a brief detour through a collapsible
@@ -448,8 +450,26 @@ short-text-out calls, not open-ended reasoning.
   correct, sufficient behavior. `TrainerAppointmentsPage.tsx`'s "Termini bez trenera" section also
   now filters to that same `selectedDate` (previously a flat, unfiltered, date-sorted list of every
   upcoming open slot - reconsidered for page-wide consistency around one selected day, see
-  `docs/decision-log.md` "Upgrade: termini-bez-trenera calendar filtering decision"). A shared
-  `extractErrorMessage(err, fallback)` helper (duplicated per
+  `docs/decision-log.md` "Upgrade: termini-bez-trenera calendar filtering decision"). CLIENT-side
+  `ClientBookingPage.tsx` ("Zakaži trening") and `ClientAppointmentsPage.tsx` ("Moji termini") got
+  the same `MonthCalendar` + `selectedDate` + `a.date === selectedDate` restructure, replacing flat
+  unfiltered tables of every available/reserved appointment regardless of date -
+  `ClientAppointmentsPage.tsx`'s previous always-visible "Budući termini"/"Istorija" two-table
+  split collapsed into one calendar-driven table (cancel button shown per-row based on that row's
+  own past/future status, not a section-level split) for the same reason the TRAINER pages'
+  history split was judged unnecessary. See `docs/decision-log.md` "Upgrade: CLIENT calendar
+  decisions". `LoadingIndicator`/`Spinner` (`components/LoadingIndicator.tsx`) replaced every bare
+  `Učitavanje...` text-only loading message app-wide (23 call sites, `grep "Učitavanje\.\.\."
+  Frontend/src` before this) with a `currentColor`-based rotating-circle SVG spinner next to the
+  same text - `className` passed straight through so each call site's existing text
+  size/color/spacing is unchanged; see `docs/decision-log.md` "Upgrade: shared loading-indicator
+  decisions". `AppShell.tsx`'s outer flex container changed from `min-h-screen` to `h-screen`
+  (`layout/AppShell.tsx`) - `min-h-screen` let the container grow taller than the viewport on any
+  page whose content overflowed, which meant `<main>`'s `overflow-auto` never actually engaged
+  (nothing was clipping it) and the whole document scrolled instead, taking the `<aside>` sidebar
+  (nav, role switcher, "Odjava") down with it - a live, screenshotted, confirmed bug, not a
+  hypothetical one. See `docs/decision-log.md` "Upgrade: AppShell scroll-containment fix" for the
+  live verification. A shared `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`
   messages in the UI. A backend error message can be multi-line (`\n`-joined, e.g.

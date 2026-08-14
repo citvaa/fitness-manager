@@ -3525,3 +3525,135 @@ from the previous round, but for the opposite direction (discovering days with d
 past data). Not fixed here since it wasn't part of the explicit ask and doesn't regress anything
 this round changed; worth considering a second, differently-styled dot (or a combined indicator)
 for open-slot dates in a future round if this becomes a real pain point.
+
+## Upgrade: shared loading-indicator decisions
+
+23 call sites (`grep "Učitavanje\.\.\." Frontend/src`) rendered a bare `<p>`/`<div>` with just the
+text "Učitavanje..." - no spinner, no visual motion, nothing to distinguish "the app is working on
+it" from "the app has finished and there's simply no content." Added
+`components/LoadingIndicator.tsx`: a `Spinner` (a small SVG rotating-circle using Tailwind's
+`animate-spin`, colored via `currentColor` so it always matches whatever text-color class the
+caller passes rather than needing its own color prop) and a `LoadingIndicator` wrapper that renders
+`Spinner` + the label text in a flex row. `className` is passed straight through to the wrapper so
+every call site's existing text size/color/spacing (`text-sm text-slate-500`, `p-8 text-slate-400`,
+etc.) carries over unchanged - only the element itself changes from a bare `<p>`/`<div>` to a
+spinner+text row.
+
+Replaced all 23 occurrences: one file (`TrainerAppointmentsPage.tsx`, 2 occurrences) by hand first
+to establish the pattern, then the remaining 16 files (18 occurrences) via a small one-off Node
+script matching `<(p|div) className="...">Učitavanje\.\.\.</\1>` and substituting
+`<LoadingIndicator className="..." />`, plus inserting the import. The remaining 2 files
+(`ClientBookingPage.tsx`/`ClientAppointmentsPage.tsx`, 3 occurrences) were handled inline while
+restructuring those pages for the CLIENT-calendar change below, in the same commit as that change
+rather than this one, since they were being rewritten anyway.
+
+**Bug introduced and caught before commit**: the automation script's import-insertion logic broke
+on any file whose relevant import was part of a multi-line `import { ... } from '...'` block - it
+naively inserted the new `import { LoadingIndicator }` line immediately after any line starting
+with `import `, which for a multi-line import is the opening `import {` line, splitting the block
+and producing a syntax error. Caught immediately by `npx tsc -b` (4 files:
+`AppointmentsTab.tsx`/`TrainerScheduleManager.tsx`/`TrainerProgressPage.tsx`/
+`TrainerSchedulePage.tsx`), fixed by hand-moving the misplaced import line to sit before the
+multi-line block instead of inside it. Not a runtime bug (never reached the running app - `tsc -b`
+was run immediately after the script, before anything else), but worth noting as exactly the kind
+of mechanical-refactor risk a purely text-based find/replace across many files carries, even for a
+"simple" change - full recompilation after any bulk automated edit is not optional.
+
+**Live verification**: `npx tsc -b`/`npm run build` clean after all fixes. Screenshotted
+`ClientBookingPage.tsx` (see the CLIENT-calendar entry below) with all `/api/**` requests
+artificially delayed ~900ms via Playwright's request interception (`page.route`) specifically to
+catch and screenshot the loading state, which is normally too brief to reliably capture - confirmed
+the spinner visibly renders (a small rotating circle) next to "Učitavanje..." rather than the old
+static text.
+
+## Upgrade: CLIENT calendar decisions
+
+`ClientBookingPage.tsx` ("Zakaži trening") and `ClientAppointmentsPage.tsx` ("Moji termini") were
+flat tables of every available/reserved appointment regardless of date - the same shape
+`AppointmentsTab.tsx`/`TrainerAppointmentsPage.tsx` had before their own calendar restructures.
+Applied the identical pattern: `MonthCalendar` + `selectedDate` state (defaulting to today) +
+`highlightedDates` (dates with at least one relevant appointment) + filtering the table to
+`a.date === selectedDate`, in a `grid gap-4 lg:grid-cols-[auto,1fr]` layout matching every other
+calendar-restructured page in this codebase. The table's own `Datum` column was dropped from both
+(redundant once the section heading already states the selected date, matching the convention
+already used on `TrainerAppointmentsPage.tsx`/`AppointmentsTab.tsx`).
+
+`ClientAppointmentsPage.tsx` additionally lost its previous always-visible "Budući termini"/
+"Istorija" two-table split - now one calendar-driven table, with the "Otkaži" button shown per-row
+based on that specific row's own `!isPast(a)` check rather than which of the two former sections it
+was in. This mirrors the reasoning from "Upgrade: history-section revert" earlier in this log (a
+MonthCalendar's per-day click-through, spanning past and future dates alike, already IS the
+history view - a separate always-visible history section/split is redundant on top of it, not
+complementary), applied here for the first time to a CLIENT-facing page rather than reverting an
+existing split. `ClientBookingPage.tsx` only ever showed upcoming appointments (booking a past slot
+is meaningless) and keeps that filter (`isUpcoming`) layered on top of the date filter, rather than
+also showing past dates with nothing bookable in them.
+
+**Live verification**: screenshotted both pages as the seeded `citva` CLIENT account. Booking page:
+selecting today's date (2026-08-15, pre-highlighted as the default) showed 3 real available
+sessions with real trainer emails/free-spot counts and working "Rezerviši" buttons; the calendar's
+dot indicators correctly matched dates with real bookable data. Appointments page: the calendar
+showed dot indicators across multiple dates (including dates before today, confirming past
+reservations are still reachable), and selecting today's date showed a real reserved appointment
+with a working "Otkaži" button (shown because it's still >24h out).
+
+## Upgrade: AppShell scroll-containment fix
+
+**Confirmed a real, previously unverified bug** - the session brief asked to verify live rather
+than assume the code was correct, and it was not. `AppShell.tsx`'s outer container was
+`<div className="flex min-h-screen ...">` with `<aside>` (no explicit height/overflow) and
+`<main className="flex-1 overflow-auto">`. The reasoning that `min-h-screen` plus `main`'s
+`overflow-auto` alone guarantees an always-visible sidebar was checked by hand and looked
+plausible, but `min-height` only sets a floor, not a ceiling: on any page whose content is taller
+than the viewport, the flex row container itself grows to fit that content (since nothing caps its
+height), which means `main` is never actually height-constrained relative to the viewport - it just
+grows too, so its `overflow-auto` never has anything to clip and never triggers. The browser falls
+back to scrolling the whole document instead, and since `<aside>` is an ordinary (non-`sticky`/
+non-`fixed`) flex sibling that also stretches to the same inflated container height, it scrolls up
+and out of view right along with `main` - including the "Odjava" button at its bottom, which could
+end up hundreds of pixels below the visible viewport on a long page with no way to reach it without
+scrolling the entire document past all the main content first.
+
+Fix: changed the outer container from `min-h-screen` to `h-screen` (a hard viewport-height cap, not
+just a floor) and added `overflow-y-auto` + `shrink-0` to `<aside>` as defensive insurance (not
+currently needed - the nav/account block always fits well under `h-screen` today - but cheap
+protection against a future nav list actually overflowing the sidebar itself, matching `main`'s own
+pattern rather than leaving the sidebar as the one un-scrollable exception). With a true `h-screen`
+cap, both flex children are locked to exactly the viewport height, so any child whose own content
+overflows (either `main` directly, or - as observed live - a page's own nested
+`overflow-auto` wrapper, see below) now genuinely scrolls within its own box instead of inflating
+the shared container.
+
+**Live verification** (screenshotted + programmatically inspected via Playwright against the
+running dev app, `TrainerProgressPage.tsx` for a client with a full page of charts/forms/history -
+tall enough to overflow a 900px test viewport):
+- **Before the fix**: `window.scrollY` reached 1393 after scrolling to the bottom (`document.body.
+  scrollHeight` = 2293, well past the 900px viewport) - the whole document was scrolling. A
+  screenshot at the top of the page showed the sidebar's logo/nav visible but its "ogi"/"Odjava"
+  block was NOT in the initial viewport at all (only reachable by scrolling the whole page down);
+  a screenshot after scrolling to the bottom showed the opposite problem - nav links had scrolled
+  out of view while "Odjava" only came into view because the scroll happened to land exactly at the
+  bottom of the (also-inflated) sidebar.
+- **After the fix**: `window.scrollY` stayed `0` throughout, and `document.body.scrollHeight`
+  matched the viewport height exactly (900) - the document itself no longer scrolls at all. The
+  actual scrolling now happens on `TrainerProgressPage.tsx`'s own inner
+  `<div className="flex-1 overflow-auto p-6">` (confirmed via `document.querySelectorAll('*')`
+  filtered to elements where `scrollHeight > clientHeight` - exactly one such element, that inner
+  div, with `scrollTop` correctly tracking a mouse-wheel scroll over the content area). A
+  screenshot after wheel-scrolling that content area to the bottom (showing "Istorija merenja"/
+  "Lični rekordi"/"AI rezime napretka") confirmed the sidebar - logo, nav links, AND "Odjava" -
+  stayed pixel-identical to its position before scrolling, exactly the intended always-visible
+  behavior.
+- This also incidentally confirms `main` itself never needed to be the actual scroll container in
+  practice - every page under it already wraps its own content in a similarly-structured
+  `overflow-auto` div (see e.g. `TrainerProgressPage.tsx`'s `<div className="flex h-full">` +
+  `<div className="flex-1 overflow-auto p-6">`), so `main`'s own `overflow-auto` is really a
+  fallback for any future page that does NOT add its own inner scroll wrapper - still correct to
+  keep, just rarely the element that actually engages today.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None beyond the two items the session brief already flagged as open questions (AppShell's scroll
+  behavior, to be verified and fixed only if actually broken - it was) and the LoadingIndicator
+  import-insertion bug caught and fixed before it ever reached a running build (see above). No
+  other pre-existing issues were newly encountered while implementing any of the three items.
