@@ -50,15 +50,6 @@ function clientList(a: AppointmentDTO) {
  * different future dates (any day a manager opened a slot for), so a day-picker would mostly show
  * empty calendars and force clicking through dates one at a time to find anything - a sorted list
  * surfaces all of them at a glance instead.
- *
- * The calendar-only history view turned out to be a regression, not an improvement (see AGENTS.md
- * "Upgrade: appointment/schedule history visibility decisions") - seeing what a trainer worked on
- * previously required navigating month-by-month and clicking each past date individually, with no
- * way to just see "everything I've done" at a glance. A collapsible "Istorija dodeljenih termina"
- * section (`showHistory` state, collapsed by default so it doesn't dominate the page) restores a
- * always-reachable, one-click, reverse-chronological flat list of every past assigned appointment,
- * alongside - not instead of - the calendar (which stays useful for "what do I have on this
- * specific date").
  */
 export function TrainerAppointmentsPage() {
   const [mine, setMine] = useState<AppointmentDTO[]>([])
@@ -67,7 +58,6 @@ export function TrainerAppointmentsPage() {
   const [busyId, setBusyId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso())
-  const [showHistory, setShowHistory] = useState(false)
 
   async function reload() {
     setLoading(true)
@@ -120,17 +110,12 @@ export function TrainerAppointmentsPage() {
 
   const highlightedDates = useMemo(() => new Set(mine.map((a) => a.date)), [mine])
 
-  const pastMine = useMemo(
-    () => mine.filter(isPast).sort((a, b) => (b.date + b.startTime).localeCompare(a.date + a.startTime)),
-    [mine],
-  )
-
   const visibleForDate = useMemo(
     () => mine.filter((a) => a.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [mine, selectedDate],
   )
 
-  function appointmentCard(a: AppointmentDTO, options?: { assignAction?: boolean; showDate?: boolean }) {
+  function appointmentCard(a: AppointmentDTO, options?: { assignAction?: boolean }) {
     return (
       <li key={a.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -142,7 +127,7 @@ export function TrainerAppointmentsPage() {
           </span>
         </div>
         <div className="mt-1 text-xs text-slate-400">
-          {(options?.assignAction || options?.showDate) && <>{a.date} · </>}
+          {options?.assignAction && <>{a.date} · </>}
           Soba: {a.room?.name ?? 'bez sobe'}
         </div>
         <div className="mt-1 text-xs text-slate-400">Klijenti: {clientList(a)}</div>
@@ -199,7 +184,7 @@ export function TrainerAppointmentsPage() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-300">Termini bez trenera</h3>
         {loading ? (
           <p className="text-sm text-slate-500">Učitavanje...</p>
@@ -210,30 +195,6 @@ export function TrainerAppointmentsPage() {
             {upcomingUnassigned.map((a) => appointmentCard(a, { assignAction: true }))}
           </ul>
         )}
-      </div>
-
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-300">
-            Istorija dodeljenih termina ({pastMine.length})
-          </h3>
-          <button
-            onClick={() => setShowHistory((s) => !s)}
-            className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
-          >
-            {showHistory ? 'Sakrij' : 'Prikaži'}
-          </button>
-        </div>
-        {showHistory &&
-          (loading ? (
-            <p className="text-sm text-slate-500">Učitavanje...</p>
-          ) : pastMine.length === 0 ? (
-            <p className="text-sm text-slate-500">Još nema odrađenih termina.</p>
-          ) : (
-            <ul className="max-h-[28rem] space-y-2 overflow-y-auto">
-              {pastMine.map((a) => appointmentCard(a, { showDate: true }))}
-            </ul>
-          ))}
       </div>
     </div>
   )
