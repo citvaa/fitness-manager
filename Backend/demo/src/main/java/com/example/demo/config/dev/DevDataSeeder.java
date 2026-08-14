@@ -528,8 +528,19 @@ public class DevDataSeeder implements CommandLineRunner {
             List<Appointment> openIndividual = new ArrayList<>();
             List<Appointment> openSmallGroup = new ArrayList<>();
             List<Appointment> openBigGroup = new ArrayList<>();
-            int slotCounter = 0;
-            int trainerCounter = 0;
+
+            // (trainer, time) and (room, time) pairs already claimed by an appointment created
+            // for THIS date - shared across all three session types below (an individual and a
+            // group appointment for the same trainer at the same time are just as much a double
+            // booking as two of the same type). All appointments in this seeder are exactly one
+            // hour and every slot in slotsFor() is spaced so distinct slots never overlap in
+            // time, so "same trainer/room + same slot" is the only overlap case that can occur
+            // here - a same-key check is therefore sufficient, no interval-overlap math needed.
+            Set<String> occupiedTrainerSlots = new HashSet<>();
+            Map<LocalTime, Set<Integer>> occupiedRoomsAtSlot = new HashMap<>();
+            int comboCounter = 0;
+            int totalCombos = slots.size() * workingTrainers.size();
+            int skippedForNoFreeSlot = 0;
 
             for (Client client : interestedClients) {
                 // Weighted towards group sessions - the only way ~50 clients' bookings fit into a
@@ -542,11 +553,46 @@ public class DevDataSeeder implements CommandLineRunner {
 
                 Appointment appointment = openList.isEmpty() ? null : openList.get(openList.size() - 1);
                 if (appointment == null) {
-                    LocalTime time = slots.get(slotCounter % slots.size());
-                    slotCounter++;
-                    Trainer trainer = workingTrainers.get(trainerCounter % workingTrainers.size());
-                    trainerCounter++;
-                    Room room = rooms.isEmpty() ? null : rooms.get(random.nextInt(rooms.size()));
+                    // Walk the (slot, trainer) combo space deterministically from comboCounter
+                    // until an unclaimed pair is found, instead of rotating two independent
+                    // counters that can revisit an already-used pair (the original bug: with
+                    // independent trainerCounter/slotCounter, the same (trainer, time) pair
+                    // recurs every lcm(workingTrainers.size(), slots.size()) new appointments).
+                    LocalTime time = null;
+                    Trainer trainer = null;
+                    for (int attempt = 0; attempt < totalCombos; attempt++) {
+                        int combo = comboCounter % totalCombos;
+                        comboCounter++;
+                        LocalTime candidateTime = slots.get(combo % slots.size());
+                        Trainer candidateTrainer = workingTrainers.get(combo / slots.size());
+                        if (occupiedTrainerSlots.add(candidateTrainer.getId() + "@" + candidateTime)) {
+                            time = candidateTime;
+                            trainer = candidateTrainer;
+                            break;
+                        }
+                    }
+                    if (trainer == null) {
+                        // Every (trainer, slot) combo for this date is already claimed - a real,
+                        // if rare, scheduling ceiling, not a bug. Skip this client for this date
+                        // rather than double-book a trainer.
+                        skippedForNoFreeSlot++;
+                        continue;
+                    }
+
+                    Room room = null;
+                    if (!rooms.isEmpty()) {
+                        Set<Integer> usedRoomsAtSlot = occupiedRoomsAtSlot.computeIfAbsent(time, t -> new HashSet<>());
+                        int roomStart = random.nextInt(rooms.size());
+                        for (int i = 0; i < rooms.size(); i++) {
+                            Room candidate = rooms.get((roomStart + i) % rooms.size());
+                            if (usedRoomsAtSlot.add(candidate.getId())) {
+                                room = candidate;
+                                break;
+                            }
+                        }
+                        // If every room is already claimed at this exact slot, room is left null
+                        // (a nullable column - see AGENTS.md) rather than double-booking one.
+                    }
 
                     appointment = Appointment.builder()
                             .date(date)
@@ -574,6 +620,11 @@ public class DevDataSeeder implements CommandLineRunner {
 
                 bookedCounts.computeIfAbsent(client.getId(), k -> new HashMap<>())
                         .merge(sessionType.getId(), 1, Integer::sum);
+            }
+
+            if (skippedForNoFreeSlot > 0) {
+                log.info("🌱 {} client(s) not booked on {} - every trainer/time-slot combination ({} total) was already taken.",
+                        skippedForNoFreeSlot, date, totalCombos);
             }
         }
 

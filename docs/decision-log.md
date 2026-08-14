@@ -2954,3 +2954,64 @@ passing clean, and code review of the render logic against that confirmed API be
 look in a browser is still owed before considering the picker UX fully done, same standing note as
 every previous round.
 
+
+## Upgrade: dev-seeder double-booking fix
+
+**Bug (reported by user)**: `DevDataSeeder.seedAppointmentsForCurrentMonth()` could generate two
+`Appointment` rows for the same trainer overlapping in time on the same date, and separately could
+double-book a room. Root cause: when a new appointment needed to be opened for a date, the trainer
+and time slot were each picked from an independent rotating counter
+(`trainerCounter % workingTrainers.size()`, `slotCounter % slots.size()`), with no check that the
+resulting `(trainer, time)` pair was already claimed by an earlier appointment created for that
+same date - the pair recurs every `lcm(workingTrainers.size(), slots.size())` new appointments,
+which is small enough (single digits) to actually hit within one date's booking loop. The room was
+worse: picked via `random.nextInt(rooms.size())` completely independent of trainer/time, so a
+`(room, time)` collision was even more likely. This bypassed `AppointmentServiceImpl`'s
+`validateTrainerNotDoubleBooked`/`validateRoomNotDoubleBooked` checks entirely because the seeder
+inserts rows directly via `appointmentRepository.saveAll(...)`, not through `create()`.
+
+**Fix** (`seedAppointmentsForCurrentMonth`, still generating the same overall shape - ~50 clients,
+3 sessions/week each, same individual/group weighting): per date, maintain a `Set<String>
+occupiedTrainerSlots` (key `trainerId + "@" + time`, shared across all three session types for
+that date - an individual and a group appointment for the same trainer/time are just as much a
+conflict as two of the same type) and a `Map<LocalTime, Set<Integer>> occupiedRoomsAtSlot`. When a
+new appointment needs a trainer/time, walk the `(slot, trainer)` combo space deterministically from
+a single `comboCounter` (`combo % slots.size()` for the slot, `combo / slots.size()` for the
+trainer index) until an unclaimed key is found, instead of two independent rotating counters. If
+every combo for that date is already claimed, the client is skipped for that date rather than
+double-booking a trainer - logged via `log.info("... client(s) not booked on {} - every
+trainer/time-slot combination ({} total) was already taken.")`. Room selection for the chosen slot
+scans `rooms` starting from a random offset and picks the first one not yet in
+`occupiedRoomsAtSlot.get(time)`; if all rooms are already claimed at that exact slot, the
+appointment is left with `room = null` (a nullable column, per AGENTS.md's domain-model notes)
+rather than double-booking one. No interval-overlap arithmetic was needed for the "same slot"
+check: every generated appointment is exactly one hour and `slotsFor()`'s fixed time lists are
+spaced so distinct slots never overlap in time (the only exception, 18:00 and 19:30, ends the
+18:00 appointment at 19:00, before the 19:30 one starts) - so "same trainer/room + same slot key"
+is a correct and sufficient overlap test here, unlike the general-purpose validation in
+`AppointmentServiceImpl` which does need real interval overlap math for arbitrary user-submitted
+times.
+
+**Live verification** (dev backend rebuilt from this session's code, `POST /api/dev/reseed` via
+`admin` MANAGER JWT, checked directly against Postgres with `docker exec ... psql`):
+- **Before the fix** (existing seeded data from the pre-fix code, same fixed RNG seed): a
+  self-join query for same-trainer, same-date, overlapping `start_time`/`end_time` pairs returned
+  **58** conflicting appointment rows; the equivalent same-room query returned **10**.
+- **After the fix** (reseeded with the corrected seeder): both queries returned **0** conflicts,
+  across **203** total generated appointments (within the ~110-225 documented range).
+- The "skip if no free combo" fallback fired exactly as expected, not spuriously: log output
+  showed `7 client(s) not booked on <date> - every trainer/time-slot combination (3 total) was
+  already taken` on all 5 Sundays in the seeded month. This is correct, not a regression - per
+  `TRAINER_WORKDAY_SETS`, only one trainer (`ogi`, pattern `{WED, FRI, SUN}`) works Sundays, and
+  Sunday only has 3 time slots (`slotsFor`), so `totalCombos = 3` that day; with roughly 20+
+  clients preferring Sunday, the fixed capacity of 3 non-conflicting Sunday appointments is a real
+  scheduling ceiling given the current trainer roster, not a bug in the fix.
+
+**Found but not fixed, out of scope per this session's explicit instructions** (reported here
+rather than silently patched):
+- Encountered the pre-existing, already-documented `ManagerInsightsServiceImplTest` compile
+  failure again - it also blocks `./mvnw spring-boot:run` itself (not just `mvn test`), because
+  Maven's default lifecycle binds `spring-boot:run`'s `test-compile` phase before running; had to
+  launch with `-Dmaven.test.skip=true` to get the app running at all for live verification. Worth
+  noting in case a future session assumes only `mvn test` is blocked by this - `spring-boot:run`
+  is too.

@@ -370,6 +370,18 @@ short-text-out calls, not open-ended reasoning.
   table this class owns in FK-safe order, then calls `seedAll()` again) - exposed as `POST
   /api/dev/reseed`, `@Profile("dev")` + `@RoleRequired("MANAGER")`, so a manager can rebuild a
   clean dataset on the live dev database at any time without touching Docker.
+  `seedAppointmentsForCurrentMonth()` writes appointments directly via `appointmentRepository.
+  saveAll(...)`, bypassing `AppointmentServiceImpl.create()`'s conflict checks entirely - it is
+  therefore itself responsible for never generating a same-trainer or same-room time overlap.
+  Per date, it tracks already-claimed `(trainer, time)` and `(room, time)` pairs (a plain
+  `Set`/`Map`, shared across the individual/small-group/big-group session types being generated
+  that date) and walks the slot/trainer combo space from a single deterministic counter until an
+  unclaimed pair is found, instead of two independent rotating counters (which could - and did,
+  before this fix - revisit the same pair within one date's booking loop); a client is skipped
+  for that date only if every combo is already taken (a real capacity ceiling, e.g. Sunday has
+  just one working trainer and 3 slots = 3 combos total), never by double-booking. See
+  `docs/decision-log.md`'s "Upgrade: dev-seeder double-booking fix" for the before/after conflict
+  counts.
 - **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*` or
   `db/dev-data/V1.00XX__*`) - their checksums are locked once applied. If schema changes are
   needed, add a new `V1.00XX__*.sql` file (either location - they share one version sequence).
