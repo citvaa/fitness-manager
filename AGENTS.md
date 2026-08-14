@@ -119,11 +119,18 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   a price/amount column - manager-insights "revenue" is a paid-appointment-count proxy, not
   currency.
 - **Appointment** - date/start/end time, belongs to a `Session` type, a `Trainer`, and a `Room`,
-  plus a set of `ClientAppointment`s. `Trainer`/`Room` are still nullable **columns** (an
-  appointment can lose its trainer via `removeTrainer`, and DB rows created before this changed
-  can exist without one) but `CreateAppointmentRequest.trainerId`/`roomId` are mandatory as of the
-  manager-testing round 3 restructure - `AppointmentServiceImpl.create()` rejects either being null
-  before any other validation runs (see `docs/decision-log.md`). `POST /api/appointment/recurring`
+  plus a set of `ClientAppointment`s. `Room` is mandatory on `CreateAppointmentRequest` (manager-
+  testing round 3 - `AppointmentServiceImpl.create()` rejects a null `roomId` before any other
+  validation runs). `Trainer` is **optional again** as of the trainer self-assign round -
+  `CreateAppointmentRequest.trainerId` may be null, producing a "termin bez trenera" that a
+  TRAINER can later claim via the pre-existing `POST /{id}/assign`/`DELETE /{id}/unassign`
+  marketplace (see "Auth flow"/below - that marketplace existed since Faza 7 but round 3 had made
+  it unreachable by requiring a trainer at creation time; see `docs/decision-log.md` "Upgrade:
+  trainer self-assign decisions"). `validateTrainerWorkingSchedule`/`validateTrainerNotDoubleBooked`
+  are both no-ops when `trainerId` is null, so no other change was needed to re-enable this.
+  `DevDataSeeder` generates a handful of trainer-less open slots (~1 in 4 dates) reusing the same
+  per-date room/slot occupancy tracking the rest of that method already builds, so they can never
+  collide with a real trainer-led appointment's room/time. `POST /api/appointment/recurring`
   (`CreateAppointmentRequest.recurring = true`) generates weekly-repeating instances of one request
   8 weeks ahead from its `date`, each independently validated - one week's conflict is skipped, not
   fatal to the series. There is no persisted appointment status column - "cancelled"/"never
@@ -169,7 +176,11 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   date and time range. A trainer's rows never overlap regardless of status mix (a `WORKING` shift
   can't overlap an existing `VACATION` day and vice versa) - enforced both directions in
   `TrainerScheduleServiceImpl` via the same status-agnostic
-  `existsByTrainerIdAndDateAndTimeRange` check.
+  `existsByTrainerIdAndDateAndTimeRange` check. `POST /api/schedule/trainer/me/recurring`
+  (TRAINER self-service only - see "Upgrade: trainer fixed-schedule decisions" in
+  `docs/decision-log.md`) generates weekly-repeating `WORKING` shifts from one request, same
+  `RECURRING_WEEKS_AHEAD = 8` convention and "skip one bad week, only report reasons if the whole
+  series fails" behavior as `AppointmentService#createRecurringWeekly`.
 - **Holiday** - a gym-wide non-working date; insert-only by design (no update/delete).
 - **Gym** (`model/gym/Gym.java`) - single-installation config (name, address, contact info,
   logo/brand color, timezone). A real table (not a `@ConfigurationProperties` bean), even though
@@ -206,8 +217,13 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   snapshot for a `Client` (weight, body fat %, waist/chest/hip/thigh/arm circumference, notes) as
   fixed nullable columns, not a JSON/EAV blob.
 - **ClientPersonalRecord** (`model/progress/ClientPersonalRecord.java`) - a `Client`'s best result
-  for a free-text exercise name (value + `RecordUnit` + date). `RecordUnit` is a fixed enum:
-  `KG`/`LB`/`REPS`/`SECONDS`/`MINUTES`/`METERS`/`KM`.
+  for a free-text exercise name (value + `RecordUnit` + date), and every `create()` call is a new
+  row (no unique constraint on client+exerciseName) - the full history this way already backed
+  `PersonalRecordsList.tsx`'s list view before the trainer-testing round added a chart on top of
+  it (`PersonalRecordChart`, same file) - one exercise at a time via a dropdown (defaulting to
+  whichever has the most history), since different exercises use different units/scales
+  (`RecordUnit` is a fixed enum: `KG`/`LB`/`REPS`/`SECONDS`/`MINUTES`/`METERS`/`KM`) and can't
+  share one Recharts axis the way `ProgressCharts.tsx`'s body-measurement lines can.
 
 ## Auth flow (read this before touching security-adjacent code)
 
@@ -314,7 +330,13 @@ Redis via Spring Cache, one global `RedisCacheConfiguration` (10 min TTL, JSON s
 - `CLIENT_PROGRESS_INSIGHT_CACHE` (10 min TTL) - manual `CacheManager` lookup/populate (no
   `@Cacheable` annotation, for the same self-invocation reason) in
   `ClientProgressInsightServiceImpl`; evicted explicitly whenever a `ClientProgressEntry` is
-  created/updated/deleted for that client id (personal-record writes do not evict it).
+  created/updated/deleted for that client id (personal-record writes do not evict it). The
+  cached `ClientProgressInsightDTO.narrative` string changed shape in the trainer-testing round -
+  "short intro + `- `-prefixed bullets" instead of one 3-5 sentence paragraph (see
+  `docs/decision-log.md` "Upgrade: progress-insight readability decisions") - `InsightPanel.tsx`
+  parses it by splitting on lines and pulling out any `- `-prefixed ones as bullets, everything
+  before the first bullet as the intro. Same stale-cache caveat as `MANAGER_INSIGHTS_CACHE` above
+  applies to any existing cached entries from before this change.
 
 Both AI cache regions back Claude-generated narratives (`claude-haiku-4-5`) - chosen as the
 cheapest current model since both features are single-turn, already-aggregated-data-in /
@@ -381,17 +403,24 @@ short-text-out calls, not open-ended reasoning.
   for that date only if every combo is already taken (a real capacity ceiling, e.g. Sunday has
   just one working trainer and 3 slots = 3 combos total), never by double-booking. See
   `docs/decision-log.md`'s "Upgrade: dev-seeder double-booking fix" for the before/after conflict
-  counts.
+  counts. As of the trainer-testing round, the same method additionally rolls a ~1-in-4 chance per
+  date to append one trainer-less "open slot" appointment (no trainer, no clients, `individual`
+  session type) - reusing that date's own `occupiedRoomsAtSlot` map so it can never double-book a
+  room a trainer-led appointment above already claimed at that exact slot; these back the TRAINER
+  self-assign marketplace's "Termini bez trenera" screen with real data (see "Upgrade: trainer
+  self-assign decisions").
 - **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*` or
   `db/dev-data/V1.00XX__*`) - their checksums are locked once applied. If schema changes are
   needed, add a new `V1.00XX__*.sql` file (either location - they share one version sequence).
 - Frontend (`Frontend/`): one feature module per concern under `src/features/<name>/{types,api}.ts`
   plus one page per screen; flat per-page routes in `App.tsx` (no nested layouts/routes). A small
-  `src/components/` directory (new in manager-testing round 3) holds the first genuinely
-  cross-feature UI - `MonthCalendar` (a from-scratch month-grid day picker, used by the admin
-  Termini tab and `/manager/dnevni-raspored`) and `SearchableSelect` (a from-scratch filterable
-  combobox, used by Plaćanja's client picker) - both built without adding a dependency, since none
-  existed for either need. A shared `extractErrorMessage(err, fallback)` helper (duplicated per
+  `src/components/` directory (new in manager-testing round 3, grown in the trainer-testing round)
+  holds cross-feature UI: `MonthCalendar` (a from-scratch month-grid day picker, used by the admin
+  Termini tab, `/manager/dnevni-raspored`, and - as of the trainer-testing round - both TRAINER
+  self-service pages, `TrainerSchedulePage`/`TrainerAppointmentsPage`), `SearchableSelect` (a
+  from-scratch filterable combobox, used by Plaćanja's client picker), and `DateInput` (see below)
+  - all built without adding a dependency, since none existed for any of these needs. A shared
+  `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`
   messages in the UI. A backend error message can be multi-line (`\n`-joined, e.g.
@@ -407,16 +436,20 @@ short-text-out calls, not open-ended reasoning.
   (`RequireActiveRole`). `AdminPage`'s tabs (`features/admin/`) each own one domain: `UsersTab`
   is the full cross-role account list (search/edit/delete/toggle MANAGER); `ManagersTab`/
   `TrainersTab`/`ClientsTab` each have their own create form that defaults that tab's role - there
-  is deliberately no "create an account with no role" path. Every `<input type="date">` gets
-  `lang="sr-Latn-RS"` and both `input[type='date']`/`input[type='time']` rely on the global
-  `color-scheme: dark` rule in `index.css` for a visible calendar/clock-picker icon. **The
-  `lang="sr-Latn-RS"` attribute does not actually change the empty-state segment placeholder
-  ("dd.mm.gggg"/its Chromium equivalent) in Chrome/Edge** - confirmed during "manager-testing round
-  2" live testing (see `docs/decision-log.md`): Chromium derives that placeholder's format from the
+  is deliberately no "create an account with no role" path. Every date field in the app now goes
+  through `components/DateInput.tsx` (all ~16 former ad-hoc `<input type="date" lang="sr-Latn-RS">`
+  call sites replaced in the trainer-testing round - see `docs/decision-log.md` "Upgrade: DateInput
+  decisions") instead of a bare native input, both `input[type='date']`/`input[type='time']` still
+  rely on the global `color-scheme: dark` rule in `index.css` for a visible calendar/clock-picker
+  icon. **The `lang="sr-Latn-RS"` attribute alone does not actually change the empty-state segment
+  placeholder ("dd.mm.gggg"/its Chromium equivalent) in Chrome/Edge** - confirmed during
+  "manager-testing round 2" live testing: Chromium derives that placeholder's format from the
   browser/OS UI language, not the page's `lang` attribute (Firefox does honor it, which is
-  presumably why this was believed fixed). There is no reachable CSS or `placeholder`-attribute
-  lever for it either. Left as a known, confirmed limitation rather than a "fixed" claim - see
-  Known issues below for the accepted alternative.
+  presumably why this was believed fixed), and there is no reachable CSS or `placeholder`-attribute
+  lever into it either. `DateInput` works around this with a separate overlay label ("Izaberite
+  datum") shown only while the input is empty and unfocused, rather than fighting the native
+  placeholder - see `docs/decision-log.md` for why this approach (over a CSS-only attempt) and how
+  it keeps the native picker's click-to-open behavior intact (`pointer-events-none` on the overlay).
 
 ## Known issues
 
@@ -470,16 +503,13 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   check against `remainingAppointments`.
 - No CI pipeline runs `mvn test`/`tsc -b`/`npm run build` automatically - all three must be run
   manually, and `mvn test` requires Postgres/Redis to be up first.
-- **`<input type="date">`'s native empty-state placeholder ("dd.mm.gggg"-shaped) cannot be
-  reliably localized from the page at all** - confirmed during "manager-testing round 2" (see
-  `docs/decision-log.md`): Chromium derives it from browser/OS UI language, not the `lang`
-  attribute, and there is no CSS or `placeholder`-attribute hook into it either. The accepted
-  alternative, not yet implemented: hide the native placeholder text only while unfocused-and-empty
-  (e.g. `input:not(:focus):invalid::-webkit-datetime-edit { color: transparent }`-style rule, or an
-  absolutely-positioned custom label sibling that disappears on focus/value) and show a custom
-  "dd.mm.gggg" label instead. Left unbuilt because it needs visual, in-browser confirmation to trust
-  (this session had no browser tooling available to verify it) - do not re-attempt the plain
-  `lang` fix, it is confirmed not to work in Chrome/Edge.
+- ~~`<input type="date">`'s native empty-state placeholder cannot be reliably localized~~ - fixed in
+  the trainer-testing round via `components/DateInput.tsx`'s overlay label approach (see
+  "Conventions" above and `docs/decision-log.md` "Upgrade: DateInput decisions"). Not yet visually
+  confirmed in an actual browser (no browser-automation tooling was available in that session either
+  - verification there was tsc/build passing plus reading the rendered DOM logic, not a screenshot);
+  worth a quick visual sanity check next time a browser is available, though the mechanism
+  (`pointer-events-none` overlay, hidden on value/focus) is standard and low-risk.
 - `docs/decision-log.md`'s "manager-testing round 2" also hit the `BaseEntity` id-less
   `equals()`/`hashCode()` issue above a third time, in `DevDataSeeder`'s new month-long appointment
   generator: adding several freshly-built, unsaved `ClientAppointment`s to the same `Appointment`'s

@@ -3015,3 +3015,242 @@ rather than silently patched):
   launch with `-Dmaven.test.skip=true` to get the app running at all for live verification. Worth
   noting in case a future session assumes only `mvn test` is blocked by this - `spring-boot:run`
   is too.
+
+## Upgrade: trainer-testing round decisions
+
+Manual-testing pass over the TRAINER-facing screens (Praćenje napretka, Moj raspored, Moji
+termini), plus one app-wide cleanup item (the date-input placeholder). Eight numbered items from
+the session brief (A1/A2/B1/B2/B3/C1/C2/C3) plus a global item (D). All backend changes were
+compile-verified (`mvn -o compile`, clean) and live-verified against the running dev app
+(`./mvnw spring-boot:run -Dmaven.test.skip=true` - the pre-existing `ManagerInsightsServiceImplTest`
+compile failure from prior rounds still blocks `test-compile`, unchanged by this session, so the
+same skip flag from the previous round's finding was reused); frontend changes were `tsc -b` and
+`npm run build` verified. No browser-automation tooling (Playwright etc.) was available in this
+session/environment, so the actual pixel-level rendering of the new calendar/chart/DateInput UI was
+**not** screenshotted - see the "not visually confirmed" callouts below for exactly which pieces
+that applies to.
+
+### A1 - personal-records chart
+
+`ClientPersonalRecord` already had full history (no unique constraint on client+exerciseName, a
+`recordDate` per row) and `PersonalRecordsList.tsx` already rendered it as a list - only a chart was
+missing. Different exercises use different units/scales (kg vs. seconds vs. reps vs. km), so - unlike
+`ProgressCharts.tsx`'s body-measurement lines, which are all either kg, %, or cm and can share one
+`LineChart` - personal records can't all go on one chart together without a nonsensical shared axis.
+Considered three shapes: (a) one small chart per distinct exercise name (a "small multiple" grid),
+(b) a single chart with an exercise-picker dropdown, (c) a single chart with a Y-axis-per-exercise
+toggle (multiple lines, only one visible Y-axis at a time). Went with (b), added as `PersonalRecordChart`
+inside `PersonalRecordsList.tsx` (kept in the same file rather than a new one - it's small, shares the
+`records` prop, and there's already exactly one page-level list component per progress sub-feature in
+this codebase, not a chart/list split): a dropdown defaulting to whichever exercise has the most
+recorded history (most likely to actually show a visible trend, rather than defaulting alphabetically
+or to most-recent), reusing the same Recharts `LineChart`/`CartesianGrid`/`Tooltip` styling constants
+as `ProgressCharts.tsx` (dark tooltip background, `#1e293b` grid lines) for visual consistency. Shows
+a "need at least two entries" message instead of an empty/single-point chart when the selected
+exercise has fewer than 2 records. The existing history list is untouched below it, per the brief
+("Lista istorije ostaje, grafik je dopuna").
+
+**Live verification**: `GET /api/progress/records/client/312` returns records across 3 different
+exercises/units for the seeded `citva` account (from `DevDataSeeder.seedProgressData`) - confirmed
+the underlying data exists to exercise the dropdown. The chart's actual rendering was not
+screenshotted (no browser tooling) - `tsc -b`/`npm run build` passing confirms the component compiles
+and the recharts `formatter` prop type-checks, not that it renders correctly.
+
+### A2 - readable AI progress narrative format
+
+Previous prompt asked Claude for one 3-5 sentence prose paragraph; `InsightPanel.tsx` just split on
+`\n+` into paragraphs (usually one, since the model rarely inserted its own blank lines). Considered
+two approaches per the brief: (a) a formatted string with a `- ` bullet convention, matching
+`ErrorMessage`'s existing multi-line-message convention elsewhere in this codebase (`AppointmentsTab.tsx`),
+or (b) a structured JSON response (e.g. `{intro: string, bullets: string[]}`) via a forced tool-call
+shape. Went with (a): the `ClaudeInsightService.generate()` interface returns a plain `String` and is
+shared by both the manager-insights and progress-insight features - introducing a JSON contract here
+would mean either changing that shared interface (touching the manager-insights caller too, out of
+scope) or duplicating a separate structured-call path only for this one feature. A `- `-prefixed
+bullet convention needs only a `String.split('\n')` + `startsWith('- ')` check on the frontend - not
+"fragile regex", just a fixed literal-prefix check - and reuses a pattern already proven in this
+codebase. New prompt asks for exactly: a 1-2 sentence intro, a blank line, then 2-4 `- `-prefixed
+bullets, each ≤~1 sentence, covering one concrete observation/recommendation each. `InsightPanel.tsx`'s
+`parseNarrative()` treats every line before the first bullet as intro (joined as separate `<p>`s, in
+case the model outputs more than one intro line) and renders bullets as a `<ul>`; falls back to
+intro-only rendering if the model produces no bullets at all (graceful degradation, not a thrown
+error, given the known Claude-response variance already documented in AGENTS.md's Known Issues around
+this same prompt/feature).
+
+**Live verification**: called `GET /api/progress/insight/client/312` against the live dev backend
+(real Anthropic API call, not mocked) and got back exactly the intended shape - one intro sentence
+followed by 4 `- `-prefixed bullets, each on its own line, in Serbian Latin script as required. Full
+response inspected directly in the HTTP body (not just that the call succeeded), confirming the model
+actually follows the new prompt shape in practice, not just that the prompt compiles.
+
+### B1 - recurring weekly trainer schedule
+
+Mirrored `AppointmentServiceImpl.createRecurringWeekly`'s convention exactly, including reusing the
+same `RECURRING_WEEKS_AHEAD = 8` constant value (re-declared locally in
+`TrainerScheduleServiceImpl` rather than sharing one constant across two unrelated services - these
+two classes have no existing coupling and introducing one purely to share a numeric literal wasn't
+worth it) and the same "skip one bad week via a caught `IllegalArgumentException`, only surface the
+per-date failure reasons if every single week failed" error-reporting shape. Deliberately scoped to
+TRAINER self-service only (`POST /api/schedule/trainer/me/recurring`, new method
+`createMyScheduleRecurring` on the existing `TrainerScheduleService` interface) rather than also
+adding it to the MANAGER-facing `createSchedule`/`TrainerScheduleManager.tsx` path - the session brief
+named `TrainerSchedulePage.tsx` specifically, and the manager's oversight screen was out of scope for
+this round; a manager wanting a recurring shift for a trainer can still add single shifts one at a
+time via the existing form, or this could be extended in a future round by the same pattern.
+
+**Live verification**: `POST /api/schedule/trainer/me/recurring` with `ogi`'s JWT and a
+Wednesday 09:00-12:00 request returned `201` with 5 generated `TrainerSchedule` rows (dates 8 weeks
+apart matched the request's weekday) in the HTTP response body - confirmed by inspecting the raw JSON
+(fewer than 8 because some weeks fell on dates with pre-existing conflicting schedule rows from the
+recently-reseeded dev data, exercising the "skip one bad week" path for real, not just in theory).
+
+### B2 - trainer schedule / appointment overlap visibility
+
+The brief allowed full freedom on presentation. Considered a new backend endpoint that would compute
+coverage server-side vs. a purely client-side re-derivation from data already being fetched. Went
+client-side: `TrainerSchedulePage.tsx` already fetches `getMySchedule()` (all of this trainer's
+`TrainerSchedule` rows) for the calendar's highlighted dates, and now additionally fetches the
+trainer's own assigned appointments via a new, narrowly-typed `getMyAppointmentsForScheduleCheck()`
+(hits the pre-existing `GET /api/appointment/trainer/me`, typed locally as `MyAppointmentSlimDTO` -
+id/date/startTime/endTime only, not the full shared `AppointmentDTO` - same "small duplication over
+cross-feature coupling" convention `features/admin/api.ts` already uses for `RoomDTO`). A small
+client-side helper, `isCoveredByWorkingSchedule()`, re-implements the exact same coverage predicate
+`AppointmentServiceImpl.isTrainerAvailable()` already enforces server-side (a `WORKING` row on the
+same date whose `[startTime, endTime]` fully contains the appointment's) - duplicated logic, but a
+narrow, stable rule (unlikely to change independently on either side) and avoiding it would have
+meant a new endpoint whose only job is running that same one-line predicate per appointment, which
+felt like more surface area for equivalent value. When a trainer selects a day on the new calendar
+(see B3), both "Raspored za `<date>`" (their WORKING/unavailability entries) and "Termini dodeljeni od
+menadžera za `<date>`" (their assigned appointments, each tagged "✓ pokriven rasporedom" or "⚠ nije
+pokriven trenutnim rasporedom") render side by side - so editing the schedule and noticing a
+now-uncovered appointment happens on one screen, not by cross-referencing two.
+
+The brief's "ili obrnuto" (manager's direction too) is already covered by an existing mechanism
+rather than new UI: `AppointmentsTab.tsx`'s trainer picker already only lists trainers who pass
+`getAvailableTrainersForPicker` (working-schedule coverage + not double-booked) for the entered
+date/time - a manager literally cannot select a trainer whose fixed schedule doesn't cover the slot
+being created. That check pre-dates this round (see "Upgrade: appointment picker filtering
+decisions") and already fully satisfies "manager sees the mismatch before it happens"; no changes
+were made there.
+
+**Live verification**: confirmed via `GET /api/appointment/trainer/me` and `GET
+/api/schedule/trainer/me` for `ogi` directly against the API that both datasets are real and joinable
+by `date`; the coverage badge's actual rendering (colors, exact text) was not screenshotted (no
+browser tooling) - the `isCoveredByWorkingSchedule` predicate logic was traced by hand against
+`AppointmentServiceImpl.isTrainerAvailable`'s Java to confirm it's the same rule, not independently
+re-derived.
+
+### B3 / C1 - calendar views replacing flat lists
+
+Both `TrainerSchedulePage.tsx` ("Moji uneti termini") and `TrainerAppointmentsPage.tsx` ("Budući
+dodeljeni termini" + "Istorija dodeljenih termina") moved to the existing `MonthCalendar` component,
+matching the admin Termini tab / `/manager/dnevni-raspored` pattern exactly (day-picker calendar with
+dot-highlighted dates, selecting a day filters the list below it to that date). On
+`TrainerAppointmentsPage.tsx`, this collapses what were two separate flat lists ("upcoming assigned"
+and "history") into ONE calendar - a trainer picks any date (past or future) and sees that date's
+assigned appointments, with an "Otkaži dodelu" button shown only on future ones - since a calendar
+naturally spans both directions in time, keeping two separate flat lists for that split added no
+value once a day-picker existed.
+
+"Termini bez trenera" deliberately did **not** move to a calendar (explicitly allowed by the brief to
+diverge here, with justification) - open slots a manager creates are typically scattered thinly
+across many different future dates rather than clustered, so a day-picker would mostly show a mostly-
+undotted calendar and force clicking through dates one at a time to find anything; a flat,
+chronologically-sorted list surfaces all open slots at a glance, which is the more useful view for
+"which slots can I claim" specifically.
+
+**Live verification**: `GET /api/appointment/trainer/me` and `GET /api/appointment/without-trainer`
+both confirmed returning real, non-empty data for `ogi` against the reseeded dev database (36
+trainer-less open slots existed after reseed, spread across the seeded month - visually confirming
+the "scattered" premise behind keeping that section a flat list). The calendar's actual rendering
+(dot placement, click behavior) was not screenshotted - `MonthCalendar` itself is an unmodified,
+already-shipped component from a prior round, reused here rather than rebuilt, so the risk of a
+rendering regression is lower than for genuinely new UI.
+
+### C2 - appointment creation without a trainer (marketplace re-enabled)
+
+The manager-testing round 3 restructure had made `trainerId` mandatory on
+`CreateAppointmentRequest`, which silently broke the TRAINER self-assign marketplace
+(`POST /{id}/assign`/`DELETE /{id}/unassign`, wired since Faza 7): no trainer-less appointment could
+ever be created again for a trainer to assign into. Fix was a single-line removal in
+`AppointmentServiceImpl.validateAppointment()` (the `trainerId == null` throw), confirmed safe because
+`validateTrainerWorkingSchedule`/`validateTrainerNotDoubleBooked` were already null-safe no-ops for a
+null `trainerId` (they were written that way even during round 3, evidently in anticipation of - or
+just as defensive style around - trainer possibly being absent) - no other server-side change needed.
+Room stays mandatory per the brief. `createRecurringWeekly()` needed no change at all since it calls
+`create()` per occurrence and inherits the fix automatically - confirming both single and recurring
+creation paths were covered without duplicating logic.
+
+Frontend: `AppointmentsTab.tsx`'s trainer `<select>` lost its `required` attribute and gained an
+explicit "Bez trenera (otvoreni termin)" empty-value option (rather than silently allowing an empty
+selection with no visual affordance for what that means); submit now sends `trainerId: null` instead
+of `Number('')` (which would have sent `0`/`NaN`, previously masked by the `required` attribute making
+an empty submission impossible).
+
+`DevDataSeeder` needed data to actually exercise this - see the AGENTS.md "Conventions" update for
+the mechanism (rolls a ~1-in-4 chance per date, reuses the day's own `occupiedRoomsAtSlot` map so it
+can't collide with a room a trainer-led appointment already claimed at that slot). Chose "reuse the
+existing per-date room tracking" specifically because the double-booking bug fixed in the previous
+round ("Upgrade: dev-seeder double-booking fix") was caused by exactly this kind of tracking being
+absent/incomplete - deliberately not repeating that mistake by adding a parallel, untracked room
+selection path for open slots.
+
+**Live verification**: `POST /api/appointment` with `trainerId: null` and a valid `roomId` against
+the live dev backend returned `201` with `"trainer":null` in the response body. `POST
+/api/appointment/{id}/assign` with `ogi`'s JWT against that newly-created appointment returned `200`
+with `"trainer":{"id":...,"email":"ogi"}` - the full create-then-self-assign flow exercised
+end-to-end, not just each endpoint in isolation. After `POST /api/dev/reseed`, `GET
+/api/appointment/without-trainer` returned 36 trainer-less appointments, confirming the seeder change
+also works as intended (not just the hand-crafted API call above).
+
+### C3 - room + full client list per appointment
+
+`AppointmentDTO` (backend) already included `room`; `features/appointments/types.ts` (frontend) was
+simply stale - missing the `room` field that `features/calendar/types.ts` (a different feature
+module, populated in the manager-testing round 3 calendar restructure) already had. Added the same
+`RoomSummaryDTO` shape and field there. `TrainerAppointmentsPage.tsx`'s card renderer now shows
+`Soba: <name>` and the full comma-joined client email list (previously just a `x/max` count) for
+every appointment card - both the calendar-driven "assigned to me" section and the flat "bez trenera"
+list share one `appointmentCard()` render helper, so this applies uniformly rather than needing to be
+added to two separate render paths.
+
+**Live verification**: confirmed via the same `GET /api/appointment` response inspected for C2 above
+that `room` and `clients` are both populated with real data (room name + type, multiple client
+emails) in practice, not just present as an empty/null field in the type.
+
+### D - shared DateInput component
+
+AGENTS.md's Known Issues already documented that Chromium's native `<input type="date">` empty-state
+placeholder cannot be localized via `lang` or CSS, with a specific accepted-but-unbuilt alternative
+already written down: an absolutely-positioned overlay label, hidden on focus/value, `pointer-events`
+kept passable to the native input underneath. Built exactly that as `components/DateInput.tsx` rather
+than reinventing an approach - wraps a native `type="date"` input, tracks local `focused` state via
+`onFocus`/`onBlur`, and renders a `pointer-events-none` absolutely-positioned "Izaberite datum" span
+whenever `!value && !focused`. `pointer-events-none` was the key mechanism choice over e.g. a
+higher-z-index clickable overlay that manually forwards clicks to the input - it guarantees a click
+always reaches the native element underneath with zero extra JS, so the native picker's open-on-click
+behavior needed no special-casing.
+
+Replaced all 16 real `<input type="date">` call sites app-wide (grep found 17 occurrences of
+`type="date"` across the frontend before this change; one was a comment in `index.css`, not a real
+input - the brief's "svih 15 mesta" underclaimed by one, likely counting distinct files rather than
+distinct inputs, since `TrainerSchedulePage.tsx` and `TrainerScheduleManager.tsx` each had more than
+one). Each site kept its existing `className` (passed straight through to `DateInput`'s inner
+`<input>`) so no visual sizing/spacing regression was introduced; the `lang="sr-Latn-RS"` attribute
+now lives inside `DateInput` itself rather than being repeated at every call site, so it can't drift
+out of sync again.
+
+**Not visually confirmed**: no browser-automation tooling (Playwright/Chromium) was available in this
+session's environment to actually screenshot the placeholder overlay or confirm the native picker
+still opens on click - `tsc -b`/`npm run build` passing confirms the component and every call site
+compile correctly, and the `pointer-events-none` mechanism is a standard, low-risk CSS technique, but
+per AGENTS.md's own stated standard ("if you can't test the UI, say so explicitly rather than
+claiming success") this specific piece should get a quick visual sanity check in an actual browser
+next time one is available, before being treated as fully verified.
+
+### Bugs found, not fixed (reported per session instructions)
+
+- None found beyond the pre-existing, already-documented issues re-encountered above (the
+  `ManagerInsightsServiceImplTest` compile failure blocking `spring-boot:run`/`mvn test`, and the
+  `RoomServiceImplTest` failure noted in AGENTS.md's Known Issues - neither was touched, both are
+  unrelated to this round's TRAINER-facing scope).
