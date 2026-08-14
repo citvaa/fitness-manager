@@ -445,7 +445,10 @@ short-text-out calls, not open-ended reasoning.
   always-visible history list (see `docs/decision-log.md` "Upgrade: appointment/schedule history
   visibility decisions" for that attempt) was reverted (`docs/decision-log.md` "Upgrade:
   history-section revert") once it turned out the calendar's per-day click-through was already the
-  correct, sufficient behavior. A shared
+  correct, sufficient behavior. `TrainerAppointmentsPage.tsx`'s "Termini bez trenera" section also
+  now filters to that same `selectedDate` (previously a flat, unfiltered, date-sorted list of every
+  upcoming open slot - reconsidered for page-wide consistency around one selected day, see
+  `docs/decision-log.md` "Upgrade: termini-bez-trenera calendar filtering decision"). A shared
   `extractErrorMessage(err, fallback)` helper (duplicated per
   feature; reads
   `err.response.data.message` via axios's `isAxiosError`) surfaces `GlobalExceptionHandler`

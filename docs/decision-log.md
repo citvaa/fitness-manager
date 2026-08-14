@@ -3485,3 +3485,43 @@ directly to what needed covering.
 - None. Both items in this round were explicitly pre-identified by the user (the history-section
   revert and the seeder gap); no additional pre-existing issues were newly encountered while
   implementing either.
+
+## Upgrade: termini-bez-trenera calendar filtering decision
+
+Reverses part of "Upgrade: appointment/schedule history visibility decisions" earlier in this log:
+`TrainerAppointmentsPage.tsx`'s "Termini bez trenera" section previously showed every upcoming
+open slot regardless of the calendar's `selectedDate`, on the reasoning that open slots are
+scattered thinly across many future dates and filtering by one day would mostly show nothing.
+
+Now filters to `selectedDate` exactly like the "Termini za {selectedDate}" section above it -
+`unassignedForDate` replaces `upcomingUnassigned`, and the section heading became "Termini bez
+trenera za {selectedDate} (N)" to match. The per-row date label inside `appointmentCard()` (only
+ever shown when `options.assignAction` was set, i.e. only in this section) was also removed, since
+it's now redundant - both sections on the page are scoped to one date, matching the top section's
+existing convention of not repeating the date on every row. This makes the whole page consistently
+driven by one selected calendar day, at the cost of the open-slots list sometimes showing "0" for
+the currently selected date even when open slots exist elsewhere in the month - an accepted
+trade-off per the explicit ask, since the calendar's dot indicators (from `highlightedDates`,
+still derived only from `mine`, not `unassigned`) don't currently mark which dates have open slots
+either way, so this wasn't a regression introduced by this change - a trainer already had to know
+or guess which dates to check.
+
+**Live verification**: `npx tsc -b`/`npm run build` clean. Queried
+`GET /api/appointment/without-trainer` as `ogi` to find two distinct dates with real open slots
+(2026-08-01 and 2026-08-04, one slot each, different rooms/times). Screenshotted
+`TrainerAppointmentsPage.tsx` after clicking each date on the calendar in turn: the heading and
+list both updated correctly ("Termini bez trenera za 2026-08-01 (1)" showing the Svlačionica
+16:00–17:00 slot, then "Termini bez trenera za 2026-08-04 (1)" showing a different Recepcija
+08:00–09:00 slot after switching dates) - confirming the section now tracks `selectedDate` the
+same way the "Termini za {selectedDate}" section already did.
+
+### Note for a future round (not a bug, not fixed here - out of the explicit ask)
+
+The calendar's dot indicators only mark dates with `mine` (assigned-to-me) appointments, not dates
+with open (`unassigned`) slots. Now that "Termini bez trenera" is date-filtered too, a trainer
+browsing the calendar has no visual cue for which dates actually have an open slot to look at -
+they'd need to click through dates to find one, similar in spirit to the history-section problem
+from the previous round, but for the opposite direction (discovering days with data, not seeing
+past data). Not fixed here since it wasn't part of the explicit ask and doesn't regress anything
+this round changed; worth considering a second, differently-styled dot (or a combined indicator)
+for open-slot dates in a future round if this becomes a real pain point.

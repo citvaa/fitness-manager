@@ -45,11 +45,16 @@ function clientList(a: AppointmentDTO) {
  * Restructured (see AGENTS.md "Upgrade: trainer self-assign decisions"): "assigned to me" (both
  * upcoming and history) is now ONE calendar day-picker (MonthCalendar, same component as the
  * admin Termini tab) instead of two separate flat lists - a trainer picks a day and sees exactly
- * that day's appointments, upcoming or past. "Termini bez trenera" deliberately stays a flat,
- * date-sorted list rather than a calendar: those slots are typically scattered thinly across many
- * different future dates (any day a manager opened a slot for), so a day-picker would mostly show
- * empty calendars and force clicking through dates one at a time to find anything - a sorted list
- * surfaces all of them at a glance instead.
+ * that day's appointments, upcoming or past.
+ *
+ * "Termini bez trenera" originally stayed a flat, date-sorted list of every upcoming open slot
+ * rather than being filtered by the calendar, on the reasoning that open slots are scattered
+ * thinly across many different future dates and a day-picker would mostly show empty days. That
+ * was reconsidered (see AGENTS.md "Upgrade: termini-bez-trenera calendar filtering decision"): the
+ * page reads more consistently with ONE selected day driving both sections, and the calendar's dot
+ * indicators already tell a trainer which days have anything to look at (for the "assigned to me"
+ * section) - "Termini bez trenera" now filters to `selectedDate` exactly like "Termini za
+ * {selectedDate}" above it, using the same calendar and the same selected day.
  */
 export function TrainerAppointmentsPage() {
   const [mine, setMine] = useState<AppointmentDTO[]>([])
@@ -103,16 +108,16 @@ export function TrainerAppointmentsPage() {
     }
   }
 
-  const upcomingUnassigned = useMemo(
-    () => unassigned.filter(isUpcoming).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)),
-    [unassigned],
-  )
-
   const highlightedDates = useMemo(() => new Set(mine.map((a) => a.date)), [mine])
 
   const visibleForDate = useMemo(
     () => mine.filter((a) => a.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [mine, selectedDate],
+  )
+
+  const unassignedForDate = useMemo(
+    () => unassigned.filter((a) => a.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [unassigned, selectedDate],
   )
 
   function appointmentCard(a: AppointmentDTO, options?: { assignAction?: boolean }) {
@@ -126,10 +131,7 @@ export function TrainerAppointmentsPage() {
             {SESSION_TYPE_LABEL[a.session.type] ?? a.session.type} · {a.clients.length}/{a.session.maxParticipants}
           </span>
         </div>
-        <div className="mt-1 text-xs text-slate-400">
-          {options?.assignAction && <>{a.date} · </>}
-          Soba: {a.room?.name ?? 'bez sobe'}
-        </div>
+        <div className="mt-1 text-xs text-slate-400">Soba: {a.room?.name ?? 'bez sobe'}</div>
         <div className="mt-1 text-xs text-slate-400">Klijenti: {clientList(a)}</div>
         <div className="mt-2">
           {options?.assignAction ? (
@@ -185,14 +187,16 @@ export function TrainerAppointmentsPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-slate-300">Termini bez trenera</h3>
+        <h3 className="mb-3 text-sm font-semibold text-slate-300">
+          Termini bez trenera za {selectedDate} ({unassignedForDate.length})
+        </h3>
         {loading ? (
           <p className="text-sm text-slate-500">Učitavanje...</p>
-        ) : upcomingUnassigned.length === 0 ? (
-          <p className="text-sm text-slate-500">Trenutno nema slobodnih termina bez trenera.</p>
+        ) : unassignedForDate.length === 0 ? (
+          <p className="text-sm text-slate-500">Nema slobodnih termina bez trenera za ovaj dan.</p>
         ) : (
           <ul className="max-h-[28rem] space-y-2 overflow-y-auto">
-            {upcomingUnassigned.map((a) => appointmentCard(a, { assignAction: true }))}
+            {unassignedForDate.map((a) => appointmentCard(a, { assignAction: true }))}
           </ul>
         )}
       </div>
