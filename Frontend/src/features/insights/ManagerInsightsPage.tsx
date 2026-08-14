@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getManagerInsights, refreshManagerInsights } from './api'
 import type { ManagerInsightsDTO } from './types'
+import { RatingBadge, RoomOccupancyChart, SessionTypeChart, StatTile } from './InsightCharts'
 
 function formatGeneratedAt(iso: string) {
   return new Date(iso).toLocaleString('sr-RS', {
@@ -10,6 +11,24 @@ function formatGeneratedAt(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+      <h2 className="text-sm font-semibold text-slate-200">{title}</h2>
+      {subtitle && <p className="mb-3 text-xs text-slate-500">{subtitle}</p>}
+      <div className={subtitle ? '' : 'mt-3'}>{children}</div>
+    </div>
+  )
 }
 
 export function ManagerInsightsPage() {
@@ -50,29 +69,9 @@ export function ManagerInsightsPage() {
     return <div className="p-8 text-slate-400">Učitavanje...</div>
   }
 
-  // The backend prompt (see AGENTS.md "Upgrade: manager-testing fixes") asks Claude for a short
-  // summary paragraph followed by "- "-prefixed recommendation lines - rendered here as an
-  // actual <ul>/<li> list instead of dumping everything into one dense text blob. Consecutive
-  // bullet lines are grouped into a single list; everything else becomes its own paragraph.
-  const lines = insights?.insightText.split(/\n+/).filter((line) => line.trim().length > 0) ?? []
-  const blocks: { type: 'paragraph' | 'list'; items: string[] }[] = []
-  for (const line of lines) {
-    const bulletMatch = /^[-•]\s*(.+)/.exec(line.trim())
-    if (bulletMatch) {
-      const last = blocks[blocks.length - 1]
-      if (last?.type === 'list') {
-        last.items.push(bulletMatch[1])
-      } else {
-        blocks.push({ type: 'list', items: [bulletMatch[1]] })
-      }
-    } else {
-      blocks.push({ type: 'paragraph', items: [line.trim()] })
-    }
-  }
-
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="mx-auto max-w-5xl p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-100">AI uvid za menadžera</h1>
           <p className="text-sm text-slate-500">
@@ -96,27 +95,87 @@ export function ManagerInsightsPage() {
       )}
 
       {insights && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-          <div className="space-y-3 text-sm leading-relaxed text-slate-200">
-            {blocks.length > 0 ? (
-              blocks.map((block, i) =>
-                block.type === 'list' ? (
-                  <ul key={i} className="list-disc space-y-1.5 pl-5">
-                    {block.items.map((item, j) => (
-                      <li key={j}>{item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p key={i}>{block.items[0]}</p>
-                ),
-              )
-            ) : (
-              <p className="text-slate-500">Nema dostupnog teksta.</p>
+        <div className="space-y-4">
+          <SectionCard title="Rezime">
+            <p className="text-sm leading-relaxed text-slate-200">
+              {insights.summary || 'Nema dostupnog rezimea.'}
+            </p>
+            {insights.recommendations.length > 0 && (
+              <ul className="mt-4 space-y-1.5 border-t border-slate-800 pt-4 text-sm text-slate-300">
+                {insights.recommendations.map((rec, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-brand-400">→</span>
+                    <span>{rec}</span>
+                  </li>
+                ))}
+              </ul>
             )}
+          </SectionCard>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatTile label="Različiti klijenti" value={insights.attendance.distinctClients} />
+            <StatTile label="Ukupno check-in-a" value={insights.attendance.totalCheckIns} />
+            <StatTile
+              label="Prosečno trajanje"
+              value={insights.attendance.avgCheckInDurationMinutes}
+              suffix="min"
+            />
           </div>
-          <div className="mt-6 border-t border-slate-800 pt-3 text-xs text-slate-500">
+
+          <SectionCard title="Posećenost — AI ocena" subtitle="Ocena ukupne posećenosti teretane u periodu.">
+            <div className="flex items-start gap-3">
+              <RatingBadge rating={insights.attendance.rating} />
+              <p className="text-sm text-slate-300">{insights.attendance.comment}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Popunjenost po sali"
+            subtitle="Broj check-in-a po sali u periodu, obojeno prema AI oceni te sale."
+          >
+            {insights.roomOccupancy.length > 0 ? (
+              <>
+                <RoomOccupancyChart rooms={insights.roomOccupancy} />
+                <ul className="mt-4 space-y-2 border-t border-slate-800 pt-4">
+                  {insights.roomOccupancy.map((room) => (
+                    <li key={room.roomName} className="flex items-start gap-2 text-sm">
+                      <RatingBadge rating={room.rating} />
+                      <span className="font-medium text-slate-200">{room.roomName}:</span>
+                      <span className="text-slate-400">{room.comment}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Nema sala.</p>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Individualne vs. grupne sesije"
+            subtitle="Udeo plaćenih termina po tipu sesije, obojeno prema AI oceni tog odnosa."
+          >
+            {insights.sessionTypeBreakdown.length > 0 ? (
+              <>
+                <SessionTypeChart sessions={insights.sessionTypeBreakdown} />
+                <ul className="mt-4 space-y-2 border-t border-slate-800 pt-4">
+                  {insights.sessionTypeBreakdown.map((s) => (
+                    <li key={s.sessionType} className="flex items-start gap-2 text-sm">
+                      <RatingBadge rating={s.rating} />
+                      <span className="font-medium text-slate-200">{s.sessionType}:</span>
+                      <span className="text-slate-400">{s.comment}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Nema plaćenih termina u periodu.</p>
+            )}
+          </SectionCard>
+
+          <p className="text-right text-xs text-slate-600">
             Generisano: {formatGeneratedAt(insights.generatedAt)}
-          </div>
+          </p>
         </div>
       )}
     </div>
