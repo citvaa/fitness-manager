@@ -12,6 +12,10 @@ import com.example.demo.model.user.ClientSessionTracking;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.SessionRepository;
+import com.example.demo.repository.HolidayRepository;
+import com.example.demo.model.schedule.TrainerSchedule;
+import com.example.demo.enums.WorkStatus;
+import com.example.demo.model.user.User;
 import com.example.demo.repository.schedule.GymScheduleRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.repository.user.ClientAppointmentRepository;
@@ -52,6 +56,7 @@ class AppointmentMarketplaceServiceTest {
     @Mock RoomRepository rooms;
     @Mock GymScheduleRepository gymSchedules;
     @Mock TrainerScheduleRepository trainerSchedules;
+    @Mock HolidayRepository holidays;
     @Mock ClientSessionTrackingRepository trackings;
     @Mock NotificationService notifications;
     @Mock ClientAppointmentRepository clientAppointments;
@@ -60,7 +65,7 @@ class AppointmentMarketplaceServiceTest {
     @BeforeEach
     void setUp() {
         service = new AppointmentServiceImpl(sessions, trainers, clients, appointments, mapper, sessionMapper, rooms, gymSchedules,
-                trainerSchedules, trackings, notifications, clientAppointments);
+                trainerSchedules, holidays, trackings, notifications, clientAppointments);
         lenient().when(appointments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(mapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
     }
@@ -111,9 +116,13 @@ class AppointmentMarketplaceServiceTest {
     @Test
     void trainerCanAssignAndUnassignOnlyOwnFutureMarketplaceSlot() {
         authenticate("trainer@example.com", "TRAINER");
-        Trainer trainer = Trainer.builder().id(7).build();
+        Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trainer@example.com").build()).build();
         Appointment appointment = futureAppointment(13, session(2, 3), null);
         when(trainers.findByUserEmail("trainer@example.com")).thenReturn(Optional.of(trainer));
+        when(trainers.findById(7)).thenReturn(Optional.of(trainer));
+        TrainerSchedule shift = TrainerSchedule.builder().startTime(LocalTime.of(8,0)).endTime(LocalTime.of(16,0)).status(WorkStatus.WORKING).build();
+        when(trainerSchedules.findByTrainerIdAndDate(eq(7), any())).thenReturn(List.of(shift));
+        when(appointments.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(eq(7), any(), any(), any())).thenReturn(Optional.empty());
         when(appointments.findById(13)).thenReturn(Optional.of(appointment));
 
         service.assign(13);

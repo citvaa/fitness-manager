@@ -58,6 +58,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final RoomRepository roomRepository;
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
+    private final HolidayRepository holidayRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final NotificationService notificationService;
     private final ClientAppointmentRepository clientAppointmentRepository;
@@ -102,6 +103,8 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Trainer trainer = trainerRepository.findById(trainerId)
                 .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+
+        validateTrainerAvailability(trainerId, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime(), appointmentId);
 
         appointment.setTrainer(trainer);
 
@@ -230,6 +233,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (trainerAppointment.getSecond().getTrainer() != null) {
             throw new IllegalStateException("Appointment already has an assigned trainer!");
         }
+        validateTrainerAvailability(trainerAppointment.getFirst().getId(), trainerAppointment.getSecond().getDate(),
+                trainerAppointment.getSecond().getStartTime(), trainerAppointment.getSecond().getEndTime(), appointmentId);
         trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
@@ -296,7 +301,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     private void validateAppointment(@NotNull CreateAppointmentRequest request) {
         validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
         validateGymSchedule(request.getDate(), request.getStartTime(), request.getEndTime());
-        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        if (holidayRepository.existsByDate(request.getDate())) {
+            throw new IllegalArgumentException("Gym is closed for a holiday on " + request.getDate() + ".");
+        }
+        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime(), null);
+        validateRoomAvailability(request.getRoomId(), request.getDate(), request.getStartTime(), request.getEndTime(), null);
         validateClientAvailability(request.getClientIds(), request.getDate(), request.getStartTime(), request.getEndTime());
     }
 
@@ -319,10 +328,23 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime) {
-        if (id != null && !isTrainerAvailable(id, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trainer with ID " + id + " is already occupied in this time slot!");
+    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime, Integer ignoredAppointmentId) {
+        if (id == null) return;
+        Trainer trainer = trainerRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+        if (!isTrainerAvailable(id, date, startTime, endTime)) {
+            throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " has no working shift covering " + date + " " + startTime + "-" + endTime + ".");
         }
+        appointmentRepository.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(id, date, endTime, startTime)
+                .filter(conflict -> ignoredAppointmentId == null || !conflict.getId().equals(ignoredAppointmentId))
+                .ifPresent(conflict -> { throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " is already booked on " + date + " " + conflict.getStartTime() + "-" + conflict.getEndTime() + "."); });
+    }
+
+    private void validateRoomAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime, Integer ignoredAppointmentId) {
+        if (id == null) return;
+        Room room = roomRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Room not found"));
+        appointmentRepository.findFirstByRoomIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(id, date, endTime, startTime)
+                .filter(conflict -> ignoredAppointmentId == null || !conflict.getId().equals(ignoredAppointmentId))
+                .ifPresent(conflict -> { throw new IllegalArgumentException("Room " + room.getName() + " is already booked on " + date + " " + conflict.getStartTime() + "-" + conflict.getEndTime() + "."); });
     }
 
     private void validateClientAvailability(Set<Integer> ids, LocalDate date, LocalTime startTime, LocalTime endTime) {

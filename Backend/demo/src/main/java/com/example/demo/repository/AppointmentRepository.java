@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AppointmentRepository extends JpaRepository<Appointment, Integer> {
@@ -35,4 +36,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
     boolean existsByTrainerIdAndClientAppointmentsClientId(Integer trainerId, Integer clientId);
 
     List<Appointment> findDistinctByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(Integer clientId);
+
+    Optional<Appointment> findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(
+            Integer trainerId, LocalDate date, LocalTime endTime, LocalTime startTime);
+
+    Optional<Appointment> findFirstByRoomIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(
+            Integer roomId, LocalDate date, LocalTime endTime, LocalTime startTime);
 }

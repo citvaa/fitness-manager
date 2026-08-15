@@ -1176,6 +1176,7 @@ button {
   font-size: 11px;
 }
 .content-error {
+  white-space: pre-wrap;
   display: flex;
   justify-content: space-between;
   gap: 20px;

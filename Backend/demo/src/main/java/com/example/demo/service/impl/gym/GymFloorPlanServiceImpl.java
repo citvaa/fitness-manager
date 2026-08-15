@@ -92,6 +92,12 @@ public class GymFloorPlanServiceImpl implements GymFloorPlanService {
     private void validate(UpsertRoomRequest request) {
         if (request.getName() == null || request.getName().isBlank() || request.getType() == null) throw new ApiException(HttpStatus.BAD_REQUEST, "Room name and type are required");
         if (request.getCapacity() == null || request.getCapacity() <= 0 || request.getWidth() == null || request.getWidth() <= 0 || request.getHeight() == null || request.getHeight() <= 0 || request.getPosX() == null || request.getPosY() == null) throw new ApiException(HttpStatus.BAD_REQUEST, "capacity, position and positive dimensions are required");
+        double minimumWidth = Math.max(100d, request.getName().trim().length() * 10d + 32d);
+        double minimumHeight = 80d;
+        if (request.getWidth() < minimumWidth || request.getHeight() < minimumHeight) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Room " + request.getName().trim() + " must be at least "
+                    + Math.ceil(minimumWidth) + " x " + Math.ceil(minimumHeight) + " to fit its live-plan content");
+        }
     }
 
     private void apply(Room room, UpsertRoomRequest request) {
