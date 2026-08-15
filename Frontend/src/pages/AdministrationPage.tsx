@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { clientsApi, trainersApi, usersApi } from "../api/administration";
 import { API_URL, errorMessage } from "../api/client";
+import { useConfirm } from "../components/ConfirmDialog";
 import type {
   ClientProfile,
   EmploymentStatus,
@@ -16,6 +17,7 @@ const roleLabel: Record<Role, string> = {
   ADMIN: "Administrator",
 };
 export function AdministrationPage() {
+  const { requestConfirmation, confirmationDialog } = useConfirm();
   const [tab, setTab] = useState<"users" | "trainers" | "clients">("users");
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
@@ -85,7 +87,7 @@ export function AdministrationPage() {
     }
   }
   async function remove(id: number) {
-    if (!confirm("Obrisati izabrani zapis?")) return;
+    if (!await requestConfirmation({ title: "Brisanje zapisa", message: "Obrisati izabrani zapis?", confirmLabel: "Obriši" })) return;
     try {
       tab === "users"
         ? await usersApi.remove(id)
@@ -112,6 +114,7 @@ export function AdministrationPage() {
   }
   return (
     <main className="workspace-page admin-page">
+      {confirmationDialog}
       <header className="workspace-header">
         <div>
           <p className="eyebrow">Manager / administracija</p>

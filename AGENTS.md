@@ -130,6 +130,9 @@ Every entity is also `@Audited` (Hibernate Envers).
 - The personal-record chart's exercise selector uses the shared light form
   language (label typography, padded bordered control, rounded background and
   green focus state), scoped through `personal-record-chart`/`record-chart-filter`.
+- Destructive frontend actions use the shared promise-based `useConfirm` dialog
+  and the existing in-app overlay/card visual language; browser-native
+  `confirm()` is not part of the UI contract.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - **Appointment** optionally belongs to Room and has no persisted status or

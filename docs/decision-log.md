@@ -743,3 +743,13 @@ real inbox; template rendering is independently covered. Captured UI states are
   classes and computed green primary treatment; the user independently completed
   the live “Započni trening” check-in/check-out flow and confirmed layout,
   disabled/busy behavior and both actions work correctly.
+
+## 2026-08-15 - Part 1 shared confirmation dialog
+
+- Administration record, room, progress-measurement, and personal-record deletion
+  now share one promise-based `useConfirm` component. The dialog accepts its title,
+  message, and action labels while reusing the established schedule-overwrite
+  backdrop/card/button treatment.
+- The four browser-native `confirm()` calls were removed. Backdrop cancellation,
+  explicit cancellation, focus on the confirm action, and alert-dialog semantics
+  are centralized so future destructive actions do not invent another pattern.

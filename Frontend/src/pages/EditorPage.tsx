@@ -3,6 +3,7 @@ import { Layer, Line, Stage, Text } from 'react-konva'
 import { gymApi } from '../api/gym'
 import { errorMessage } from '../api/client'
 import { RoomShape } from '../components/RoomShape'
+import { useConfirm } from '../components/ConfirmDialog'
 import type { Gym, Room, RoomDraft, RoomType } from '../types'
 
 const WIDTH=1000, HEIGHT=620
@@ -11,6 +12,7 @@ const emptyRoom:RoomDraft={name:'Nova sala',type:'FUNCTIONAL',capacity:10,posX:8
 const emptyGym: Omit<Gym, 'id'>={name:'Moja teretana',address:'',phone:'',email:'',logoUrl:null,brandColor:'#BAF252',timezone:'Europe/Belgrade'}
 
 export function EditorPage(){
+ const {requestConfirmation,confirmationDialog}=useConfirm()
  const wrap=useRef<HTMLDivElement>(null); const [scale,setScale]=useState(1); const [gym,setGym]=useState<Gym|null>(null); const [rooms,setRooms]=useState<Room[]>([]); const [selected,setSelected]=useState<number|null>(null); const [draft,setDraft]=useState<RoomDraft|null>(null); const [gymDraft,setGymDraft]=useState(emptyGym); const [showGym,setShowGym]=useState(false); const [busy,setBusy]=useState(true); const [notice,setNotice]=useState(''); const [error,setError]=useState('')
  useEffect(()=>{const ro=new ResizeObserver(([e])=>setScale(Math.min(1,e.contentRect.width/WIDTH))); if(wrap.current)ro.observe(wrap.current);return()=>ro.disconnect()},[])
  useEffect(()=>{void load()},[])
@@ -18,9 +20,9 @@ export function EditorPage(){
  async function saveGym(e:FormEvent){e.preventDefault();setError('');try{const result=gym?await gymApi.updateGym(gym.id,gymDraft):await gymApi.createGym(gymDraft);setGym(result);setShowGym(false);setNotice('Podešavanja teretane su sačuvana.')}catch(err){setError(errorMessage(err))}}
  async function saveRoom(e:FormEvent){e.preventDefault();if(!draft)return;setError('');try{const existing=selected?rooms.find(r=>r.id===selected):null;const result=existing?await gymApi.updateRoom(existing.id,draft):await gymApi.createRoom(draft);setRooms(rs=>existing?rs.map(r=>r.id===result.id?result:r):[...rs,result]);setSelected(result.id);setDraft(null);setNotice(existing?'Sala je ažurirana.':'Sala je dodata na plan.')}catch(err){setError(errorMessage(err))}}
  async function changeRoom(next:Room,persist:boolean){setRooms(rs=>rs.map(r=>r.id===next.id?next:r));if(persist){try{const {id:_,gym:__,...body}=next;const saved=await gymApi.updateRoom(next.id,body);setRooms(rs=>rs.map(r=>r.id===saved.id?saved:r));setNotice('Pozicija je sačuvana.')}catch(err){setError(errorMessage(err));void load()}}}
- async function removeRoom(){if(!selected||!confirm('Obrisati izabranu salu?'))return;try{await gymApi.deleteRoom(selected);setRooms(rs=>rs.filter(r=>r.id!==selected));setSelected(null);setDraft(null);setNotice('Sala je obrisana.')}catch(err){setError(errorMessage(err))}}
+ async function removeRoom(){if(!selected||!await requestConfirmation({title:'Brisanje sale',message:'Obrisati izabranu salu?',confirmLabel:'Obriši salu'}))return;try{await gymApi.deleteRoom(selected);setRooms(rs=>rs.filter(r=>r.id!==selected));setSelected(null);setDraft(null);setNotice('Sala je obrisana.')}catch(err){setError(errorMessage(err))}}
  const editSelected=()=>{const r=rooms.find(x=>x.id===selected);if(r){const{id:_,gym:__,...body}=r;setDraft(body)}}
- return <main className="workspace-page">
+ return <main className="workspace-page">{confirmationDialog}
   <header className="workspace-header"><div><p className="eyebrow">Floor plan studio</p><h1>Editor sala</h1><p>Prevucite, rotirajte i prilagodite prostor — svaka izmena se čuva u planu.</p></div><div className="header-actions"><button className="secondary-button" onClick={()=>setShowGym(true)}>⚙ Podešavanja</button><button className="primary-button compact" disabled={!gym} onClick={()=>{setSelected(null);setDraft({...emptyRoom,posX:80+rooms.length*25,posY:80+rooms.length*20})}}>＋ Dodaj salu</button></div></header>
   {error&&<div className="page-alert error" role="alert">{error}</div>}{notice&&<div className="page-alert" onAnimationEnd={()=>setNotice('')}>✓ {notice}</div>}
   <section className="editor-layout">
