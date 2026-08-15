@@ -1,6 +1,7 @@
 package com.example.demo.service.impl.notification.email;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.PaymentDTO;
 import com.example.demo.dto.summary.ClientSummaryDTO;
 import com.example.demo.service.notification.email.AsyncEmailService;
 import com.example.demo.service.notification.email.EmailService;
@@ -74,6 +75,12 @@ public class EmailServiceImpl implements EmailService {
     public void sendClientUpcomingAppointmentEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
         asyncEmailService.sendEmail(clientEmail, "Upcoming training session",
                 "Your training session starts on " + appointment.getDate() + " at " + appointment.getStartTime() + ".");
+    }
+
+    public void sendPaymentConfirmationEmail(String clientEmail, @NotNull PaymentDTO payment) {
+        String unit = payment.getPaidAppointments() == 1 ? " termin" : " termina";
+        asyncEmailService.sendEmail(clientEmail, "Potvrda uplate",
+                "Evidentirana je uplata za " + payment.getPaidAppointments() + unit + " (" + payment.getSession().getType() + ").");
     }
 
 

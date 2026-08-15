@@ -127,7 +127,7 @@ class AppointmentMarketplaceServiceTest {
     @Test
     void clientCanReserveFutureAppointmentAndCreditsAreAdjusted() {
         authenticate("client@example.com", "CLIENT");
-        Client client = Client.builder().id(5).build();
+        Client client = Client.builder().id(5).user(User.builder().email("client@example.com").build()).build();
         Session session = session(2, 3);
         Appointment appointment = futureAppointment(11, session, null);
         ClientSessionTracking tracking = ClientSessionTracking.builder().client(client).session(session)
@@ -142,6 +142,7 @@ class AppointmentMarketplaceServiceTest {
         assertEquals(3, tracking.getRemainingAppointments());
         assertEquals(2, tracking.getReservedAppointments());
         verify(appointments).save(appointment);
+        verify(notifications).sendManagerAlert(contains("client@example.com"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.example.demo.service.notification.email;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.PaymentDTO;
 import com.example.demo.service.params.request.email.ActivationEmailData;
 import com.example.demo.service.params.request.email.ForgetPasswordEmailData;
 import org.jetbrains.annotations.NotNull;
@@ -20,4 +21,6 @@ public interface EmailService {
     void sendTrainerAssignmentEmail(String trainerEmail, @NotNull AppointmentDTO appointment);
 
     void sendClientUpcomingAppointmentEmail(String clientEmail, @NotNull AppointmentDTO appointment);
+
+    void sendPaymentConfirmationEmail(String clientEmail, @NotNull PaymentDTO payment);
 }

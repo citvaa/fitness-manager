@@ -12,6 +12,7 @@ import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.repository.user.UserRepository;
 import com.example.demo.repository.user.UserRoleRepository;
 import com.example.demo.service.notification.email.EmailService;
+import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.email.ActivationEmailData;
 import com.example.demo.service.params.request.email.ForgetPasswordEmailData;
 import com.example.demo.repository.*;
@@ -60,6 +61,7 @@ public class UserServiceImpl implements UserService {
     private final ClientRepository clientRepository;
     private final PaymentRepository paymentRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
@@ -146,6 +148,7 @@ public class UserServiceImpl implements UserService {
                     user.setRegistrationKeyValidity(null);
                     user.setIsActivated(true);
                     userRepository.save(user);
+                    notificationService.sendManagerAlert("Novi korisnik se registrovao: " + user.getEmail());
                 });
     }
 

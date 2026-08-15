@@ -936,3 +936,16 @@ real inbox; template rendering is independently covered. Captured UI states are
   read returned the same timestamp with all nine metrics. The live model call
   produced fallback ratings, confirming that unavailable/malformed AI output
   does not take the page down.
+
+## 2026-08-15 - Part 16 notification completeness
+
+- Managers now subscribe to `/topic/manager`. Client self-reservation, trainer
+  self-assignment, and completed registration publish concise operational alerts
+  without preference filtering.
+- Recording a payment sends the affected client a confirmation through PUSH,
+  email, or both according to the existing preference. The previously missing
+  notification call on manual trainer assignment was also connected.
+- Live STOMP QA succeeded for all roles: a client reserve/cancel produced the
+  manager alert; appointment 105 assignment/revert produced the trainer alert;
+  and a one-unit payment produced the client confirmation. The QA reservation,
+  assignment, payment row, and tracking increment were all reverted afterwards.

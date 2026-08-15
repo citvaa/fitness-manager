@@ -15,6 +15,8 @@ import com.example.demo.repository.SessionRepository;
 import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.service.security.AuthenticatedUserService;
+import com.example.demo.service.notification.NotificationService;
+import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,9 +41,10 @@ class PaymentServiceImplTest {
     @Mock AuthenticatedUserService authenticatedUser;
     @Mock AppointmentRepository appointments;
     @Mock GymRepository gyms;
+    @Mock NotificationService notifications;
     PaymentServiceImpl service;
 
-    @BeforeEach void setUp() { service = new PaymentServiceImpl(mapper, payments, clients, sessions, tracking, authenticatedUser, appointments, gyms); }
+    @BeforeEach void setUp() { service = new PaymentServiceImpl(mapper, payments, clients, sessions, tracking, authenticatedUser, appointments, gyms, notifications); }
 
     @Test
     void managerHistoryUsesGlobalOrClientScopedQueries() {
@@ -64,6 +67,22 @@ class PaymentServiceImplTest {
         assertEquals(List.of(), service.getOwn());
         verify(payments).findByClientIdOrderByPaymentDateDescIdDesc(9);
         verify(payments, never()).findAllByOrderByPaymentDateDescIdDesc();
+    }
+
+    @Test
+    void paymentCreationNotifiesClient() {
+        Client client = Client.builder().id(9).build();
+        Session session = new Session(); session.setId(2);
+        PaymentDTO dto = new PaymentDTO(); dto.setPaidAppointments(4);
+        when(clients.findById(9)).thenReturn(Optional.of(client));
+        when(sessions.findById(2)).thenReturn(Optional.of(session));
+        when(tracking.findByClientAndSession(client, session)).thenReturn(Optional.empty());
+        when(payments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.toDto(any(Payment.class))).thenReturn(dto);
+
+        assertEquals(dto, service.create(new CreatePaymentRequest(9, 2, 4, LocalDate.now())));
+
+        verify(notifications).sendPaymentConfirmationNotification(client, dto);
     }
 
     @Test

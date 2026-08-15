@@ -132,7 +132,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         appointment.setTrainer(trainer);
 
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        AppointmentDTO assigned = appointmentMapper.toDto(appointmentRepository.save(appointment));
+        notificationService.sendTrainerAssignmentNotification(trainerId, assigned);
+        return assigned;
     }
 
     @Transactional
@@ -209,7 +211,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         ClientAppointment clientAppointment = createClientAppointment(client, appointment);
         appointment.getClientAppointments().add(clientAppointment);
 
-        return appointmentMapper.toDto(appointmentRepository.save(appointment));
+        AppointmentDTO reserved = appointmentMapper.toDto(appointmentRepository.save(appointment));
+        notificationService.sendManagerAlert("Klijent " + client.getUser().getEmail() + " je rezervisao termin " + appointment.getDate() + " u " + appointment.getStartTime() + ".");
+        return reserved;
     }
 
     @Transactional
@@ -260,7 +264,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         validateTrainerAvailability(trainerAppointment.getFirst().getId(), trainerAppointment.getSecond().getDate(),
                 trainerAppointment.getSecond().getStartTime(), trainerAppointment.getSecond().getEndTime(), appointmentId, true);
         trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
-        return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+        AppointmentDTO assigned = appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
+        notificationService.sendManagerAlert("Trener " + trainerAppointment.getFirst().getUser().getEmail() + " je preuzeo otvoreni termin " + trainerAppointment.getSecond().getDate() + " u " + trainerAppointment.getSecond().getStartTime() + ".");
+        return assigned;
     }
 
     @Transactional

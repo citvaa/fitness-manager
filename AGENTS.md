@@ -207,6 +207,10 @@ Every entity is also `@Audited` (Hibernate Envers).
   card panel so expanding history does not displace the bottom profile controls.
   The preference select owns its visual contract through
   `.notification-preference`, rather than relying on the broad `.sidebar select` rule.
+- Managers subscribe to `/topic/manager` and receive live operational broadcasts
+  for client self-reservations, trainer self-assignment, and completed user
+  registration. Payment creation sends the client a preference-aware PUSH/email
+  confirmation; manual add-trainer also emits the trainer assignment notification.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
   digests at 20:00, and an hourly sweep for appointments starting within the
   next hour. The latter accepts `app.notifications.upcoming-cron` for isolated

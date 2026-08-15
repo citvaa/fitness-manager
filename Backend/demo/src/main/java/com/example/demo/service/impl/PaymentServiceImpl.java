@@ -15,6 +15,7 @@ import com.example.demo.repository.gym.GymRepository;
 import com.example.demo.enums.SessionType;
 import com.example.demo.service.PaymentService;
 import com.example.demo.service.security.AuthenticatedUserService;
+import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
 import com.example.demo.service.params.response.payment.PaymentStatusResponse;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final AuthenticatedUserService authenticatedUserService;
     private final AppointmentRepository appointmentRepository;
     private final GymRepository gymRepository;
+    private final NotificationService notificationService;
 
     public java.util.List<PaymentDTO> getAll(Integer clientId) {
         java.util.List<Payment> payments = clientId == null
@@ -70,7 +72,9 @@ public class PaymentServiceImpl implements PaymentService {
         updateClientSessionTracking(tracking, request.getPaidAppointments());
 
         Payment payment = createPayment(client, session, request);
-        return paymentMapper.toDto(paymentRepository.save(payment));
+        PaymentDTO paymentDTO = paymentMapper.toDto(paymentRepository.save(payment));
+        notificationService.sendPaymentConfirmationNotification(client, paymentDTO);
+        return paymentDTO;
     }
 
 

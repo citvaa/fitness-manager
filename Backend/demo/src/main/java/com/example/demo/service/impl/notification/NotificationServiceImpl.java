@@ -1,6 +1,8 @@
 package com.example.demo.service.impl.notification;
 
 import com.example.demo.dto.AppointmentDTO;
+import com.example.demo.dto.PaymentDTO;
+import com.example.demo.dto.notification.SimpleNotificationDTO;
 import com.example.demo.dto.notification.TrainerAssignmentNotificationDTO;
 import com.example.demo.dto.notification.ClientAppointmentReminderNotificationDTO;
 import com.example.demo.dto.notification.TrainerScheduleNotificationDTO;
@@ -88,6 +90,21 @@ public class NotificationServiceImpl implements NotificationService {
             case BOTH -> { emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment); messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload); }
             case EMAIL -> emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment);
             case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+        }
+    }
+
+    public void sendManagerAlert(String message) {
+        messagingTemplate.convertAndSend("/topic/manager", JsonUtil.convertToJson(new SimpleNotificationDTO(message)));
+        log.info("✅ Manager WebSocket alert sent!");
+    }
+
+    public void sendPaymentConfirmationNotification(@NotNull Client client, PaymentDTO payment) {
+        String unit = payment.getPaidAppointments() == 1 ? " termin" : " termina";
+        String payload = JsonUtil.convertToJson(new SimpleNotificationDTO("Uplata za " + payment.getPaidAppointments() + unit + " je evidentirana."));
+        switch (client.getUser().getNotificationPreference()) {
+            case BOTH -> { emailService.sendPaymentConfirmationEmail(client.getUser().getEmail(), payment); messagingTemplate.convertAndSend("/topic/client" + client.getId(), payload); }
+            case EMAIL -> emailService.sendPaymentConfirmationEmail(client.getUser().getEmail(), payment);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), payload);
         }
     }
 }
