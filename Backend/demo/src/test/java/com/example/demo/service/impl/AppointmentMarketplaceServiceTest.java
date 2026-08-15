@@ -4,6 +4,7 @@ import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.mapper.AppointmentMapper;
 import com.example.demo.mapper.SessionMapper;
 import com.example.demo.repository.gym.RoomRepository;
+import com.example.demo.model.gym.Room;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.Session;
 import com.example.demo.model.user.Client;
@@ -24,6 +25,7 @@ import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.notification.NotificationService;
+import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -89,6 +92,36 @@ class AppointmentMarketplaceServiceTest {
         when(mapper.toDto(early)).thenReturn(earlyDto);
 
         assertEquals(List.of(earlyDto, lateDto), service.getAppointmentsForDate(date));
+    }
+
+    @Test
+    void managerCreationRequiresRoom() {
+        CreateAppointmentRequest request = new CreateAppointmentRequest(LocalDate.now().plusDays(2), LocalTime.of(9, 0),
+                LocalTime.of(10, 0), 1, null, null, Set.of());
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.create(request));
+
+        assertEquals("Room is required", error.getMessage());
+        verify(appointments, never()).save(any());
+    }
+
+    @Test
+    void recurringManagerCreationSkipsInvalidWeeksIndependently() {
+        LocalDate firstDate = LocalDate.now().plusDays(2);
+        Session session = session(1, 1);
+        Room room = Room.builder().id(3).name("Studio").build();
+        CreateAppointmentRequest request = new CreateAppointmentRequest(firstDate, LocalTime.of(9, 0),
+                LocalTime.of(10, 0), 1, 3, null, Set.of());
+        when(sessions.findById(1)).thenReturn(Optional.of(session));
+        when(rooms.findById(3)).thenReturn(Optional.of(room));
+        when(holidays.existsByDate(any())).thenAnswer(invocation -> firstDate.plusWeeks(2).equals(invocation.getArgument(0)));
+
+        var result = service.createRecurring(request);
+
+        assertEquals(7, result.createdCount(), result.skippedReasons().toString());
+        assertEquals(1, result.skippedReasons().size());
+        assertTrue(result.skippedReasons().getFirst().contains(firstDate.plusWeeks(2).toString()));
+        verify(appointments, times(7)).save(any(Appointment.class));
     }
 
     @Test

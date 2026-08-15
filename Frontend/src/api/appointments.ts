@@ -1,11 +1,12 @@
 import { api } from './client'
 import type { AppointmentSummary, SessionInfo } from '../types'
 
-export type CreateAppointmentInput={date:string;startTime:string;endTime:string;sessionId:number;roomId?:number;trainerId?:number;clientIds?:number[]}
+export type CreateAppointmentInput={date:string;startTime:string;endTime:string;sessionId:number;roomId:number;trainerId?:number;clientIds?:number[]}
 
 export const appointmentsApi = {
   sessions: async () => (await api.get<SessionInfo[]>('/api/appointment/sessions')).data,
   create: async (input:CreateAppointmentInput) => (await api.post<AppointmentSummary>('/api/appointment',input)).data,
+  createRecurring: async (input:CreateAppointmentInput) => (await api.post<{createdCount:number;skippedReasons:string[]}>('/api/appointment/recurring',input)).data,
   addTrainer: async (id:number,trainerId:number) => (await api.post<AppointmentSummary>(`/api/appointment/${id}/add-trainer`,null,{params:{trainerId}})).data,
   removeTrainer: async (id:number) => (await api.delete<AppointmentSummary>(`/api/appointment/${id}/remove-trainer`)).data,
   addClients: async (id:number,clientIds:number[]) => (await api.post<AppointmentSummary>(`/api/appointment/${id}/add-clients`,null,{params:{clientIds:clientIds.join(',')}})).data,

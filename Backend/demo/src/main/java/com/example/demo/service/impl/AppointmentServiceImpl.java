@@ -23,6 +23,7 @@ import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.AppointmentService;
 import com.example.demo.service.notification.NotificationService;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
+import com.example.demo.service.params.response.appointment.RecurringAppointmentResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class AppointmentServiceImpl implements AppointmentService {
 
+    private static final int RECURRING_WEEKS = 8;
+
     private final SessionRepository sessionRepository;
     private final TrainerRepository trainerRepository;
     private final ClientRepository clientRepository;
@@ -69,7 +72,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Session session = fetchSession(request.getSessionId());
         Trainer trainer = fetchTrainer(request.getTrainerId());
-        Room room = request.getRoomId() == null ? null : roomRepository.findById(request.getRoomId())
+        Room room = roomRepository.findById(request.getRoomId())
                 .orElseThrow(() -> new EntityNotFoundException("Room not found"));
 
         Appointment appointment = Appointment.builder()
@@ -90,6 +93,27 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return appointmentDTO;
+    }
+
+    @Transactional
+    public RecurringAppointmentResponse createRecurring(CreateAppointmentRequest request) {
+        int created = 0;
+        List<String> reasons = new java.util.ArrayList<>();
+        for (int week = 0; week < RECURRING_WEEKS; week++) {
+            CreateAppointmentRequest occurrence = new CreateAppointmentRequest(
+                    request.getDate().plusWeeks(week), request.getStartTime(), request.getEndTime(),
+                    request.getSessionId(), request.getRoomId(), request.getTrainerId(), request.getClientIds());
+            try {
+                create(occurrence);
+                created++;
+            } catch (Exception exception) {
+                reasons.add(occurrence.getDate() + ": " + exception.getMessage());
+            }
+        }
+        if (created == 0) {
+            throw new IllegalArgumentException("Nijedan termin nije kreiran:\n" + String.join("\n", reasons));
+        }
+        return new RecurringAppointmentResponse(created, reasons);
     }
 
     public List<com.example.demo.dto.SessionDTO> getSessions() {
@@ -306,6 +330,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
 
     private void validateAppointment(@NotNull CreateAppointmentRequest request) {
+        if (request.getRoomId() == null) throw new IllegalArgumentException("Room is required");
         validateDateAndTimeRange(request.getDate(), request.getStartTime(), request.getEndTime());
         validateGymSchedule(request.getDate(), request.getStartTime(), request.getEndTime());
         if (holidayRepository.existsByDate(request.getDate())) {

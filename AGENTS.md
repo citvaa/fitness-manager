@@ -252,6 +252,10 @@ uses one hour per client, with explicit refresh/eviction.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.
+- Manager-created appointments always require a Room. The recurring manager
+  command attempts eight weekly instances through the same ordinary trainer,
+  room, client, gym-hours, and holiday validation; invalid weeks are reported
+  and skipped, and only total failure rejects the whole command.
 - Trainer self-assignment is the one missing-shift exception: claiming an open
   appointment creates an exact-time WORKING row in the same transaction when no
   schedule row overlaps it. A real appointment conflict is checked first and
@@ -333,3 +337,5 @@ Only currently open items belong here; resolved history is in `docs/decision-log
 - `RoleInterceptor` casts every resolved handler to `HandlerMethod`; an authenticated
   request to an unmapped `/api/**` URL can therefore return 400 with a class-cast
   message instead of the normal 404 response.
+- GymSchedule writes do not validate that opening time precedes closing time;
+  live QA found a persisted Wednesday row of `16:00-05:00`.

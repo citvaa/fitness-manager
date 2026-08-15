@@ -5,11 +5,13 @@ import com.example.demo.dto.AppointmentDTO;
 import com.example.demo.dto.SessionDTO;
 import com.example.demo.service.AppointmentService;
 import com.example.demo.service.params.request.appointment.CreateAppointmentRequest;
+import com.example.demo.service.params.response.appointment.RecurringAppointmentResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Set;
@@ -23,7 +25,7 @@ public class AppointmentController {
 
     @RoleRequired("MANAGER")
     @PostMapping
-    public ResponseEntity<AppointmentDTO> create(@RequestBody CreateAppointmentRequest request) throws JsonProcessingException {
+    public ResponseEntity<AppointmentDTO> create(@Valid @RequestBody CreateAppointmentRequest request) throws JsonProcessingException {
         AppointmentDTO createdAppointment = appointmentService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
     }
@@ -100,6 +102,12 @@ public class AppointmentController {
     @GetMapping("/me")
     public ResponseEntity<List<AppointmentDTO>> getMine() {
         return ResponseEntity.ok(appointmentService.getMyAppointments());
+    }
+
+    @RoleRequired("MANAGER")
+    @PostMapping("/recurring")
+    public RecurringAppointmentResponse createRecurring(@Valid @RequestBody CreateAppointmentRequest request) {
+        return appointmentService.createRecurring(request);
     }
 
     @RoleRequired("TRAINER") @GetMapping("/me/today-upcoming")

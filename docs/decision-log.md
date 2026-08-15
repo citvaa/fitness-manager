@@ -897,3 +897,22 @@ real inbox; template rendering is independently covered. Captured UI states are
   save, and show a short per-day “Sačuvano ✓” acknowledgement. The holiday date
   is controlled and defaults to today, eliminating the broken empty native-date
   placeholder while keeping the description reset after creation.
+
+## 2026-08-15 - Part 14 manager appointment calendar and recurring creation
+
+- Manager appointment navigation now uses `MonthCalendar`; the selected day
+  still drives the existing daily roster API. Room selection is mandatory in
+  both the form and validated backend request, with no “Bez sobe” option.
+- `/api/appointment/recurring` attempts eight weekly copies. Every occurrence
+  reuses normal appointment validation (including trainer shift availability),
+  invalid weeks contribute dated reasons, partial success is returned, and an
+  all-failed series raises one aggregated error.
+- Live reproduction before editing proved “Dodaj klijenta” already worked with
+  the real API shape: an enabled roster exposed 49 candidates, added the chosen
+  client, and remained interactive. The QA roster link was removed afterwards;
+  no speculative dropdown code change was made.
+- Live API QA rejected a missing room with 400, created all eight valid Tuesday
+  occurrences, and then removed the eight exact QA rows. Monday could not be
+  used because the live database currently closes at 08:00; inspection also
+  exposed an out-of-scope invalid Wednesday `16:00-05:00` GymSchedule row and
+  the missing backend ordering validation is recorded as a known issue.
