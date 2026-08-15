@@ -780,3 +780,12 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Payment-form selects and the shared client picker now own `width` and
   `max-width: 100%`, preventing long client emails from expanding the fixed-width
   payment card or overflowing the page header.
+
+## 2026-08-15 - Part 2 trainer non-working calendar dates
+
+- `MonthCalendar` gained an optional muted-date set independent of its existing
+  data highlights. Muted styling deliberately excludes the selected state, while
+  highlighted dots remain visible when a date belongs to both sets.
+- Trainer appointment and self-schedule pages combine personal non-WORKING rows
+  with gym-wide Holiday dates. Holiday reads now authorize TRAINER as well as
+  MANAGER; holiday writes remain manager-only.

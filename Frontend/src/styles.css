@@ -37,6 +37,12 @@ button {
 .muted {
   color: #78827b;
 }
+.month-grid button.muted:not(.selected) {
+  color: #8b8176;
+  background: #f2eee8;
+  text-decoration: line-through;
+  text-decoration-color: #b8aa98;
+}
 .login-page {
   min-height: 100vh;
   display: grid;

@@ -60,9 +60,9 @@ export function SchedulesPage() {
   });
   async function loadBase() {
     try {
+      setHolidays(await holidayApi.list());
       if (!own) {
         setGym(await gymScheduleApi.list());
-        setHolidays(await holidayApi.list());
         const ts = await trainersApi.list();
         setTrainers(ts);
         if (!trainerId && ts[0]) setTrainerId(ts[0].id);
@@ -333,7 +333,7 @@ export function SchedulesPage() {
             <button className="secondary-button">Dodaj odsustvo</button>
           </form>
         </div>
-        <div className={own?"calendar-list-layout":""}>{own&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(rows.map(row=>row.date))}/>}<div className="schedule-list">
+        <div className={own?"calendar-list-layout":""}>{own&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(rows.map(row=>row.date))} mutedDates={new Set([...rows.filter(row=>row.status!=="WORKING").map(row=>row.date),...holidays.map(holiday=>holiday.date)])}/>}<div className="schedule-list">
           {rows.filter(row=>!own||row.date===selectedDate).map((r) => (
             <article key={r.id}>
               <time>

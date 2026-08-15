@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { appointmentsApi } from '../api/appointments'
 import { errorMessage } from '../api/client'
+import { holidayApi, trainerScheduleApi } from '../api/schedules'
 import { useAuthStore } from '../auth/authStore'
-import type { AppointmentSummary } from '../types'
+import type { AppointmentSummary, Holiday, TrainerSchedule } from '../types'
 import { MonthCalendar } from '../components/MonthCalendar'
 
 const future = (item: AppointmentSummary) => new Date(`${item.date}T${item.startTime}`) > new Date()
@@ -20,14 +21,18 @@ export function AppointmentsPage() {
   const trainer = useAuthStore(s => s.session?.activeRole) === 'TRAINER'
   const [mine, setMine] = useState<AppointmentSummary[]>([])
   const [open, setOpen] = useState<AppointmentSummary[]>([])
+  const [schedules, setSchedules] = useState<TrainerSchedule[]>([])
+  const [holidays, setHolidays] = useState<Holiday[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<number | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   async function load() {
     try {
-      const [owned, market] = await Promise.all([appointmentsApi.mine(), trainer ? appointmentsApi.withoutTrainer() : appointmentsApi.available()])
+      const [owned, market, ownSchedules, gymHolidays] = await Promise.all([appointmentsApi.mine(), trainer ? appointmentsApi.withoutTrainer() : appointmentsApi.available(), trainer ? trainerScheduleApi.list() : Promise.resolve([]), trainer ? holidayApi.list() : Promise.resolve([])])
       setMine(owned)
       setOpen(market.filter(item => !owned.some(own => own.id === item.id)))
+      setSchedules(ownSchedules)
+      setHolidays(gymHolidays)
     } catch (cause) { setError(errorMessage(cause)) }
   }
   useEffect(() => { void load() }, [trainer])
@@ -42,10 +47,11 @@ export function AppointmentsPage() {
   const upcoming = selectedMine.filter(future).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
   const history = selectedMine.filter(item => !future(item))
   const visibleOpen = trainer ? open.filter(item => item.date === selectedDate) : open
+  const mutedDates = new Set([...schedules.filter(row=>row.status!=='WORKING').map(row=>row.date),...holidays.map(holiday=>holiday.date)])
   return <main className="workspace-page appointments-page">
     <header className="workspace-header"><div><p className="eyebrow">{trainer ? 'Trenerski portal' : 'Klijentski portal'}</p><h1>Moji termini</h1><p>{trainer ? 'Pregledajte svoj angažman i preuzmite slobodne termine iz ponude.' : 'Rezervišite novi trening i pratite svoju istoriju dolazaka.'}</p></div></header>
     {error && <div className="content-error">{error}<button onClick={() => setError('')}>×</button></div>}
-    <div className={trainer?'calendar-list-layout':''}>{trainer&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(mine.map(item=>item.date))}/>}<div>{!isPastDate&&<section className="appointment-section"><div className="card-head"><div><p className="eyebrow">Sledeće</p><h2>{trainer?'Termini izabranog dana':'Predstojeći termini'}</h2></div><strong>{upcoming.length}</strong></div><div className="appointment-list">{upcoming.map(item => <AppointmentCard key={item.id} appointment={item} action={() => void act(item.id, () => trainer ? appointmentsApi.unassign(item.id) : appointmentsApi.cancel(item.id))} actionLabel={busy === item.id ? 'Otkazujem…' : trainer ? 'Otkaži dodelu' : 'Otkaži rezervaciju'} disabled={busy !== null || (!trainer && new Date(`${item.date}T${item.startTime}`).getTime() - Date.now() <= 86_400_000)} />)}{!upcoming.length && <div className="empty-panel">Nema budućih termina za izabrani datum.</div>}</div>{!trainer && <p className="appointment-note">Rezervaciju je moguće otkazati najkasnije 24 sata pre početka termina.</p>}</section>}
+    <div className={trainer?'calendar-list-layout':''}>{trainer&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(mine.map(item=>item.date))} mutedDates={mutedDates}/>}<div>{!isPastDate&&<section className="appointment-section"><div className="card-head"><div><p className="eyebrow">Sledeće</p><h2>{trainer?'Termini izabranog dana':'Predstojeći termini'}</h2></div><strong>{upcoming.length}</strong></div><div className="appointment-list">{upcoming.map(item => <AppointmentCard key={item.id} appointment={item} action={() => void act(item.id, () => trainer ? appointmentsApi.unassign(item.id) : appointmentsApi.cancel(item.id))} actionLabel={busy === item.id ? 'Otkazujem…' : trainer ? 'Otkaži dodelu' : 'Otkaži rezervaciju'} disabled={busy !== null || (!trainer && new Date(`${item.date}T${item.startTime}`).getTime() - Date.now() <= 86_400_000)} />)}{!upcoming.length && <div className="empty-panel">Nema budućih termina za izabrani datum.</div>}</div>{!trainer && <p className="appointment-note">Rezervaciju je moguće otkazati najkasnije 24 sata pre početka termina.</p>}</section>}
     {!isPastDate&&<section className="appointment-section marketplace"><div className="card-head"><div><p className="eyebrow">{trainer ? 'Marketplace' : 'Zakaži trening'}</p><h2>{trainer ? 'Termini bez trenera' : 'Dostupni termini'}</h2></div><strong>{visibleOpen.length}</strong></div><div className="appointment-list">{visibleOpen.map(item => <AppointmentCard key={item.id} appointment={item} action={() => void act(item.id, () => trainer ? appointmentsApi.assign(item.id) : appointmentsApi.reserve(item.id))} actionLabel={busy === item.id ? (trainer ? 'Preuzimam…' : 'Rezervišem…') : (trainer ? 'Preuzmi termin' : 'Rezerviši mesto')} disabled={busy !== null} />)}{!visibleOpen.length && <div className="empty-panel">Trenutno nema dostupnih termina za izabrani datum.</div>}</div></section>}
     {!isFutureDate&&<section className="appointment-section muted-section"><div className="card-head"><div><p className="eyebrow">Arhiva</p><h2>{trainer ? 'Održani termini izabranog dana' : 'Istorija treninga'}</h2></div><strong>{history.length}</strong></div><div className="appointment-list compact">{history.map(item => <AppointmentCard key={item.id} appointment={item} />)}</div></section>}</div></div>
   </main>

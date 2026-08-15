@@ -245,6 +245,9 @@ uses one hour per client, with explicit refresh/eviction.
   selected dates show only the held section (including no marketplace), future
   dates only the upcoming section plus marketplace, and today shows both plus
   marketplace; unassigned marketplace rows are scoped to the selected date.
+  Both trainer calendars visually mute personal HOLIDAY/SICK_LEAVE/VACATION
+  dates and gym-wide Holiday dates without changing appointment highlights;
+  authenticated trainers may read the holiday list for this purpose.
 - The manager daily schedule also uses `MonthCalendar`; changing the selected
   day reloads its date-scoped aggregate timeline.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
