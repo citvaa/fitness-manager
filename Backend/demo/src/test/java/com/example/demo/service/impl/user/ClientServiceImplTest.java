@@ -62,7 +62,7 @@ class ClientServiceImplTest {
     }
 
     @Test
-    void updateChangesAccountEmailAndDeleteRemovesOnlyClientRole() {
+    void updateChangesAccountEmailAndDeleteRemovesWholeAccount() {
         User user = User.builder().id(12).email("old@example.com").build();
         Client client = Client.builder().id(3).user(user).build();
         CreateUserRequest request = new CreateUserRequest();
@@ -74,8 +74,7 @@ class ClientServiceImplTest {
         service.delete(3);
 
         assertEquals("new@example.com", user.getEmail());
-        verify(clients).delete(client);
-        verify(users).removeRole(12, Role.CLIENT);
-        verify(users, never()).delete(anyInt());
+        verify(users).delete(12);
+        verify(clients, never()).delete(any());
     }
 }

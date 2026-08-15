@@ -789,6 +789,23 @@ real inbox; template rendering is independently covered. Captured UI states are
   flex siblings of the title; their established `min-width:240px` and mobile-only
   full-width behavior now remain authoritative.
 
+## 2026-08-15 - Part 8 single operational role and immutable ADMIN
+
+- MANAGER/TRAINER/CLIENT are now mutually exclusive operational roles. Generic
+  role addition rejects a second operational role, removal rejects the last one,
+  and ADMIN add/remove is categorically rejected before authorization lookup.
+- Administration no longer renders role toggles or an ADMIN affordance. New
+  accounts choose exactly one operational role; TRAINER creation requests the
+  required employment fields and uses the profile endpoint, CLIENT uses its
+  profile endpoint, and MANAGER uses account creation plus its single role.
+- Deleting a Trainer or Client profile now deletes its whole User account. The
+  former “preserve a role-less User” behavior conflicts with the new invariant.
+- Migration 1.0019 removes legacy TRAINER/CLIENT role rows with no matching
+  profile, then fails startup if any User still has other-than-one operational
+  role. Live pre-migration inspection found one real drifted account with
+  CLIENT+TRAINER but no Client profile, exactly the failure mode this cleanup
+  addresses.
+
 ## 2026-08-15 - Part 2 trainer non-working calendar dates
 
 - `MonthCalendar` gained an optional muted-date set independent of its existing

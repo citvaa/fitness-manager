@@ -84,8 +84,7 @@ public class TrainerServiceImpl implements TrainerService {
 
         trainerScheduleRepository.deleteByTrainer(trainer);
         Integer userId = trainer.getUser().getId();
-        trainerRepository.delete(trainer);
-        userService.removeRole(userId, Role.TRAINER);
+        userService.delete(userId);
     }
 
     public List<TrainerDTO> getAll() {

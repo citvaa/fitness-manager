@@ -9,7 +9,7 @@ import type {
   TrainerProfile,
   UserAccount,
 } from "../types";
-const roles: Role[] = ["MANAGER", "TRAINER", "CLIENT"];
+const operationalRoles: Role[] = ["MANAGER", "TRAINER", "CLIENT"];
 const roleLabel: Record<Role, string> = {
   MANAGER: "Menadžer",
   TRAINER: "Trener",
@@ -26,7 +26,7 @@ export function AdministrationPage() {
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
   const [email, setEmail] = useState("");
-  const [initialRoles, setInitialRoles] = useState<Role[]>([]);
+  const [initialRole, setInitialRole] = useState<Role>("MANAGER");
   const [profile, setProfile] = useState({
     employmentDate: new Date().toISOString().slice(0, 10),
     birthYear: 1990,
@@ -55,11 +55,17 @@ export function AdministrationPage() {
     e.preventDefault();
     try {
       if (tab === "users") {
-        const u = await usersApi.create(email);
-        for (const role of initialRoles) await usersApi.addRole(u.id, role);
-        setInvite(
-          `${location.origin}/complete-registration?key=${u.registrationKey}`,
-        );
+        if (initialRole === "MANAGER") {
+          const u = await usersApi.create(email);
+          await usersApi.addRole(u.id, initialRole);
+          setInvite(`${location.origin}/complete-registration?key=${u.registrationKey}`);
+        } else if (initialRole === "TRAINER") {
+          const trainer = await trainersApi.create({ email, ...profile });
+          setInvite(`${location.origin}/complete-registration?key=${trainer.user.registrationKey}`);
+        } else {
+          const client = await clientsApi.create(email);
+          setInvite(`${location.origin}/complete-registration?key=${client.user.registrationKey}`);
+        }
       } else if (tab === "trainers") {
         const t = await trainersApi.create({ email, ...profile });
         setInvite(
@@ -72,16 +78,6 @@ export function AdministrationPage() {
         );
       }
       setEmail("");
-      await load();
-    } catch (x) {
-      setNotice(errorMessage(x));
-    }
-  }
-  async function toggleRole(u: UserAccount, r: Role) {
-    try {
-      u.roles.includes(r)
-        ? await usersApi.removeRole(u.id, r)
-        : await usersApi.addRole(u.id, r);
       await load();
     } catch (x) {
       setNotice(errorMessage(x));
@@ -174,8 +170,8 @@ export function AdministrationPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
-          {tab === "users" && <div className="initial-roles"><small>Inicijalne role</small>{roles.map((role) => <label key={role}><input type="checkbox" checked={initialRoles.includes(role)} onChange={() => setInitialRoles((value) => value.includes(role) ? value.filter((item) => item !== role) : [...value, role])}/>{roleLabel[role]}</label>)}</div>}
-          {tab === "trainers" && (
+          {tab === "users" && <label>Operativna rola<select value={initialRole} onChange={(event)=>setInitialRole(event.target.value as Role)}>{operationalRoles.map(role=><option key={role} value={role}>{roleLabel[role]}</option>)}</select></label>}
+          {(tab === "trainers" || (tab === "users" && initialRole === "TRAINER")) && (
             <>
               <label>
                 Datum zaposlenja
@@ -262,15 +258,7 @@ export function AdministrationPage() {
                     </small>
                   </div>
                   <div className="role-pills">
-                    {roles.map((r) => (
-                      <button
-                        key={r}
-                        className={u.roles.includes(r) ? "on" : ""}
-                        onClick={() => void toggleRole(u, r)}
-                      >
-                        {roleLabel[r]}
-                      </button>
-                    ))}
+                    {u.roles.filter(role=>role!=="ADMIN").map(role=><span className="status-chip" key={role}>{roleLabel[role]}</span>)}
                   </div>
                   <div className="row-actions"><button onClick={() => void edit(u)}>Izmeni</button><button className="icon-danger" onClick={() => void remove(u.id)}>×</button></div>
                 </article>

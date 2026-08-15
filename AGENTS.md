@@ -81,7 +81,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   nested user in `TrainerDTO` or `ClientDTO`; password input belongs only in
   purpose-specific command objects.
 - **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`.
-  A single `User` can hold multiple roles. `BaseEntity` intentionally has no
+  Every User has exactly one operational MANAGER/TRAINER/CLIENT role; ADMIN is
+  additive only to the single seeded MANAGER administrator and cannot be changed
+  through the generic role API. `BaseEntity` intentionally has no
   generated value equality: audit-field equality collapsed distinct unsaved
   `UserRole` values in a `Set` and silently dropped ADMIN during seeding.
 - **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus`
@@ -234,7 +236,10 @@ uses one hour per client, with explicit refresh/eviction.
 
 ## Conventions
 
-- `ADMIN` is additive to `MANAGER`; only ADMIN may grant/revoke MANAGER.
+- `ADMIN` is additive to `MANAGER` and immutable through REST. Generic role
+  mutation rejects a second or zero operational roles. Trainer/Client creation
+  atomically creates its profile and role; deleting either profile deletes the
+  whole account so a role-less User cannot remain.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.

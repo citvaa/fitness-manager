@@ -41,11 +41,14 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.EnumSet;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class UserServiceImpl implements UserService {
+
+    private static final EnumSet<Role> OPERATIONAL_ROLES = EnumSet.of(Role.MANAGER, Role.TRAINER, Role.CLIENT);
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
@@ -203,6 +206,7 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void addRole(Integer id, Role role) {
+        rejectAdminMutation(role);
         requireAdminForManagerRole(role);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -212,6 +216,9 @@ public class UserServiceImpl implements UserService {
 
         if (alreadyHasRole) {
             throw new IllegalArgumentException("User already has role " + role);
+        }
+        if (OPERATIONAL_ROLES.contains(role) && operationalRoleCount(user) > 0) {
+            throw new IllegalArgumentException("User must have exactly one operational role; change the profile atomically instead");
         }
 
         UserRole userRole = new UserRole();
@@ -226,6 +233,7 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void removeRole(Integer id, Role role) {
+        rejectAdminMutation(role);
         requireAdminForManagerRole(role);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -234,6 +242,9 @@ public class UserServiceImpl implements UserService {
 
         if (userRoleToRemove.isEmpty()) {
             throw new IllegalArgumentException("User does not have role " + role);
+        }
+        if (OPERATIONAL_ROLES.contains(role) && operationalRoleCount(user) <= 1) {
+            throw new IllegalArgumentException("User must retain exactly one operational role");
         }
 
         userRoleRepository.delete(userRoleToRemove.get());
@@ -281,5 +292,14 @@ public class UserServiceImpl implements UserService {
                 || !jwt.getClaimAsStringList("roles").contains(Role.ADMIN.name())) {
             throw new AccessDeniedException("Only an administrator can grant or revoke the manager role");
         }
+    }
+
+    private int operationalRoleCount(User user) {
+        if (user.getUserRoles() == null) return 0;
+        return (int) user.getUserRoles().stream().filter(userRole -> OPERATIONAL_ROLES.contains(userRole.getRole())).count();
+    }
+
+    private void rejectAdminMutation(Role role) {
+        if (role == Role.ADMIN) throw new IllegalArgumentException("ADMIN role cannot be changed through the API");
     }
 }
