@@ -47,7 +47,9 @@ Codex CLI. They must start from identical context. Concretely, that means:
    (>= 32 characters - the app fails to start otherwise). The
    `springboot3-dotenv` dependency automatically exposes every value from the
    repository-root `.env` file to Spring's existing `${...}` placeholders for
-   local development; real process environment variables retain precedence.
+   local development; `springdotenv.directory: ../../` is required because the
+   documented launch directory is `Backend/demo`. Real process environment
+   variables retain precedence.
 2. Start infrastructure: `docker compose -f Docker/docker-compose.yaml up -d`
    - Postgres on host port `8877` (mapped to container `5432`), db `fm`,
      user `fm_dbuser` / password `password`
@@ -74,9 +76,14 @@ Every entity is also `@Audited` (Hibernate Envers).
 
 - **User** (`model/user/User.java`) - email, password (null until account
   activation), `isActivated`, `notificationPreference` (`EMAIL`/`PUSH`/`BOTH`),
-  registration/reset keys with validity timestamps, `Set<UserRole>`.
+  registration/reset keys with validity timestamps, `Set<UserRole>`. Password
+  is deliberately absent from `UserDTO`, so it also cannot leak through the
+  nested user in `TrainerDTO` or `ClientDTO`; password input belongs only in
+  purpose-specific command objects.
 - **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`.
-  A single `User` can hold multiple roles.
+  A single `User` can hold multiple roles. `BaseEntity` intentionally has no
+  generated value equality: audit-field equality collapsed distinct unsaved
+  `UserRole` values in a `Set` and silently dropped ADMIN during seeding.
 - **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus`
   (`FULL_TIME` / `CONTRACT` / `FORMER_EMPLOYEE`).
 - **Client** - 1:1 with `User`; owns `Payment`s, `ClientSessionTracking`s,
@@ -156,7 +163,8 @@ Every entity is also `@Audited` (Hibernate Envers).
   subscribes to held-role topics and exposes the current user's preference.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
   digests at 20:00, and an hourly sweep for appointments starting within the
-  next hour.
+  next hour. The latter accepts `app.notifications.upcoming-cron` for isolated
+  live tests while retaining the hourly production default.
 - `websocket/StompWebSocketClient` is a manual `public static void main` test
   harness left in `src/main/java` (not part of runtime wiring, not test code)
   - known clutter, not removed in this session to keep the diff hygiene-only
@@ -192,7 +200,12 @@ uses one hour per client, with explicit refresh/eviction.
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
-  `http://localhost:5173`); user creation flushes before email is queued.
+  `http://localhost:5173`); activation targets the frontend's real
+  `/complete-registration?key=...` route, and user creation flushes before
+  email is queued.
+- `ADMIN` is an authorization capability, not a standalone workspace. The
+  frontend active-role switcher considers MANAGER/TRAINER/CLIENT only, while
+  preserving ADMIN in the held-role set used for backend authorization.
 - Room geometry minimums are content-aware on server and canvas: width
   `max(100, trimmed-name-length * 10 + 32)`, height 80.
 - Dev data can be destructively rebuilt through manager-only `POST
@@ -232,5 +245,4 @@ Only currently open items belong here; resolved history is in `docs/decision-log
 - Broad runtime handling reports not-found cases and bugs as 400 instead of a complete 404/500 taxonomy.
 - `application.yaml` and `application-dev.yaml` duplicate nearly every property.
 - A Gmail App Password remains recoverable from Git history and must be rotated.
-- `BaseEntity` equality ignores subclass IDs, so distinct unsaved entities can compare equal in sets.
 - Appointment reservation/roster addition can reduce remaining session credits below zero.

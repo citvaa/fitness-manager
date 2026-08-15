@@ -502,3 +502,49 @@ absent; automated tests fake only the Claude boundary. Fresh-volume verification
 requires a clean Maven output directory as well as an empty database volume so
 deleted/renamed resource artifacts cannot survive in `target/classes` and appear
 to Flyway as duplicate migrations.
+
+## 2026-08-15 - Security and full-stack live-audit follow-up (`upgrade/codex`)
+
+- **Password hashes are no longer part of the read DTO contract.** `UserDTO.password`
+  and the now-unneeded `UserMapper.toEntity(UserDTO)` direction were removed rather
+  than merely annotated or ignored. No legitimate caller read that field; write flows
+  already use purpose-specific requests. This makes the guarantee structural for
+  `/api/user/me`, manager user reads, and nested users in `TrainerDTO`/`ClientDTO`.
+  A serialization regression test covers all three shapes, and live requests as an
+  ordinary TRAINER and CLIENT returned no `password` key.
+- **Fresh startup exposed a production/dev Flyway version collision.** Production
+  `add_admin_role` and dev `fix_demo_trainer_birth_year` were both numbered 1.0017,
+  so a clean dev database could not start. The production migration was moved to the
+  next unused version, 1.0018. Stale `target/classes` can independently retain renamed
+  migrations, so live rehearsals begin with `mvnw clean`.
+- **Live reseeding exposed broken entity equality.** Lombok `@Data` on `BaseEntity`
+  made distinct unsaved `UserRole` objects equal when their audit fields matched;
+  the seed ADMIN role vanished from the user's `Set`, despite both database rows
+  existing. `BaseEntity` now generates accessors only and uses identity equality.
+  The JWT and `/api/user/me` now retain `MANAGER,ADMIN`, with a focused Set test.
+- **ADMIN is kept as a capability, not selected as a frontend workspace.** Once the
+  lost role was restored, login role selection chose ADMIN first and sent the seed
+  administrator to an unrelated fallback UI. `authStore` now selects only operational
+  MANAGER/TRAINER/CLIENT roles while retaining ADMIN in the JWT role set.
+- **The delivered activation URL used the right origin but the wrong frontend path.**
+  The template now points to `/complete-registration?key=...`, matching the router;
+  a real template-rendering test protects the full URL. Live startup also showed that
+  the documented repository-root `.env` was not found from `Backend/demo`, so
+  `springdotenv.directory` now explicitly points two levels upward.
+- **Notification timing is test-configurable.** The upcoming-appointment sweep keeps
+  its hourly default but accepts `app.notifications.upcoming-cron`; the live audit
+  temporarily used five-second sweeps to exercise CLIENT EMAIL/PUSH/BOTH without
+  changing production behavior.
+
+### Live verification evidence
+
+An isolated `fm_codex_live` database was migrated from empty and reseeded through
+`POST /api/dev/reseed`. The run verified the five expected rooms; ADMIN-only manager
+grant (ADMIN 200, ordinary MANAGER 403); adjacent overnight gym-hour rejection;
+holiday rejection with date; trainer and room overlaps with email/name and exact
+slot; frontend and API room minimum enforcement; multiline `pre-wrap` errors;
+backend-offline login text without port 8088; persisted sidebar preferences; and
+readable STOMP notifications for trainer and client EMAIL/PUSH/BOTH choices. SMTP
+dispatch was observed, but placeholder Gmail credentials cannot prove delivery to a
+real inbox; template rendering is independently covered. Captured UI states are
+`docs/live-qa-floor-editor.png` and `docs/live-qa-notification-center.png`.
