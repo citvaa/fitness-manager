@@ -272,7 +272,6 @@ back to `AVERAGE` and a generic comment without hiding the calculated cards.
   still rejects the claim; existing non-WORKING/other schedule rows are never
   silently overwritten. Before the generated shift is saved, current gym hours
   and holidays are revalidated so stale open slots cannot create invalid shifts.
-- Trainer appointment and own-schedule pages use the shared dependency-free
 - Trainer and client appointment pages, plus trainer own-schedule, use the shared dependency-free
   `MonthCalendar`; full API lists remain loaded, selected-day rows are filtered
   locally, and dates with data are highlighted. On both appointment pages, past
@@ -309,6 +308,10 @@ back to `AVERAGE` and a generic comment without hiding the calculated cards.
   measurements and three monthly personal-record points per client, two holidays,
   and weekday/weekend gym hours. Reseed truncates all application tables in one
   statement so the occupancy scheduler cannot deadlock a partially locked wipe.
+- `docs/defense-demo-script.md` is the current end-to-end defense runbook. Keep
+  its CORE + optional structure and update it only after the user-visible flows
+  it demonstrates are final, so its roles, routes, credentials, and plans B do
+  not describe removed UI.
 
 - Layered packages: `controller` (thin, `@RoleRequired`-gated) -> `service`
   interface + `service.impl` -> `repository` (Spring Data JPA) -> `model`
@@ -349,3 +352,6 @@ Only currently open items belong here; resolved history is in `docs/decision-log
   message instead of the normal 404 response.
 - GymSchedule writes do not validate that opening time precedes closing time;
   live QA found a persisted Wednesday row of `16:00-05:00`.
+- `ClientMapper` does not populate `roles` on the nested `UserDTO` inside a
+  `ClientDTO` (the direct user endpoint still returns roles); MapStruct reports
+  this explicitly during compilation.

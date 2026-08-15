@@ -868,6 +868,10 @@ real inbox; template rendering is independently covered. Captured UI states are
   persists it in the same transaction before the activation email is queued.
   TRAINER and CLIENT creation continue through their profile endpoints, so every
   newly created account immediately satisfies the one-operational-role invariant.
+- Live/API inspection also exposed that the existing `ClientMapper` leaves the
+  nested `ClientDTO.user.roles` empty even though the direct user endpoint is
+  correct. This was documented as an open mapper gap rather than changed as
+  part of the activation-email scope.
 
 ## 2026-08-15 - Part 11 administration enum labels
 
@@ -949,3 +953,16 @@ real inbox; template rendering is independently covered. Captured UI states are
   manager alert; appointment 105 assignment/revert produced the trainer alert;
   and a one-unit payment produced the client confirmation. The QA reservation,
   assignment, payment row, and tracking increment were all reverted afterwards.
+
+## 2026-08-15 - Part 0 defense demonstration runbook
+
+- Rewrote the stale walkthrough against the final application instead of
+  incrementally preserving removed flows. Activation is email-only, manager
+  check-in is appointment-scoped, and client booking and booked-appointment
+  history are shown as separate calendar pages.
+- The CORE story now includes structured metric cards on AI insights, shared
+  payment/debt status, mandatory-room and recurring manager appointments, and
+  live manager/trainer/client notification examples.
+- Retained the existing CORE + “ako ima vremena” organization and added explicit
+  preparation and fallback guidance for SMTP, Claude, WebSocket, late-day
+  check-in data, and a complete local failure.
