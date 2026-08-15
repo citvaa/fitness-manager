@@ -7,6 +7,7 @@ import {
 } from "../api/schedules";
 import { trainersApi } from "../api/administration";
 import { errorMessage } from "../api/client";
+import { MonthCalendar } from "../components/MonthCalendar";
 import type {
   GymSchedule,
   Holiday,
@@ -43,6 +44,8 @@ export function SchedulesPage() {
   const [trainerId, setTrainerId] = useState<number>();
   const [rows, setRows] = useState<TrainerSchedule[]>([]);
   const [notice, setNotice] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [recurring, setRecurring] = useState(false);
   const [shift, setShift] = useState({
     date: new Date().toISOString().slice(0, 10),
     startTime: "08:00:00",
@@ -83,10 +86,9 @@ export function SchedulesPage() {
   async function addShift(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await trainerScheduleApi.create(
-        { ...shift, ...(!own && { trainerId }) },
-        own,
-      );
+      const request={ ...shift, ...(!own && { trainerId }) };
+      if(recurring){const result=await trainerScheduleApi.recurring(request,own);setNotice(`Kreirano smena: ${result.createdCount}${result.skippedReasons.length?`. Preskočeno: ${result.skippedReasons.length}`:''}`)}
+      else await trainerScheduleApi.create(request,own);
       await loadRows();
     } catch (x) {
       setNotice(errorMessage(x));
@@ -295,6 +297,7 @@ export function SchedulesPage() {
               }
             />
             <button className="primary-button compact">Dodaj smenu</button>
+            <label><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)}/> Fiksni raspored (8 nedelja)</label>
           </form>
           <form onSubmit={addAway}>
             <h3>Neradni period</h3>
@@ -321,8 +324,8 @@ export function SchedulesPage() {
             <button className="secondary-button">Dodaj odsustvo</button>
           </form>
         </div>
-        <div className="schedule-list">
-          {rows.map((r) => (
+        <div className={own?"calendar-list-layout":""}>{own&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(rows.map(row=>row.date))}/>}<div className="schedule-list">
+          {rows.filter(row=>!own||row.date===selectedDate).map((r) => (
             <article key={r.id}>
               <time>
                 {new Date(r.date + "T12:00").toLocaleDateString("sr-Latn-RS", {
@@ -343,7 +346,7 @@ export function SchedulesPage() {
           {!rows.length && (
             <div className="empty-panel">Još nema unetih termina.</div>
           )}
-        </div>
+        </div></div>
       </section>
     </main>
   );

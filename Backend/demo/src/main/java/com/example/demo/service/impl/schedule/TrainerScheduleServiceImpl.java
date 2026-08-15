@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
+import com.example.demo.service.params.response.schedule.RecurringScheduleResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -30,6 +31,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Service
 public class TrainerScheduleServiceImpl implements TrainerScheduleService {
+    private static final int RECURRING_WEEKS = 8;
     private final GymScheduleRepository gymScheduleRepository;
     private final TrainerRepository trainerRepository;
     private final TrainerScheduleRepository trainerScheduleRepository;
@@ -83,6 +85,27 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     public TrainerScheduleDTO createOwnSchedule(CreateTrainerScheduleRequest request) {
         request.setTrainerId(authenticatedUserService.trainer().getId());
         return createSchedule(request);
+    }
+
+    @Transactional
+    public RecurringScheduleResponse createRecurring(CreateTrainerScheduleRequest request) {
+        int created = 0;
+        List<String> reasons = new java.util.ArrayList<>();
+        LocalDate originalDate = request.getDate();
+        for (int week = 0; week < RECURRING_WEEKS; week++) {
+            request.setDate(originalDate.plusWeeks(week));
+            try { createSchedule(request); created++; }
+            catch (RuntimeException exception) { reasons.add(request.getDate() + ": " + exception.getMessage()); }
+        }
+        request.setDate(originalDate);
+        if (created == 0) throw new IllegalArgumentException("Nijedna smena nije kreirana:\n" + String.join("\n", reasons));
+        return new RecurringScheduleResponse(created, reasons);
+    }
+
+    @Transactional
+    public RecurringScheduleResponse createOwnRecurring(CreateTrainerScheduleRequest request) {
+        request.setTrainerId(authenticatedUserService.trainer().getId());
+        return createRecurring(request);
     }
 
     @Transactional

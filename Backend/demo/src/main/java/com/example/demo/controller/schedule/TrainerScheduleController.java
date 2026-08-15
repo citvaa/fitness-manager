@@ -5,6 +5,7 @@ import com.example.demo.dto.schedule.TrainerScheduleDTO;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
+import com.example.demo.service.params.response.schedule.RecurringScheduleResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,8 @@ public class TrainerScheduleController {
         TrainerScheduleDTO trainerScheduleDTO = trainerScheduleService.createSchedule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleDTO);
     }
+    @RoleRequired("MANAGER") @PostMapping("/recurring")
+    public RecurringScheduleResponse createRecurring(@RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.createRecurring(request); }
 
     @RoleRequired("MANAGER")
     @PostMapping("/unavailable")
@@ -45,6 +48,8 @@ public class TrainerScheduleController {
 
     @RoleRequired("TRAINER") @PostMapping("/me")
     public ResponseEntity<TrainerScheduleDTO> createOwn(@RequestBody CreateTrainerScheduleRequest request) { return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleService.createOwnSchedule(request)); }
+    @RoleRequired("TRAINER") @PostMapping("/me/recurring")
+    public RecurringScheduleResponse createOwnRecurring(@RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.createOwnRecurring(request); }
     @RoleRequired("TRAINER") @PostMapping("/me/unavailable")
     public ResponseEntity<Void> createOwnUnavailable(@RequestBody CreateTrainerUnavailabilityRequest request) { trainerScheduleService.createOwnUnavailability(request); return ResponseEntity.status(HttpStatus.CREATED).build(); }
     @RoleRequired("TRAINER") @PutMapping("/me/{id}")

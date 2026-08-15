@@ -585,3 +585,18 @@ real inbox; template rendering is independently covered. Captured UI states are
   complete metric row, and—using a backend-shaped forced 503 response—that the
   visible error does not erase the previous text. Evidence:
   `docs/live-qa-progress-ai.png`.
+
+### Part 3: trainer month calendars and recurring shifts
+
+- A reusable dependency-free `MonthCalendar` owns only its visible month and
+  receives selected date/highlight sets from each page. Trainer appointments and
+  own schedules still fetch complete lists, then filter locally to the selected
+  ISO date; marketplace data remains independently visible.
+- Both manager and trainer shift forms expose an eight-week fixed-schedule option.
+  The backend validates every weekly instance independently, skips failed dates,
+  returns `createdCount` plus skipped reasons, and throws a multiline per-date
+  error only when none can be created.
+- Live self-service creation returned `createdCount=8` and eight persisted weekly
+  rows. Browser QA found 21 highlighted appointment days, 21 schedule days, and
+  the recurring checkbox. Evidence: `docs/live-qa-appointments-calendar.png` and
+  `docs/live-qa-schedule-calendar.png`.
