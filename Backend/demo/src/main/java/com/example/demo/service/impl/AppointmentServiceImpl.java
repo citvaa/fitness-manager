@@ -339,6 +339,17 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .ifPresent(conflict -> { throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " is already booked on " + date + " " + conflict.getStartTime() + "-" + conflict.getEndTime() + "."); });
     }
 
+    public List<AppointmentDTO> getMyUpcomingToday() {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) throw new AccessDeniedException("Unauthorized access!");
+        Trainer trainer = trainerRepository.findByUserEmail(jwt.getClaim("email"))
+                .orElseThrow(() -> new AccessDeniedException("Trainer profile not found"));
+        return getAppointmentsForTrainer(trainer.getId(), today).stream().filter(item -> !item.getStartTime().isBefore(now))
+                .sorted(java.util.Comparator.comparing(AppointmentDTO::getStartTime)).limit(2).toList();
+    }
+
     private void validateRoomAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime, Integer ignoredAppointmentId) {
         if (id == null) return;
         Room room = roomRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Room not found"));

@@ -613,3 +613,20 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live QA found a precision bug in the first full-day implementation: JDBC rounded
   `LocalTime.MAX` to midnight, making away-side overlap queries empty. The boundary
   is now explicit `23:59:59`. Evidence: `docs/live-qa-schedule-overwrite.png`.
+
+### Part 5: appointment-scoped trainer check-in
+
+- `GET /api/appointment/me/today-upcoming` is TRAINER-only, derives identity from
+  JWT, filters today's assigned appointments to starts at/after now, sorts them,
+  and returns at most two. The trainer live plan no longer downloads arbitrary
+  occupancy clients or offers a room selector; managers retain that reception flow.
+- “Započni trening” is page-local UI state because it only expands controls and has
+  no operational meaning after refresh. No `appointmentId` was added to
+  `RoomCheckIn`: the persisted event describes physical client/room presence and
+  occupancy already derives scheduled participation separately. The appointment
+  safely constrains the frontend's client and room arguments without conflating the
+  two evidence sources in the schema.
+- Live API QA returned the 17:00 Pulse studio appointment with three reserved
+  clients. Browser QA exposed exactly those three, no global client selector,
+  preselected the room, and completed check-in/check-out. Evidence:
+  `docs/live-qa-trainer-appointment-checkin.png`.

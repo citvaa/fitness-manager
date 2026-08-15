@@ -111,7 +111,11 @@ Every entity is also `@Audited` (Hibernate Envers).
   (`posX`/`posY`/`width`/`height`/`rotationDegrees`).
 - **RoomCheckIn** - historical manual check-in/out. A DB partial unique index
   permits one active check-in per client globally. Occupancy adds manual and
-  in-progress appointment counts without deduplication.
+  in-progress appointment counts without deduplication. Managers retain the
+  unrestricted reception form. Trainers instead receive only their next two
+  not-yet-started appointments today; “Započni trening” exposes that appointment's
+  roster and fixed room. Started state is intentionally page-local, while the
+  physical check-in remains the existing persistent room/client event.
 - **ClientProgressEntry/ClientPersonalRecord** - fixed-column body measurements
   and free-text exercise records with fixed units. Progress UI charts body
   measurements and one selected personal-record exercise at a time, suggests

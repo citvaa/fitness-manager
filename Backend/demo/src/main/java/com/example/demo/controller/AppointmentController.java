@@ -101,4 +101,7 @@ public class AppointmentController {
     public ResponseEntity<List<AppointmentDTO>> getMine() {
         return ResponseEntity.ok(appointmentService.getMyAppointments());
     }
+
+    @RoleRequired("TRAINER") @GetMapping("/me/today-upcoming")
+    public List<AppointmentDTO> getMyUpcomingToday() { return appointmentService.getMyUpcomingToday(); }
 }
