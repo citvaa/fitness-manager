@@ -2,10 +2,12 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
 import { decodeJwt } from "../auth/token";
 import type { Role } from "../types";
+import { NotificationCenter } from "./NotificationCenter";
 const roleLabels: Record<Role, string> = {
   MANAGER: "Menadžer",
   TRAINER: "Trener",
   CLIENT: "Klijent",
+  ADMIN: "Administrator",
 };
 export function AppShell() {
   const session = useAuthStore((s) => s.session)!;
@@ -13,7 +15,7 @@ export function AppShell() {
   const clear = useAuthStore((s) => s.clear);
   const navigate = useNavigate();
   const claims = decodeJwt(session.accessToken);
-  const roles = claims.roles ?? [];
+  const roles = (claims.roles ?? []).filter((role) => role !== "ADMIN");
   const manager = session.activeRole === "MANAGER";
   return (
     <div className="app-shell">
@@ -69,6 +71,7 @@ export function AppShell() {
           )}
         </nav>
         <div className="sidebar-bottom">
+          <NotificationCenter />
           {roles.length > 1 && (
             <label>
               Aktivna oblast

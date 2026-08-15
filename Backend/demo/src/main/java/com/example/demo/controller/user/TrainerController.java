@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import com.example.demo.repository.user.TrainerRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @RequiredArgsConstructor
 @RestController
@@ -16,6 +19,14 @@ import java.util.List;
 public class TrainerController {
 
     private final TrainerService trainerService;
+    private final TrainerRepository trainerRepository;
+
+    @RoleRequired("TRAINER")
+    @GetMapping("/me")
+    public TrainerDTO getMe() {
+        Jwt jwt = (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return trainerService.getById(trainerRepository.findByUserEmail(jwt.getClaim("email")).orElseThrow().getId());
+    }
 
     @RoleRequired("MANAGER")
     @GetMapping

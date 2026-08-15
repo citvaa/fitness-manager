@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import com.example.demo.repository.user.ClientRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @RequiredArgsConstructor
 @RestController
@@ -16,6 +19,14 @@ import java.util.List;
 public class ClientController {
 
     private final ClientService clientService;
+    private final ClientRepository clientRepository;
+
+    @RoleRequired("CLIENT")
+    @GetMapping("/me")
+    public ClientDTO getMe() {
+        Jwt jwt = (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return clientService.getById(clientRepository.findByUserEmail(jwt.getClaim("email")).orElseThrow().getId());
+    }
 
     @RoleRequired("MANAGER")
     @GetMapping

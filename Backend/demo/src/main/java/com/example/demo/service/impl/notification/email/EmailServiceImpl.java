@@ -66,6 +66,16 @@ public class EmailServiceImpl implements EmailService {
         asyncEmailService.sendEmail(trainerEmail, subject, body.toString());
     }
 
+    public void sendTrainerAssignmentEmail(String trainerEmail, @NotNull AppointmentDTO appointment) {
+        asyncEmailService.sendEmail(trainerEmail, "New training assignment",
+                "You were assigned to a training session on " + appointment.getDate() + " at " + appointment.getStartTime() + ".");
+    }
+
+    public void sendClientUpcomingAppointmentEmail(String clientEmail, @NotNull AppointmentDTO appointment) {
+        asyncEmailService.sendEmail(clientEmail, "Upcoming training session",
+                "Your training session starts on " + appointment.getDate() + " at " + appointment.getStartTime() + ".");
+    }
+
 
 
 

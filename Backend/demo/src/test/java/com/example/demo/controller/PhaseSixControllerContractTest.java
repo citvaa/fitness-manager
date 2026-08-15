@@ -6,6 +6,7 @@ import com.example.demo.controller.user.ClientController;
 import com.example.demo.dto.user.ClientDTO;
 import com.example.demo.service.params.request.user.CreateUserRequest;
 import com.example.demo.service.user.ClientService;
+import com.example.demo.repository.user.ClientRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -26,7 +27,7 @@ class PhaseSixControllerContractTest {
     @Test
     void clientCrudControllerDelegatesAllAddedOperations() {
         ClientService service = mock(ClientService.class);
-        ClientController controller = new ClientController(service);
+        ClientController controller = new ClientController(service, mock(ClientRepository.class));
         CreateUserRequest request = new CreateUserRequest();
         ClientDTO dto = new ClientDTO();
         when(service.getAll()).thenReturn(List.of(dto));

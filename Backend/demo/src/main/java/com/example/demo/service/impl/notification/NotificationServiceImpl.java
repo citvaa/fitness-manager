@@ -9,6 +9,7 @@ import com.example.demo.model.user.Client;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.model.user.User;
 import com.example.demo.repository.user.UserRepository;
+import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.notification.email.EmailService;
 import com.example.demo.service.notification.NotificationService;
 import com.example.demo.util.JsonUtil;
@@ -30,11 +31,16 @@ public class NotificationServiceImpl implements NotificationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final TrainerRepository trainerRepository;
 
     public void sendTrainerAssignmentNotification(Integer trainerId, AppointmentDTO appointmentDTO) {
         String jsonPayload = JsonUtil.convertToJson(new TrainerAssignmentNotificationDTO(appointmentDTO));
-
-        messagingTemplate.convertAndSend("/topic/trainer" + trainerId, jsonPayload);
+        Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new RuntimeException("Trainer not found"));
+        switch (trainer.getUser().getNotificationPreference()) {
+            case BOTH -> { emailService.sendTrainerAssignmentEmail(trainer.getUser().getEmail(), appointmentDTO); messagingTemplate.convertAndSend("/topic/trainer" + trainerId, jsonPayload); }
+            case EMAIL -> emailService.sendTrainerAssignmentEmail(trainer.getUser().getEmail(), appointmentDTO);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/trainer" + trainerId, jsonPayload);
+        }
     }
 
     public void sendTrainerScheduleNotification(@NotNull Trainer trainer, List<AppointmentDTO> appointments) {
@@ -78,6 +84,10 @@ public class NotificationServiceImpl implements NotificationService {
 
     public void sendClientUpcomingAppointmentNotification(@NotNull Client client, AppointmentDTO appointment) {
         String jsonPayload = JsonUtil.convertToJson(new ClientUpcomingAppointmentNotificationDTO(appointment));
-        messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+        switch (client.getUser().getNotificationPreference()) {
+            case BOTH -> { emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment); messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload); }
+            case EMAIL -> emailService.sendClientUpcomingAppointmentEmail(client.getUser().getEmail(), appointment);
+            case PUSH -> messagingTemplate.convertAndSend("/topic/client" + client.getId(), jsonPayload);
+        }
     }
 }

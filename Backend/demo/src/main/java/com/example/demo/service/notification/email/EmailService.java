@@ -16,4 +16,8 @@ public interface EmailService {
     void sendClientAppointmentReminderEmail(String clientEmail, @NotNull AppointmentDTO appointment);
 
     void sendTrainerScheduleEmail(String trainerEmail, @NotNull List<AppointmentDTO> appointments);
+
+    void sendTrainerAssignmentEmail(String trainerEmail, @NotNull AppointmentDTO appointment);
+
+    void sendClientUpcomingAppointmentEmail(String clientEmail, @NotNull AppointmentDTO appointment);
 }
