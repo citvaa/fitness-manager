@@ -875,3 +875,14 @@ real inbox; template rendering is independently covered. Captured UI states are
   form instead of exposing raw enum constants. Client creation already shares
   the Part 10 success/error state and email-only invitation flow, so it required
   no separate invitation implementation.
+
+## 2026-08-15 - Part 5 appointment-scoped manager check-in
+
+- The unrestricted manager reception form was removed. A MANAGER-only date
+  endpoint returns every appointment for the requested day sorted by start time;
+  the live floor uses it to show all remaining appointments today across all
+  trainers.
+- Manager and trainer now share the same appointment roster interaction: the
+  room is fixed by the appointment, only booked clients are actionable, and
+  check-in/check-out reuse the existing occupancy endpoints. The trainer view
+  retains its intentional next-two limit.

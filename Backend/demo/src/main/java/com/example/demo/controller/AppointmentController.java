@@ -104,4 +104,10 @@ public class AppointmentController {
 
     @RoleRequired("TRAINER") @GetMapping("/me/today-upcoming")
     public List<AppointmentDTO> getMyUpcomingToday() { return appointmentService.getMyUpcomingToday(); }
+
+    @RoleRequired("MANAGER")
+    @GetMapping("/date/{date}")
+    public List<AppointmentDTO> getForDate(@PathVariable java.time.LocalDate date) {
+        return appointmentService.getAppointmentsForDate(date);
+    }
 }

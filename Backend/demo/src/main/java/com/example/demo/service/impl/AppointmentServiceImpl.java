@@ -279,6 +279,13 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .toList();
     }
 
+    public List<AppointmentDTO> getAppointmentsForDate(LocalDate date) {
+        return appointmentRepository.findByDate(date).stream()
+                .map(appointmentMapper::toDto)
+                .sorted(java.util.Comparator.comparing(AppointmentDTO::getStartTime))
+                .toList();
+    }
+
     public Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date) {
         return clientAppointmentRepository.findByClientIdAndAppointmentDate(clientId, date)
                 .stream()

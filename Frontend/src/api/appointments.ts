@@ -12,6 +12,7 @@ export const appointmentsApi = {
   removeClient: async (id:number,clientId:number) => (await api.delete<AppointmentSummary>(`/api/appointment/${id}/remove-client`,{params:{clientId}})).data,
   mine: async () => (await api.get<AppointmentSummary[]>('/api/appointment/me')).data,
   upcomingToday: async () => (await api.get<AppointmentSummary[]>('/api/appointment/me/today-upcoming')).data,
+  forDate: async (date:string) => (await api.get<AppointmentSummary[]>(`/api/appointment/date/${date}`)).data,
   withoutTrainer: async () => (await api.get<AppointmentSummary[]>('/api/appointment/without-trainer')).data,
   assign: async (id:number) => (await api.post<AppointmentSummary>(`/api/appointment/${id}/assign`)).data,
   unassign: async (id:number) => (await api.delete<AppointmentSummary>(`/api/appointment/${id}/unassign`)).data,

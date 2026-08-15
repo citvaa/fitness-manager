@@ -76,6 +76,22 @@ class AppointmentMarketplaceServiceTest {
     @AfterEach void clearSecurityContext() { SecurityContextHolder.clearContext(); }
 
     @Test
+    void managerDateViewReturnsEveryAppointmentSortedByStartTime() {
+        LocalDate date = LocalDate.of(2026, 8, 15);
+        Appointment late = Appointment.builder().id(2).startTime(LocalTime.of(18, 0)).build();
+        Appointment early = Appointment.builder().id(1).startTime(LocalTime.of(9, 0)).build();
+        AppointmentDTO lateDto = new AppointmentDTO();
+        lateDto.setStartTime(LocalTime.of(18, 0));
+        AppointmentDTO earlyDto = new AppointmentDTO();
+        earlyDto.setStartTime(LocalTime.of(9, 0));
+        when(appointments.findByDate(date)).thenReturn(List.of(late, early));
+        when(mapper.toDto(late)).thenReturn(lateDto);
+        when(mapper.toDto(early)).thenReturn(earlyDto);
+
+        assertEquals(List.of(earlyDto, lateDto), service.getAppointmentsForDate(date));
+    }
+
+    @Test
     void clientCanReserveFutureAppointmentAndCreditsAreAdjusted() {
         authenticate("client@example.com", "CLIENT");
         Client client = Client.builder().id(5).build();

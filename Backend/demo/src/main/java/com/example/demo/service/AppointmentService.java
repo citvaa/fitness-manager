@@ -39,6 +39,7 @@ public interface AppointmentService {
     List<AppointmentDTO> getMyAppointments();
 
     List<AppointmentDTO> getAppointmentsForTrainer(Integer trainerId, LocalDate date);
+    List<AppointmentDTO> getAppointmentsForDate(LocalDate date);
     List<AppointmentDTO> getMyUpcomingToday();
 
     Optional<AppointmentDTO> getAppointmentForClient(Integer clientId, LocalDate date);

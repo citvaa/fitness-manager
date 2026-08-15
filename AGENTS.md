@@ -115,8 +115,8 @@ Every entity is also `@Audited` (Hibernate Envers).
   (`posX`/`posY`/`width`/`height`/`rotationDegrees`).
 - **RoomCheckIn** - historical manual check-in/out. A DB partial unique index
   permits one active check-in per client globally. Occupancy adds manual and
-  in-progress appointment counts without deduplication. Managers retain the
-  unrestricted reception form. Trainers instead receive only their next two
+  in-progress appointment counts without deduplication. Managers receive every
+  remaining appointment today across the gym, while trainers receive only their next two
   not-yet-started appointments today; “Započni trening” exposes that appointment's
   roster and fixed room. Roster actions reuse the manager check-in visual contract:
   compact green primary for check-in and bordered secondary for check-out. Started state is intentionally page-local, while the
