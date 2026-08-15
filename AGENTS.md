@@ -244,6 +244,8 @@ uses one hour per client, with explicit refresh/eviction.
   whole account so a role-less User cannot remain. The loaded profile is
   detached before bulk cleanup and UserRole orphans are flushed first, avoiding
   stale managed profile-to-deleted-user references.
+- Administration renders employment statuses through one Serbian label map;
+  raw `FULL_TIME`/`CONTRACT`/`FORMER_EMPLOYEE` values remain API-only.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.

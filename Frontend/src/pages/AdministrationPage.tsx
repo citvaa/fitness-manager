@@ -16,6 +16,11 @@ const roleLabel: Record<Role, string> = {
   CLIENT: "Klijent",
   ADMIN: "Administrator",
 };
+const employmentStatusLabel: Record<EmploymentStatus, string> = {
+  FULL_TIME: "Stalni radni odnos",
+  CONTRACT: "Ugovor",
+  FORMER_EMPLOYEE: "Bivši zaposleni",
+};
 export function AdministrationPage() {
   const { requestConfirmation, confirmationDialog } = useConfirm();
   const [tab, setTab] = useState<"users" | "trainers" | "clients">("users");
@@ -259,7 +264,7 @@ export function AdministrationPage() {
                   <div>
                     <strong>{t.user.email}</strong>
                     <small>
-                      Trener #{t.id} · {t.status} · {t.birthYear}
+                      Trener #{t.id} · {employmentStatusLabel[t.status]} · {t.birthYear}
                     </small>
                   </div>
                   <span className="status-chip">

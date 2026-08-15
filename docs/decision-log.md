@@ -868,3 +868,10 @@ real inbox; template rendering is independently covered. Captured UI states are
   persists it in the same transaction before the activation email is queued.
   TRAINER and CLIENT creation continue through their profile endpoints, so every
   newly created account immediately satisfies the one-operational-role invariant.
+
+## 2026-08-15 - Part 11 administration enum labels
+
+- Trainer rows now use the same Serbian employment-status labels as the create
+  form instead of exposing raw enum constants. Client creation already shares
+  the Part 10 success/error state and email-only invitation flow, so it required
+  no separate invitation implementation.
