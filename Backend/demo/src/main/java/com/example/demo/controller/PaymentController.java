@@ -4,6 +4,7 @@ import com.example.demo.annotation.RoleRequired;
 import com.example.demo.dto.PaymentDTO;
 import com.example.demo.service.PaymentService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
+import com.example.demo.service.params.response.payment.PaymentStatusResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,14 @@ public class PaymentController {
     @RoleRequired("CLIENT")
     @GetMapping("/me")
     public List<PaymentDTO> getOwn() { return paymentService.getOwn(); }
+
+    @RoleRequired("CLIENT")
+    @GetMapping("/me/status")
+    public List<PaymentStatusResponse> getOwnStatus() { return paymentService.getOwnStatus(); }
+
+    @RoleRequired("MANAGER")
+    @GetMapping("/status/{clientId}")
+    public List<PaymentStatusResponse> getStatus(@PathVariable Integer clientId) { return paymentService.getStatus(clientId); }
 
     @RoleRequired("MANAGER")
     @PostMapping

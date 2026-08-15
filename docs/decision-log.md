@@ -810,3 +810,17 @@ real inbox; template rendering is independently covered. Captured UI states are
 - A clean backend rebuild/restart against `fm_codex_live` followed by live trainer
   login proved “Moj raspored” and “Moji termini” both render calendars without
   403. The reported error was stale runtime bytecode, not an authorization defect.
+
+## 2026-08-15 - Parts 4 and 15b payment debt status
+
+- Payment status is a read model, not a new persisted counter. For each
+  `SessionType`, Java counts client-linked appointments whose end timestamp is
+  before current time in the Gym IANA zone, sums purchased Payment units, and
+  returns `{type, held, paid, owed=max(0, held-paid)}`. Every enum value is
+  returned even at zero; reserved/remaining tracking is deliberately ignored.
+- CLIENT `/api/payment/me/status` derives identity from JWT; MANAGER
+  `/api/payment/status/{clientId}` validates the target profile. One shared
+  `PaymentStatusSummary` renders client self status and manager-selected status,
+  including red debt and an all-clear message only when total debt is zero.
+- Focused service coverage proves future reservations are not held usage,
+  advance payment cannot create negative debt, and zero-valued types remain.

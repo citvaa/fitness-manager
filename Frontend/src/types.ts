@@ -71,5 +71,6 @@ export interface Holiday{id:number;date:string;description:string}
 export interface TrainerSchedule{id:number;trainer:TrainerProfile;date:string;startTime:string;endTime:string;status:'WORKING'|'HOLIDAY'|'SICK_LEAVE'|'VACATION'}
 export interface SessionInfo{id:number;type:'INDIVIDUAL'|'GROUP';maxParticipants:number}
 export interface Payment{id:number;client:ClientSummary;session:SessionInfo;paidAppointments:number;paymentDate:string}
+export interface PaymentStatus{type:'INDIVIDUAL'|'GROUP';held:number;paid:number;owed:number}
 export interface AppointmentSummary{id:number;date:string;startTime:string;endTime:string;session:SessionInfo;trainer:{id:number;email:string}|null;room:{id:number;name:string;type:string;capacity:number}|null;clients:ClientSummary[]}
 export interface DailySchedule{date:string;appointments:AppointmentSummary[]}

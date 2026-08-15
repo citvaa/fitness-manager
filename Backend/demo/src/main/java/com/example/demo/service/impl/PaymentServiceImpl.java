@@ -10,13 +10,20 @@ import com.example.demo.repository.user.ClientRepository;
 import com.example.demo.repository.user.ClientSessionTrackingRepository;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
+import com.example.demo.repository.AppointmentRepository;
+import com.example.demo.repository.gym.GymRepository;
+import com.example.demo.enums.SessionType;
 import com.example.demo.service.PaymentService;
 import com.example.demo.service.security.AuthenticatedUserService;
 import com.example.demo.service.params.request.user.client.CreatePaymentRequest;
+import com.example.demo.service.params.response.payment.PaymentStatusResponse;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.EnumMap;
 
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -29,6 +36,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final SessionRepository sessionRepository;
     private final ClientSessionTrackingRepository clientSessionTrackingRepository;
     private final AuthenticatedUserService authenticatedUserService;
+    private final AppointmentRepository appointmentRepository;
+    private final GymRepository gymRepository;
 
     public java.util.List<PaymentDTO> getAll(Integer clientId) {
         java.util.List<Payment> payments = clientId == null
@@ -39,6 +48,15 @@ public class PaymentServiceImpl implements PaymentService {
 
     public java.util.List<PaymentDTO> getOwn() {
         return getAll(authenticatedUserService.client().getId());
+    }
+
+    public java.util.List<PaymentStatusResponse> getStatus(Integer clientId) {
+        fetchClient(clientId);
+        return computePaymentStatus(clientId);
+    }
+
+    public java.util.List<PaymentStatusResponse> getOwnStatus() {
+        return computePaymentStatus(authenticatedUserService.client().getId());
     }
 
     @Transactional
@@ -96,5 +114,23 @@ public class PaymentServiceImpl implements PaymentService {
                 .paidAppointments(request.getPaidAppointments())
                 .paymentDate(request.getPaymentDate())
                 .build();
+    }
+
+    private java.util.List<PaymentStatusResponse> computePaymentStatus(Integer clientId) {
+        var held = new EnumMap<SessionType, Integer>(SessionType.class);
+        var paid = new EnumMap<SessionType, Integer>(SessionType.class);
+        var gym = gymRepository.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new IllegalStateException("Gym configuration not found"));
+        var now = LocalDateTime.now(ZoneId.of(gym.getTimezone()));
+        appointmentRepository.findDistinctByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(clientId).stream()
+                .filter(appointment -> LocalDateTime.of(appointment.getDate(), appointment.getEndTime()).isBefore(now))
+                .forEach(appointment -> held.merge(appointment.getSession().getType(), 1, Integer::sum));
+        paymentRepository.findByClientIdOrderByPaymentDateDescIdDesc(clientId)
+                .forEach(payment -> paid.merge(payment.getSession().getType(), payment.getPaidAppointments(), Integer::sum));
+        return java.util.Arrays.stream(SessionType.values()).map(type -> {
+            int heldCount = held.getOrDefault(type, 0);
+            int paidCount = paid.getOrDefault(type, 0);
+            return new PaymentStatusResponse(type, heldCount, paidCount, Math.max(0, heldCount - paidCount));
+        }).toList();
     }
 }

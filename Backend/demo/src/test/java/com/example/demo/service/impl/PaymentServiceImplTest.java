@@ -3,6 +3,12 @@ package com.example.demo.service.impl;
 import com.example.demo.dto.PaymentDTO;
 import com.example.demo.mapper.PaymentMapper;
 import com.example.demo.model.Payment;
+import com.example.demo.model.Appointment;
+import com.example.demo.model.Session;
+import com.example.demo.model.gym.Gym;
+import com.example.demo.enums.SessionType;
+import com.example.demo.repository.AppointmentRepository;
+import com.example.demo.repository.gym.GymRepository;
 import com.example.demo.model.user.Client;
 import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.SessionRepository;
@@ -16,6 +22,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -28,9 +37,11 @@ class PaymentServiceImplTest {
     @Mock SessionRepository sessions;
     @Mock ClientSessionTrackingRepository tracking;
     @Mock AuthenticatedUserService authenticatedUser;
+    @Mock AppointmentRepository appointments;
+    @Mock GymRepository gyms;
     PaymentServiceImpl service;
 
-    @BeforeEach void setUp() { service = new PaymentServiceImpl(mapper, payments, clients, sessions, tracking, authenticatedUser); }
+    @BeforeEach void setUp() { service = new PaymentServiceImpl(mapper, payments, clients, sessions, tracking, authenticatedUser, appointments, gyms); }
 
     @Test
     void managerHistoryUsesGlobalOrClientScopedQueries() {
@@ -53,5 +64,27 @@ class PaymentServiceImplTest {
         assertEquals(List.of(), service.getOwn());
         verify(payments).findByClientIdOrderByPaymentDateDescIdDesc(9);
         verify(payments, never()).findAllByOrderByPaymentDateDescIdDesc();
+    }
+
+    @Test
+    void paymentStatusUsesOnlyHeldAppointmentsAndNeverReturnsNegativeDebt() {
+        Session individual = new Session(); individual.setType(SessionType.INDIVIDUAL);
+        Session group = new Session(); group.setType(SessionType.GROUP);
+        when(authenticatedUser.client()).thenReturn(Client.builder().id(9).build());
+        when(gyms.findFirstByOrderByIdAsc()).thenReturn(Optional.of(Gym.builder().timezone("Europe/Belgrade").build()));
+        when(appointments.findDistinctByClientAppointmentsClientIdOrderByDateDescStartTimeDesc(9)).thenReturn(List.of(
+                Appointment.builder().date(LocalDate.now().minusDays(1)).endTime(LocalTime.NOON).session(individual).build(),
+                Appointment.builder().date(LocalDate.now().minusDays(2)).endTime(LocalTime.NOON).session(individual).build(),
+                Appointment.builder().date(LocalDate.now().plusDays(1)).endTime(LocalTime.NOON).session(group).build()));
+        when(payments.findByClientIdOrderByPaymentDateDescIdDesc(9)).thenReturn(List.of(
+                Payment.builder().session(individual).paidAppointments(1).build(),
+                Payment.builder().session(group).paidAppointments(5).build()));
+
+        var result = service.getOwnStatus();
+
+        assertEquals(2, result.size());
+        assertEquals(1, result.get(0).owed());
+        assertEquals(0, result.get(1).held());
+        assertEquals(0, result.get(1).owed());
     }
 }

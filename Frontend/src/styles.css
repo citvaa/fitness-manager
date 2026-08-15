@@ -43,6 +43,7 @@ button {
   text-decoration: line-through;
   text-decoration-color: #b8aa98;
 }
+.payment-status-summary{margin-bottom:18px;padding:22px;border:1px solid #dbe3da;border-radius:19px;background:#fff}.payment-status-summary h2{margin:0}.payment-status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.payment-status-grid article{padding:15px;border-radius:13px;background:#f4f7f2}.payment-status-grid p{margin:6px 0;color:#59665d}.payment-debt{color:#b43c3c;font-weight:800}.payment-clear{margin:14px 0 0;color:#477d17;font-weight:800}@media(max-width:650px){.payment-status-grid{grid-template-columns:1fr}}
 .login-page {
   min-height: 100vh;
   display: grid;
