@@ -600,3 +600,16 @@ real inbox; template rendering is independently covered. Captured UI states are
   rows. Browser QA found 21 highlighted appointment days, 21 schedule days, and
   the recurring checkbox. Evidence: `docs/live-qa-appointments-calendar.png` and
   `docs/live-qa-schedule-calendar.png`.
+
+### Part 4: confirmed symmetric schedule overwrite
+
+- Both schedule request shapes carry `confirmOverwrite`. A shared overlap resolver
+  returns HTTP 409 with code `SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED`; the frontend
+  displays a modal and retries explicitly. Confirmed replacement deletes all rows
+  overlapping the new range before inserting it, in one transaction.
+- Any trainer appointment overlapping the requested range blocks replacement even
+  when confirmed, with a date-specific message. Live API QA verified WORKING→away
+  and away→WORKING as 409 then 201, and a booked 2026-08-29 slot as HTTP 400.
+- Live QA found a precision bug in the first full-day implementation: JDBC rounded
+  `LocalTime.MAX` to midnight, making away-side overlap queries empty. The boundary
+  is now explicit `23:59:59`. Evidence: `docs/live-qa-schedule-overwrite.png`.

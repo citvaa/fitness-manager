@@ -12,6 +12,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(ScheduleOverlapException.class)
+    public ResponseEntity<Map<String, Object>> handleScheduleOverlap(ScheduleOverlapException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("timestamp", LocalDateTime.now(), "status", 409,
+                "error", "Conflict", "code", "SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED", "message", exception.getMessage()));
+    }
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException exception) {
         return response(exception.getStatus(), exception.getMessage());

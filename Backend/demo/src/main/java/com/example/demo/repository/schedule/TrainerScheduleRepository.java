@@ -36,5 +36,8 @@ public interface TrainerScheduleRepository extends JpaRepository<TrainerSchedule
     void deleteByTrainer(@Param("trainer") Trainer trainer);
 
     List<TrainerSchedule> findByTrainerIdAndDate(Integer trainerId, LocalDate date);
+    @Query("SELECT ts FROM TrainerSchedule ts WHERE ts.trainer.id=:trainerId AND ts.date=:date AND ts.startTime < :endTime AND ts.endTime > :startTime")
+    List<TrainerSchedule> findOverlapping(@Param("trainerId") Integer trainerId, @Param("date") LocalDate date,
+                                          @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
     List<TrainerSchedule> findByTrainerIdOrderByDateAscStartTimeAsc(Integer trainerId);
 }

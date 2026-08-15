@@ -15,6 +15,9 @@ import java.time.LocalTime;
 @Getter
 @Setter
 public class CreateTrainerScheduleRequest {
+    public CreateTrainerScheduleRequest(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        this(trainerId, date, startTime, endTime, false);
+    }
     private Integer trainerId;
 
     private LocalDate date;
@@ -26,4 +29,5 @@ public class CreateTrainerScheduleRequest {
     @Schema(example = "00:00:00")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "HH:mm:ss")
     private LocalTime endTime;
+    private boolean confirmOverwrite;
 }

@@ -17,4 +17,5 @@ public class CreateTrainerUnavailabilityRequest {
     private LocalDate startDate;
     private LocalDate endDate;
     private WorkStatus status;
+    private boolean confirmOverwrite;
 }

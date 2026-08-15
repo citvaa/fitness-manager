@@ -12,6 +12,8 @@ import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.service.HolidayService;
 import com.example.demo.service.security.AuthenticatedUserService;
 import com.example.demo.exception.ApiException;
+import com.example.demo.exception.ScheduleOverlapException;
+import com.example.demo.repository.AppointmentRepository;
 import org.springframework.http.HttpStatus;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
@@ -38,12 +40,13 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final TrainerScheduleMapper trainerScheduleMapper;
     private final HolidayService holidayService;
     private final AuthenticatedUserService authenticatedUserService;
+    private final AppointmentRepository appointmentRepository;
 
     @Transactional
     public TrainerScheduleDTO createSchedule(@NotNull CreateTrainerScheduleRequest request) {
         validateScheduleRequest(request.getDate(), request.getStartTime(), request.getEndTime());
         validateGymHours(request.getDate(), request.getStartTime(), request.getEndTime());
-        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
+        resolveOverlap(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime(), request.isConfirmOverwrite());
 
         Trainer trainer = fetchTrainer(request.getTrainerId());
         TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, request.getDate(), request.getStartTime(), request.getEndTime());
@@ -63,6 +66,10 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         }
 
         Trainer trainer = trainerRepository.findById(trainerId).orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
+
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            resolveOverlap(trainerId, date, LocalTime.MIN, LocalTime.of(23, 59, 59), request.isConfirmOverwrite());
+        }
 
         LocalDate currentDate = startDate;
         while (!currentDate.isAfter(endDate)) {
@@ -157,11 +164,14 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         }
     }
 
-    private void validateTrainerAvailability(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime) {
-        boolean overlapExists = trainerScheduleRepository.existsByTrainerIdAndDateAndTimeRange(trainerId, date, startTime, endTime);
-        if (overlapExists) {
-            throw new IllegalArgumentException("Trainer already has a shift overlapping with this time range");
+    private void resolveOverlap(Integer trainerId, LocalDate date, LocalTime startTime, LocalTime endTime, boolean confirmed) {
+        List<TrainerSchedule> overlaps = trainerScheduleRepository.findOverlapping(trainerId, date, startTime, endTime);
+        if (overlaps.isEmpty()) return;
+        if (appointmentRepository.existsByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(trainerId, date, endTime, startTime)) {
+            throw new IllegalArgumentException("Nije moguće zameniti raspored za " + date + " jer trener ima zakazan trening u tom periodu.");
         }
+        if (!confirmed) throw new ScheduleOverlapException("Postojeći raspored za " + date + " se preklapa. Potvrdite zamenu postojećeg unosa.");
+        trainerScheduleRepository.deleteAll(overlaps);
     }
 
     private Trainer fetchTrainer(Integer trainerId) {

@@ -6,6 +6,7 @@ import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.model.schedule.TrainerSchedule;
 import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.schedule.GymScheduleRepository;
+import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.schedule.TrainerScheduleRepository;
 import com.example.demo.repository.user.TrainerRepository;
 import com.example.demo.service.HolidayService;
@@ -35,11 +36,12 @@ class TrainerScheduleServiceImplTest {
     @Mock TrainerScheduleMapper mapper;
     @Mock HolidayService holidays;
     @Mock AuthenticatedUserService authenticatedUser;
+    @Mock AppointmentRepository appointments;
     TrainerScheduleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new TrainerScheduleServiceImpl(gymSchedules, trainers, schedules, mapper, holidays, authenticatedUser);
+        service = new TrainerScheduleServiceImpl(gymSchedules, trainers, schedules, mapper, holidays, authenticatedUser, appointments);
     }
 
     @Test

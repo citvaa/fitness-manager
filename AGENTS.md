@@ -99,6 +99,11 @@ Every entity is also `@Audited` (Hibernate Envers).
   `VACATION`) for a given date and time range. Trainer self-service and manager
   forms can create eight weekly WORKING instances; invalid weeks are reported
   and skipped, and total failure includes one reason per attempted date.
+  Creating WORKING over an existing row, or unavailability over WORKING, first
+  checks trainer appointments. A booked overlap is immutable; otherwise API
+  returns 409 code `SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED`, and only an explicit
+  `confirmOverwrite` retry replaces the overlapping rows. The frontend uses an
+  in-app confirmation modal for both directions.
 - **Holiday** - a gym-wide non-working date.
 - **Gym** - audited single-installation configuration with branding/contact
   data and IANA timezone.

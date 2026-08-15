@@ -8,6 +8,7 @@ import {
 import { trainersApi } from "../api/administration";
 import { errorMessage } from "../api/client";
 import { MonthCalendar } from "../components/MonthCalendar";
+import axios from "axios";
 import type {
   GymSchedule,
   Holiday,
@@ -46,6 +47,7 @@ export function SchedulesPage() {
   const [notice, setNotice] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [recurring, setRecurring] = useState(false);
+  const [overwrite, setOverwrite] = useState<{message:string;run:()=>Promise<void>}|null>(null);
   const [shift, setShift] = useState({
     date: new Date().toISOString().slice(0, 10),
     startTime: "08:00:00",
@@ -91,6 +93,9 @@ export function SchedulesPage() {
       else await trainerScheduleApi.create(request,own);
       await loadRows();
     } catch (x) {
+      if(axios.isAxiosError(x)&&x.response?.data?.code==='SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED'){
+        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.create({...shift,...(!own&&{trainerId}),confirmOverwrite:true},own);await loadRows()}});return
+      }
       setNotice(errorMessage(x));
     }
   }
@@ -103,6 +108,9 @@ export function SchedulesPage() {
       );
       await loadRows();
     } catch (x) {
+      if(axios.isAxiosError(x)&&x.response?.data?.code==='SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED'){
+        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.unavailable({...away,...(!own&&{trainerId}),confirmOverwrite:true},own);await loadRows()}});return
+      }
       setNotice(errorMessage(x));
     }
   }
@@ -156,6 +164,7 @@ export function SchedulesPage() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
+      {overwrite&&<div className="overwrite-backdrop"><section className="progress-card overwrite-confirm"><p className="eyebrow">Potvrda zamene</p><h2>Preklapanje rasporeda</h2><p>{overwrite.message}</p><div><button className="secondary-button" onClick={()=>setOverwrite(null)}>Odustani</button><button className="primary-button" onClick={async()=>{try{await overwrite.run();setOverwrite(null)}catch(reason){setNotice(errorMessage(reason));setOverwrite(null)}}}>Zameni postojeći unos</button></div></section></div>}
       {!own && (
         <div className="schedule-admin-grid">
           <section className="progress-card">

@@ -39,6 +39,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Intege
 
     Optional<Appointment> findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(
             Integer trainerId, LocalDate date, LocalTime endTime, LocalTime startTime);
+    boolean existsByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(
+            Integer trainerId, LocalDate date, LocalTime endTime, LocalTime startTime);
 
     Optional<Appointment> findFirstByRoomIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(
             Integer roomId, LocalDate date, LocalTime endTime, LocalTime startTime);
