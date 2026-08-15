@@ -569,3 +569,19 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live QA also exposed a reseed/scheduler deadlock risk in the former procedural
   per-table TRUNCATE loop. Reseed now builds one ordered `TRUNCATE ... RESTART
   IDENTITY CASCADE` statement, acquiring the wipe's locks as a set.
+
+### Part 2: complete progress history and honest AI state
+
+- Personal-record entry remains free text but uses a datalist populated from the
+  selected client's existing exercise names. A dedicated chart groups records by
+  exercise and lets the user select one series, avoiding mixed units/scales. The
+  measurement history now prints all seven metrics rather than weight alone.
+- Summary loading no longer attaches `.catch(() => null)`. Data and AI requests are
+  handled separately: a failed regeneration shows the backend message in the
+  narrative card and deliberately leaves the last successful narrative visible.
+- The real root `.env` key had a valid Anthropic shape. A live forced request for a
+  seeded client returned model `claude-haiku-4-5-20251001` and a substantive
+  narrative. Browser QA then verified the chart, editable exercise suggestion,
+  complete metric row, and—using a backend-shaped forced 503 response—that the
+  visible error does not erase the previous text. Evidence:
+  `docs/live-qa-progress-ai.png`.

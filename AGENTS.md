@@ -106,7 +106,11 @@ Every entity is also `@Audited` (Hibernate Envers).
   permits one active check-in per client globally. Occupancy adds manual and
   in-progress appointment counts without deduplication.
 - **ClientProgressEntry/ClientPersonalRecord** - fixed-column body measurements
-  and free-text exercise records with fixed units.
+  and free-text exercise records with fixed units. Progress UI charts body
+  measurements and one selected personal-record exercise at a time, suggests
+  existing exercise names through an editable datalist, and lists every body
+  metric. AI summary failures remain visible beside the narrative and never
+  erase the previous successful insight.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - **Appointment** optionally belongs to Room and has no persisted status or
