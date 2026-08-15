@@ -243,6 +243,8 @@ uses one hour per client, with explicit refresh/eviction.
   selected dates show only the held section (including no marketplace), future
   dates only the upcoming section plus marketplace, and today shows both plus
   marketplace; unassigned marketplace rows are scoped to the selected date.
+- The manager daily schedule also uses `MonthCalendar`; changing the selected
+  day reloads its date-scoped aggregate timeline.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
   `http://localhost:5173`); activation targets the frontend's real
   `/complete-registration?key=...` route, and user creation flushes before

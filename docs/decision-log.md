@@ -768,3 +768,9 @@ real inbox; template rendering is independently covered. Captured UI states are
   language instead of `prompt()`. One typed edit state covers User, Trainer, and
   Client rows, retains their existing update endpoints, uses native email
   validation, and reports backend failures through the page's visible feedback.
+
+## 2026-08-15 - Part 13 daily calendar navigation
+
+- The manager daily schedule replaced its native date input with the shared
+  dependency-free `MonthCalendar`. Selection still drives the same date-scoped
+  aggregate endpoint and timeline; only navigation and layout changed.
