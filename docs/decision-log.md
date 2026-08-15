@@ -548,3 +548,24 @@ readable STOMP notifications for trainer and client EMAIL/PUSH/BOTH choices. SMT
 dispatch was observed, but placeholder Gmail credentials cannot prove delivery to a
 real inbox; template rendering is independently covered. Captured UI states are
 `docs/live-qa-floor-editor.png` and `docs/live-qa-notification-center.png`.
+
+## 2026-08-15 - Five-part operational upgrade
+
+### Part 1: realistic current-month demo data
+
+- The dev fixture now represents one plausible gym: exactly five trainers and
+  fifty transliterated Serbian client identities, 140 appointments across every
+  date of the current month, a 15/35/50 weighting across individual/small-group/
+  large-group sessions, and exactly 25% trainer-less marketplace slots.
+- WORKING schedule rows are derived after appointment generation from each
+  trainer/date's actual earliest and latest assigned slot. Payments are derived
+  from real bookings: 45 clients are fully paid and five intentionally owe two
+  booked sessions. Every client receives seven measurement snapshots spanning
+  six months and three monthly points for one personal-record exercise.
+- Live `POST /api/dev/reseed` against isolated `fm_codex_live` returned 204 and
+  SQL verification produced: 5 trainers, 50 clients, 140 appointments over all
+  31 August dates, 35 unassigned, 105 WORKING rows, 350 measurements, 150 records,
+  two holidays, and five debtors.
+- Live QA also exposed a reseed/scheduler deadlock risk in the former procedural
+  per-table TRUNCATE loop. Reseed now builds one ordered `TRUNCATE ... RESTART
+  IDENTITY CASCADE` statement, acquiring the wipe's locks as a set.

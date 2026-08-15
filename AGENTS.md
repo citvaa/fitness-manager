@@ -210,7 +210,13 @@ uses one hour per client, with explicit refresh/eviction.
   `max(100, trimmed-name-length * 10 + 32)`, height 80.
 - Dev data can be destructively rebuilt through manager-only `POST
   /api/dev/reseed`; it preserves Flyway history and rebuilds all application
-  tables plus the relative operational fixture.
+  tables plus the relative operational fixture. The fixture contains exactly
+  5 trainers and 50 clients, every day of the current month (~140 appointments,
+  25% trainer-less, group-weighted), WORKING ranges derived from assigned
+  appointments, 90% fully paid clients plus intentional debtors, seven six-month
+  measurements and three monthly personal-record points per client, two holidays,
+  and weekday/weekend gym hours. Reseed truncates all application tables in one
+  statement so the occupancy scheduler cannot deadlock a partially locked wipe.
 
 - Layered packages: `controller` (thin, `@RoleRequired`-gated) -> `service`
   interface + `service.impl` -> `repository` (Spring Data JPA) -> `model`

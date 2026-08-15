@@ -18,7 +18,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 @Component
 @Profile("dev")
@@ -41,26 +44,28 @@ public class DemoDataSeeder implements ApplicationRunner {
         }
         log.info("🔥 Kreiranje realističnog Momentum Fitness demo skupa...");
         seedGymHoursAndHoliday();
-        List<Integer> trainers = seedTrainers();
-        List<Integer> clients = seedClients();
-        seedTrainerSchedules(trainers);
+        seedTrainers();
+        seedClients();
+        List<Integer> trainers = jdbc.queryForList("SELECT id FROM trainer ORDER BY id", Integer.class);
+        List<Integer> clients = jdbc.queryForList("SELECT id FROM client ORDER BY id", Integer.class);
         seedOperationalHistory(trainers, clients);
         log.info("✅ Demo seeder završen: {} trenera, {} klijenata i relativna istorija/ponuda termina.", trainers.size(), clients.size());
     }
 
     @Transactional
     public void reseed() {
-        jdbc.execute("DO $$ DECLARE table_name text; BEGIN FOR table_name IN " +
-                "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'flyway_schema_history' " +
-                "LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', table_name); END LOOP; END $$");
-        jdbc.execute("DO $$ DECLARE sequence_name text; BEGIN FOR sequence_name IN " +
-                "SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP " +
-                "EXECUTE format('ALTER SEQUENCE %I RESTART WITH 1', sequence_name); END LOOP; END $$");
+        List<String> tables = jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'flyway_schema_history' ORDER BY tablename", String.class);
+        String quotedTables = tables.stream().map(name -> '"' + name.replace("\"", "\"\"") + '"').reduce((left, right) -> left + "," + right)
+                .orElseThrow(() -> new IllegalStateException("No application tables found for reseed"));
+        // One TRUNCATE acquires the table locks as a set; the former per-table loop
+        // could deadlock with the minute occupancy reader halfway through the wipe.
+        jdbc.execute("TRUNCATE TABLE " + quotedTables + " RESTART IDENTITY CASCADE");
         seedFoundations();
         seedGymHoursAndHoliday();
-        List<Integer> trainers = seedTrainers();
-        List<Integer> clients = seedClients();
-        seedTrainerSchedules(trainers);
+        seedTrainers();
+        seedClients();
+        List<Integer> trainers = jdbc.queryForList("SELECT id FROM trainer ORDER BY id", Integer.class);
+        List<Integer> clients = jdbc.queryForList("SELECT id FROM client ORDER BY id", Integer.class);
         seedOperationalHistory(trainers, clients);
         log.info("✅ Dev baza je potpuno ponovo posejana.");
     }
@@ -80,29 +85,34 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private void seedGymHoursAndHoliday() {
         for (DayOfWeek day : DayOfWeek.values()) {
-            LocalTime opening = day == DayOfWeek.SUNDAY ? LocalTime.of(8, 0) : LocalTime.of(6, 0);
-            LocalTime closing = day == DayOfWeek.SUNDAY ? LocalTime.of(20, 0) : LocalTime.of(23, 0);
+            boolean weekday = day != DayOfWeek.SATURDAY && day != DayOfWeek.SUNDAY;
+            LocalTime opening = weekday ? LocalTime.of(6, 0) : LocalTime.of(8, 0);
+            LocalTime closing = weekday ? LocalTime.of(23, 0) : LocalTime.of(20, 0);
             jdbc.update("INSERT INTO gym_schedule(day, opening_time, closing_time) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET opening_time=EXCLUDED.opening_time, closing_time=EXCLUDED.closing_time", day.name(), opening, closing);
         }
         LocalDate holiday = LocalDate.now().plusMonths(1).withDayOfMonth(1);
         jdbc.update("INSERT INTO holiday(date, description) VALUES (?, ?) ON CONFLICT(date) DO NOTHING", Date.valueOf(holiday), "Dan održavanja i servis opreme");
+        jdbc.update("INSERT INTO holiday(date, description) VALUES (?, ?) ON CONFLICT(date) DO NOTHING", Date.valueOf(holiday.plusMonths(1).plusDays(10)), "Praznični neradni dan");
     }
 
     private List<Integer> seedTrainers() {
-        String[][] people = {{MARKER_EMAIL, "1991", "FULL_TIME"}, {"ana.trener@momentum.demo", "1994", "FULL_TIME"}, {"nikola.trener@momentum.demo", "1988", "CONTRACT"}};
+        String[][] people = {{MARKER_EMAIL, "1991", "FULL_TIME", "6"}, {"ana.petrovic@momentum.demo", "1994", "FULL_TIME", "3"}, {"nikola.jovanovic@momentum.demo", "1988", "CONTRACT", "5"}, {"milica.stojanovic@momentum.demo", "1997", "CONTRACT", "2"}};
         List<Integer> ids = new ArrayList<>();
         for (int i = 0; i < people.length; i++) {
             int userId = insertUser(people[i][0], "TRAINER");
-            Integer trainerId = jdbc.queryForObject("INSERT INTO trainer(user_id, employment_date, birth_year, status) VALUES (?, ?, ?, ?) RETURNING id", Integer.class, userId, Date.valueOf(LocalDate.now().minusYears(4 - i)), Integer.valueOf(people[i][1]), people[i][2]);
+            Integer trainerId = jdbc.queryForObject("INSERT INTO trainer(user_id, employment_date, birth_year, status) VALUES (?, ?, ?, ?) RETURNING id", Integer.class, userId, Date.valueOf(LocalDate.now().minusYears(Integer.parseInt(people[i][3])).minusMonths(i * 2L)), Integer.valueOf(people[i][1]), people[i][2]);
             ids.add(trainerId);
         }
         return ids;
     }
 
     private List<Integer> seedClients() {
-        String[] emails = {"jelena.klijent@momentum.demo", "luka.klijent@momentum.demo", "mina.klijent@momentum.demo", "stefan.klijent@momentum.demo", "iva.klijent@momentum.demo"};
+        String[] firstNames = {"jelena", "luka", "mina", "stefan", "iva", "milica", "nikola", "ana", "marko", "tamara", "nemanja", "sara", "dusan", "teodora", "vuk"};
+        String[] lastNames = {"jovanovic", "petrovic", "nikolic", "stojanovic", "ilic", "pavlovic", "markovic", "djurdjevic", "kovacevic", "popovic"};
         List<Integer> ids = new ArrayList<>();
-        for (String email : emails) {
+        for (int i = 0; i < 49; i++) {
+            String email = firstNames[i % firstNames.length] + "." + lastNames[(i * 3 + i / firstNames.length) % lastNames.length]
+                    + (i >= firstNames.length ? i / firstNames.length + 1 : "") + "@clan.momentum.demo";
             int userId = insertUser(email, "CLIENT");
             ids.add(jdbc.queryForObject("INSERT INTO client(user_id) VALUES (?) RETURNING id", Integer.class, userId));
         }
@@ -115,45 +125,53 @@ public class DemoDataSeeder implements ApplicationRunner {
         return userId;
     }
 
-    private void seedTrainerSchedules(List<Integer> trainers) {
-        for (int offset = -56; offset <= 35; offset++) {
-            LocalDate date = LocalDate.now().plusDays(offset);
-            if (date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
-            for (int trainer : trainers) jdbc.update("INSERT INTO trainer_schedule(trainer_id,date,start_time,end_time,status) VALUES (?,?,?,?,?)", trainer, Date.valueOf(date), LocalTime.of(7, 0), LocalTime.of(21, 0), "WORKING");
-        }
-    }
-
     private void seedOperationalHistory(List<Integer> trainers, List<Integer> clients) {
         List<Integer> sessions = jdbc.queryForList("SELECT id FROM session ORDER BY id", Integer.class);
         List<Integer> rooms = jdbc.queryForList("SELECT id FROM room WHERE type <> 'LOCKER_ROOM' ORDER BY id", Integer.class);
         if (rooms.isEmpty()) throw new IllegalStateException("Demo floor-plan rooms must exist before DemoDataSeeder runs");
 
         for (int clientIndex = 0; clientIndex < clients.size(); clientIndex++) {
-            int client = clients.get(clientIndex);
-            for (int session : sessions) {
-                jdbc.update("INSERT INTO payment(client_id,session_id,paid_appointments,payment_date) VALUES (?,?,?,?)", client, session, session == sessions.get(0) ? 12 : 20, Date.valueOf(LocalDate.now().minusDays(70 - clientIndex * 3)));
-                jdbc.update("INSERT INTO client_session_tracking(client_id,session_id,remaining_appointments,reserved_appointments) VALUES (?,?,?,?)", client, session, 8, 4);
-            }
-            seedProgress(client, clientIndex);
+            seedProgress(clients.get(clientIndex), clientIndex);
         }
 
+        Random random = new Random(20260815L);
+        Map<Integer, Map<LocalDate, LocalTime[]>> workingRanges = new LinkedHashMap<>();
+        LocalDate date = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthEnd = date.withDayOfMonth(date.lengthOfMonth());
         int sequence = 0;
-        for (int offset = -56; offset <= 28; offset++) {
-            LocalDate date = LocalDate.now().plusDays(offset);
-            if (date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
-            for (int slot = 0; slot < 2; slot++) {
-                LocalTime start = LocalTime.of(slot == 0 ? 9 : 18, (sequence % 2) * 30);
-                Integer trainer = offset > 0 && sequence % 4 == 0 ? null : trainers.get(sequence % trainers.size());
-                int session = sessions.get(sequence % sessions.size());
+        while (!date.isAfter(monthEnd)) {
+            List<LocalTime> slots = switch (date.getDayOfWeek()) {
+                case SATURDAY -> List.of(LocalTime.of(8, 30), LocalTime.of(10, 30), LocalTime.of(13, 0), LocalTime.of(17, 0));
+                case SUNDAY -> List.of(LocalTime.of(9, 0), LocalTime.of(11, 0), LocalTime.of(17, 30));
+                default -> List.of(LocalTime.of(7, 0), LocalTime.of(9, 0), LocalTime.of(17, 0), LocalTime.of(18, 30), LocalTime.of(20, 0));
+            };
+            for (LocalTime start : slots) {
+                Integer trainer = sequence % 4 == 0 ? null : trainers.get(sequence % trainers.size());
+                int roll = random.nextInt(100);
+                int session = roll < 15 ? sessions.get(0) : roll < 50 ? sessions.get(1) : sessions.get(2);
                 int room = rooms.get(sequence % rooms.size());
                 Integer appointment = jdbc.queryForObject("INSERT INTO appointment(date,start_time,end_time,session_id,trainer_id,room_id) VALUES (?,?,?,?,?,?) RETURNING id", Integer.class, Date.valueOf(date), start, start.plusHours(1), session, trainer, room);
-                if (offset < 0 || (offset > 0 && sequence % 3 == 0)) {
-                    int participantLimit = session == sessions.get(0) ? 1 : 2;
-                    for (int p = 0; p < participantLimit; p++) jdbc.update("INSERT INTO client_appointment(client_id,appointment_id) VALUES (?,?)", clients.get((sequence + p) % clients.size()), appointment);
+                int capacity = session == sessions.get(0) ? 1 : session == sessions.get(1) ? 3 : 10;
+                int participants = session == sessions.get(0) ? 1 : Math.max(2, capacity - random.nextInt(Math.max(1, capacity / 2)));
+                for (int p = 0; p < participants; p++) {
+                    jdbc.update("INSERT INTO client_appointment(client_id,appointment_id) VALUES (?,?)", clients.get((sequence * 3 + p) % clients.size()), appointment);
+                }
+                if (trainer != null) {
+                    LocalTime[] range = workingRanges.computeIfAbsent(trainer, ignored -> new LinkedHashMap<>())
+                            .computeIfAbsent(date, ignored -> new LocalTime[]{start, start.plusHours(1)});
+                    if (start.isBefore(range[0])) range[0] = start;
+                    if (start.plusHours(1).isAfter(range[1])) range[1] = start.plusHours(1);
                 }
                 sequence++;
             }
+            date = date.plusDays(1);
         }
+
+        workingRanges.forEach((trainer, dates) -> dates.forEach((workingDate, range) ->
+                jdbc.update("INSERT INTO trainer_schedule(trainer_id,date,start_time,end_time,status) VALUES (?,?,?,?,?)",
+                        trainer, Date.valueOf(workingDate), range[0], range[1], "WORKING")));
+
+        seedPaymentsAndTracking(clients, sessions);
 
         for (int i = 0; i < 24; i++) {
             LocalDateTime in = LocalDate.now().minusDays(3 + i * 2L).atTime(17 + i % 3, 0);
@@ -161,13 +179,29 @@ public class DemoDataSeeder implements ApplicationRunner {
         }
     }
 
-    private void seedProgress(int client, int index) {
-        BigDecimal base = BigDecimal.valueOf(88 - index * 4L);
-        for (int point = 0; point < 7; point++) {
-            jdbc.update("INSERT INTO client_progress_entry(client_id,entry_date,weight_kg,body_fat_percent,waist_cm,chest_cm,hip_cm,thigh_cm,arm_cm,notes) VALUES (?,?,?,?,?,?,?,?,?,?)", client, Date.valueOf(LocalDate.now().minusDays(84 - point * 14L)), base.subtract(BigDecimal.valueOf(point * .8)), BigDecimal.valueOf(27 - point * .7 - index * .4), BigDecimal.valueOf(96 - point - index), BigDecimal.valueOf(101 + point * .3), BigDecimal.valueOf(104 - point * .6), BigDecimal.valueOf(59 - point * .2), BigDecimal.valueOf(32 + point * .25), point == 6 ? "Stabilan napredak i dobra energija." : "Redovno merenje u dvonedeljnom ciklusu.");
+    private void seedPaymentsAndTracking(List<Integer> clients, List<Integer> sessions) {
+        for (int clientIndex = 0; clientIndex < clients.size(); clientIndex++) {
+            int client = clients.get(clientIndex);
+            for (int session : sessions) {
+                Integer booked = jdbc.queryForObject("SELECT COUNT(*) FROM client_appointment ca JOIN appointment a ON a.id=ca.appointment_id WHERE ca.client_id=? AND a.session_id=?", Integer.class, client, session);
+                Integer reserved = jdbc.queryForObject("SELECT COUNT(*) FROM client_appointment ca JOIN appointment a ON a.id=ca.appointment_id WHERE ca.client_id=? AND a.session_id=? AND a.date>=CURRENT_DATE", Integer.class, client, session);
+                int paid = clientIndex % 10 == 0 ? Math.max(0, booked - 2) : booked;
+                if (booked > 0) {
+                    jdbc.update("INSERT INTO payment(client_id,session_id,paid_appointments,payment_date) VALUES (?,?,?,?)", client, session, paid, Date.valueOf(LocalDate.now().minusDays(5 + clientIndex % 20)));
+                    jdbc.update("INSERT INTO client_session_tracking(client_id,session_id,remaining_appointments,reserved_appointments) VALUES (?,?,?,?)", client, session, Math.max(0, paid - reserved), reserved);
+                }
+            }
         }
-        jdbc.update("INSERT INTO client_personal_record(client_id,exercise_name,value,unit,record_date) VALUES (?,?,?,?,?)", client, "Čučanj", BigDecimal.valueOf(70 + index * 5L), "KG", Date.valueOf(LocalDate.now().minusDays(18)));
-        jdbc.update("INSERT INTO client_personal_record(client_id,exercise_name,value,unit,record_date) VALUES (?,?,?,?,?)", client, "Plank", BigDecimal.valueOf(90 + index * 12L), "SECONDS", Date.valueOf(LocalDate.now().minusDays(9)));
-        jdbc.update("INSERT INTO client_personal_record(client_id,exercise_name,value,unit,record_date) VALUES (?,?,?,?,?)", client, "Trčanje 5 km", BigDecimal.valueOf(28 - index), "MINUTES", Date.valueOf(LocalDate.now().minusDays(4)));
+    }
+
+    private void seedProgress(int client, int index) {
+        BigDecimal base = BigDecimal.valueOf(72 + index % 12);
+        for (int point = 0; point < 7; point++) {
+            jdbc.update("INSERT INTO client_progress_entry(client_id,entry_date,weight_kg,body_fat_percent,waist_cm,chest_cm,hip_cm,thigh_cm,arm_cm,notes) VALUES (?,?,?,?,?,?,?,?,?,?)", client, Date.valueOf(LocalDate.now().minusDays(168 - point * 28L)), base.subtract(BigDecimal.valueOf(point * .45)), BigDecimal.valueOf(25 - point * .45 - index % 4), BigDecimal.valueOf(91 - point * .7 - index % 3), BigDecimal.valueOf(98 + point * .25 + index % 5), BigDecimal.valueOf(101 - point * .35 + index % 4), BigDecimal.valueOf(57 - point * .15 + index % 3), BigDecimal.valueOf(31 + point * .2 + index % 4), point == 6 ? "Stabilan napredak i dobra energija." : "Redovno mesečno merenje.");
+        }
+        String exercise = switch (index % 3) { case 0 -> "Čučanj"; case 1 -> "Mrtvo dizanje"; default -> "Bench press"; };
+        for (int point = 0; point < 3; point++) {
+            jdbc.update("INSERT INTO client_personal_record(client_id,exercise_name,value,unit,record_date) VALUES (?,?,?,?,?)", client, exercise, BigDecimal.valueOf(55 + index % 15 * 2L + point * 5L), "KG", Date.valueOf(LocalDate.now().minusMonths(2L - point)));
+        }
     }
 }
