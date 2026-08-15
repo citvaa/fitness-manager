@@ -216,7 +216,10 @@ uses one hour per client, with explicit refresh/eviction.
   by name, and includes the conflicting slot.
 - Trainer appointment and own-schedule pages use the shared dependency-free
   `MonthCalendar`; full API lists remain loaded, selected-day rows are filtered
-  locally, and dates with data are highlighted.
+  locally, and dates with data are highlighted. On trainer appointments, past
+  selected dates show only the held section, future dates only the upcoming
+  section, and today shows both; unassigned marketplace rows are also scoped to
+  the selected date.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
   `http://localhost:5173`); activation targets the frontend's real
   `/complete-registration?key=...` route, and user creation flushes before

@@ -630,3 +630,16 @@ real inbox; template rendering is independently covered. Captured UI states are
   clients. Browser QA exposed exactly those three, no global client selector,
   preselected the room, and completed check-in/check-out. Evidence:
   `docs/live-qa-trainer-appointment-checkin.png`.
+
+## 2026-08-15 - Selected-day appointment clarity
+
+- Trainer “Moji termini” now classifies the selected calendar day using only its
+  ISO date. Past dates omit the structurally irrelevant upcoming section, future
+  dates omit history, and today retains both because its start times can straddle
+  the current moment.
+- The trainer marketplace is filtered by the same selected date before count,
+  empty-state, and cards are rendered. Client marketplace behavior remains a
+  complete future list because the client view has no selected-day calendar.
+- Live browser QA selected 14, 16, and 15 August respectively and confirmed the
+  past-only, future-only, and today-both section states; marketplace cards on the
+  16th all belonged to that date. Evidence: `docs/live-qa-appointments-date-sections.png`.
