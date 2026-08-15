@@ -47,7 +47,7 @@ export function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data
     const serverMessage = typeof data === 'object' && data !== null && 'message' in data && typeof data.message === 'string' ? data.message : null
-    return serverMessage ?? (error.response ? `Server je vratio grešku ${error.response.status}.` : 'Backend nije dostupan na portu 8088.')
+    return serverMessage ?? (error.response ? `Server je vratio grešku ${error.response.status}.` : 'Servis trenutno nije dostupan. Proverite vezu i pokušajte ponovo.')
   }
   return error instanceof Error ? error.message : 'Došlo je do neočekivane greške.'
 }

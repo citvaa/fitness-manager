@@ -30,6 +30,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,13 +89,13 @@ public class UserServiceImpl implements UserService {
                 .userRoles(new HashSet<>())
                 .build();
 
+        User savedUser = userRepository.saveAndFlush(user);
         ActivationEmailData emailData = ActivationEmailData.builder()
                 .registrationKey(registration_key)
                 .registrationKeyValidity(DateTimeUtil.formatTime(registration_key_validity))
+                .frontendUrl(appConfig.getFrontendUrl())
                 .build();
         emailService.sendActivationEmail(request.getEmail(), emailData);
-
-        User savedUser = userRepository.save(user);
         return userMapper.toDto(savedUser);
     }
 
@@ -179,6 +183,7 @@ public class UserServiceImpl implements UserService {
             ForgetPasswordEmailData emailData = ForgetPasswordEmailData.builder()
                     .resetKey(resetKey)
                     .resetKeyValidity(DateTimeUtil.formatTime(resetKeyValidity))
+                    .frontendUrl(appConfig.getFrontendUrl())
                     .build();
             emailService.sendResetPasswordEmail(email, emailData);
         });
@@ -198,6 +203,7 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void addRole(Integer id, Role role) {
+        requireAdminForManagerRole(role);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -220,6 +226,7 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void removeRole(Integer id, Role role) {
+        requireAdminForManagerRole(role);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -248,5 +255,27 @@ public class UserServiceImpl implements UserService {
 
         user.setNotificationPreference(notificationPreference);
         userRepository.save(user);
+    }
+
+    public UserDTO getCurrentUser() { return userMapper.toDto(currentUser()); }
+
+    @Transactional
+    public void updateCurrentNotificationPreference(NotificationPreference notificationPreference) {
+        User user = currentUser(); user.setNotificationPreference(notificationPreference); userRepository.save(user);
+    }
+
+    private User currentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) throw new AccessDeniedException("Unauthorized access");
+        return userRepository.findByEmail(jwt.getClaim("email")).orElseThrow(() -> new AccessDeniedException("User not found"));
+    }
+
+    private void requireAdminForManagerRole(Role role) {
+        if (role != Role.MANAGER) return;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)
+                || !jwt.getClaimAsStringList("roles").contains(Role.ADMIN.name())) {
+            throw new AccessDeniedException("Only an administrator can grant or revoke the manager role");
+        }
     }
 }

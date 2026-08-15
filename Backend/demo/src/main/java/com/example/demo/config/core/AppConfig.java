@@ -12,4 +12,5 @@ import org.springframework.stereotype.Component;
 public class AppConfig {
     private Integer registrationKeyValidityMinutes;
     private Integer resetKeyValidityMinutes;
+    private String frontendUrl;
 }

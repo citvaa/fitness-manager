@@ -13,6 +13,7 @@ const roleLabel: Record<Role, string> = {
   MANAGER: "Menadžer",
   TRAINER: "Trener",
   CLIENT: "Klijent",
+  ADMIN: "Administrator",
 };
 export function AdministrationPage() {
   const [tab, setTab] = useState<"users" | "trainers" | "clients">("users");

@@ -13,11 +13,13 @@ import java.util.Map;
 public class ActivationEmailData {
     private String registrationKey;
     private String registrationKeyValidity;
+    private String frontendUrl;
 
     public Map<String, Object> toMap() {
         Map<String, Object> variables = new HashMap<>();
         variables.put("registrationKey", registrationKey);
         variables.put("registrationKeyValidity", registrationKeyValidity);
+        variables.put("frontendUrl", frontendUrl);
         return new HashMap<>(variables);
     }
 }

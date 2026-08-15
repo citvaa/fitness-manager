@@ -13,11 +13,13 @@ import java.util.Map;
 public class ForgetPasswordEmailData {
     private String resetKey;
     private String resetKeyValidity;
+    private String frontendUrl;
 
     public Map<String, Object> toMap() {
         Map<String, Object> variables = new HashMap<>();
         variables.put("resetKey", resetKey);
         variables.put("resetKeyValidity", resetKeyValidity);
+        variables.put("frontendUrl", frontendUrl);
         return new HashMap<>(variables);
     }
 }

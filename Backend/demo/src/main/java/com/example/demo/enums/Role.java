@@ -4,4 +4,5 @@ public enum Role {
     MANAGER,
     TRAINER,
     CLIENT
+    ,ADMIN
 }

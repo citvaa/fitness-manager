@@ -102,4 +102,13 @@ public class UserController {
         userService.updateNotificationPreference(id, notificationPreference);
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/me")
+    public UserDTO getCurrentUser() { return userService.getCurrentUser(); }
+
+    @PatchMapping("/me/notification-preference")
+    public ResponseEntity<Void> updateCurrentNotificationPreference(@RequestParam NotificationPreference notificationPreference) {
+        userService.updateCurrentNotificationPreference(notificationPreference);
+        return ResponseEntity.noContent().build();
+    }
 }

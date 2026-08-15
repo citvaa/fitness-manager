@@ -1,4 +1,4 @@
-export type Role = 'MANAGER' | 'TRAINER' | 'CLIENT'
+export type Role = 'MANAGER' | 'TRAINER' | 'CLIENT' | 'ADMIN'
 export type RoomType = 'CARDIO' | 'WEIGHTS' | 'GROUP_STUDIO' | 'FUNCTIONAL' | 'LOCKER_ROOM' | 'OTHER'
 
 export interface AuthResponse {
