@@ -63,7 +63,7 @@ public class NotificationScheduler {
         log.info("✅ Client notifications sent!");
     }
 
-    @Scheduled(cron = "0 0 * * * ?")
+    @Scheduled(cron = "${app.notifications.upcoming-cron:0 0 * * * ?}")
     public void sendUpcomingAppointmentNotifications() {
         log.info("🔥 Sending upcoming training notifications...");
 

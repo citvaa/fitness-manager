@@ -61,6 +61,11 @@ server:
   servlet:
     context-path: /
 
+# The documented Maven command runs from Backend/demo, while the shared .env
+# intentionally lives at the repository root.
+springdotenv:
+  directory: ../../
+
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   registration-key-validity-minutes: 10
