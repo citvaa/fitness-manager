@@ -698,3 +698,13 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live browser QA selected 14 August and asserted that “Održani termini” was
   visible while both “Termini izabranog dana” and “Termini bez trenera” were
   absent from the rendered accessibility tree.
+
+## 2026-08-15 - Personal-record chart filter styling
+
+- `PersonalRecordChart` now gives its wrapper and exercise label explicit,
+  component-scoped classes. The selector follows the existing light form
+  border, radius, padding and background, with matching uppercase label and a
+  visible green keyboard-focus state; chart behavior and data remain unchanged.
+- Browser QA asserted the rendered 9px radius and `#fafcf9` background. Matched
+  full-page captures are `docs/live-qa-record-filter-before.png` and
+  `docs/live-qa-record-filter-after.png`.

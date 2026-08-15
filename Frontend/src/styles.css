@@ -1287,6 +1287,33 @@ button {
   border-radius: 9px;
   background: #fafcf9;
 }
+.personal-record-chart {
+  display: grid;
+  gap: 10px;
+}
+.record-chart-filter {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 280px);
+  color: #6b776f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.record-chart-filter select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dce3dc;
+  border-radius: 9px;
+  color: var(--ink);
+  background: #fafcf9;
+  font: 600 13px "Inter";
+}
+.record-chart-filter select:focus {
+  outline: 2px solid #70a92940;
+  border-color: #70a929;
+}
 .notes-label {
   margin-top: 10px;
 }

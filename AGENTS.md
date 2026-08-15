@@ -126,6 +126,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   the backend's promised blank-line separator is present: “Sažetak” followed by
   a visually emphasized “Preporuka”. Unexpected single-block output falls back
   to safe per-line paragraphs; neither path interprets Markdown or HTML.
+- The personal-record chart's exercise selector uses the shared light form
+  language (label typography, padded bordered control, rounded background and
+  green focus state), scoped through `personal-record-chart`/`record-chart-filter`.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - **Appointment** optionally belongs to Room and has no persisted status or
