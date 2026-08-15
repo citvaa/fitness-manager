@@ -182,7 +182,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   on `/topic`): `NotificationServiceImpl` pushes to per-user topics and
   additionally sends email based on `User.notificationPreference`. Every
   trainer/client path observes EMAIL/PUSH/BOTH; frontend `NotificationCenter`
-  subscribes to held-role topics and exposes the current user's preference.
+  subscribes to held-role topics and exposes the current user's preference. Its
+  sidebar UI uses an explicit dark-theme notification pill and upward-opening
+  card panel so expanding history does not displace the bottom profile controls.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
   digests at 20:00, and an hourly sweep for appointments starting within the
   next hour. The latter accepts `app.notifications.upcoming-cron` for isolated

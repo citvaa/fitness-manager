@@ -708,3 +708,20 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Browser QA asserted the rendered 9px radius and `#fafcf9` background. Matched
   full-page captures are `docs/live-qa-record-filter-before.png` and
   `docs/live-qa-record-filter-after.png`.
+
+## 2026-08-15 - Sidebar notification-center redesign
+
+- `NotificationCenter` now has a separated sidebar section, the same uppercase
+  preference-label language as other sidebar controls, and a custom summary pill
+  with hidden native marker, green bell/count accents and hover/open states.
+- Notification history opens as a bounded, scrollable dark card above the pill.
+  Opening upward is deliberate: the center lives immediately above the bottom
+  profile card, so an in-flow/downward panel would push or clip account controls.
+- The first live screenshot exposed that an upward panel also covered the
+  preference control when that control preceded the bell. Reordering the bell
+  before the preference label keeps both visible while the card is open.
+- Browser QA kept the panel open, asserted its absolute card placement/dark
+  background and the pill radius, and confirmed the preference label/select
+  remained visible. Before/after evidence is
+  `docs/live-qa-notification-sidebar-before.png` and
+  `docs/live-qa-notification-sidebar-after.png`.
