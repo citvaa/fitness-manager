@@ -689,3 +689,12 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live QA added a holiday over the open 2026-08-18 07:00–08:00 slot, then tried
   to claim appointment 77 as `ogi@momentum.rs`: the API returned 400 with the
   holiday date, the appointment remained unassigned, and no exact shift existed.
+
+## 2026-08-15 - Past trainer dates are archive-only
+
+- The selected-day marketplace is now guarded by the same `isPastDate` condition
+  as the upcoming section. A past trainer date renders only “Održani termini”;
+  today and future dates retain the date-filtered marketplace.
+- Live browser QA selected 14 August and asserted that “Održani termini” was
+  visible while both “Termini izabranog dana” and “Termini bez trenera” were
+  absent from the rendered accessibility tree.
