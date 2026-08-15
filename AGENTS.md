@@ -222,7 +222,8 @@ uses one hour per client, with explicit refresh/eviction.
   appointment creates an exact-time WORKING row in the same transaction when no
   schedule row overlaps it. A real appointment conflict is checked first and
   still rejects the claim; existing non-WORKING/other schedule rows are never
-  silently overwritten.
+  silently overwritten. Before the generated shift is saved, current gym hours
+  and holidays are revalidated so stale open slots cannot create invalid shifts.
 - Trainer appointment and own-schedule pages use the shared dependency-free
   `MonthCalendar`; full API lists remain loaded, selected-day rows are filtered
   locally, and dates with data are highlighted. On trainer appointments, past

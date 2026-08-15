@@ -342,6 +342,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!trainerScheduleRepository.findOverlapping(id, date, startTime, endTime).isEmpty()) {
             throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " has another schedule entry overlapping " + date + " " + startTime + "-" + endTime + ".");
         }
+        validateGymSchedule(date, startTime, endTime);
+        if (holidayRepository.existsByDate(date)) {
+            throw new IllegalArgumentException("Gym is closed for a holiday on " + date + ".");
+        }
         trainerScheduleRepository.save(TrainerSchedule.builder()
                 .trainer(trainer)
                 .date(date)

@@ -677,3 +677,15 @@ real inbox; template rendering is independently covered. Captured UI states are
   incorrect appointment helper URL reproduced the existing `RoleInterceptor`
   assumption that every handler is a `HandlerMethod`; the unmapped request became
   a 400 class-cast response instead of 404. It is now listed under Known issues.
+
+## 2026-08-15 - Auto-shift revalidates current calendar constraints
+
+- An open appointment can outlive the gym-hours/holiday configuration under
+  which it was created. The self-assign missing-shift branch therefore reuses
+  `validateGymSchedule(...)` and the same holiday predicate/message immediately
+  after schedule-overlap validation and before persisting the generated shift.
+- Regression tests prove both a newly-added holiday and shortened gym hours
+  reject assignment without saving either the WORKING row or appointment.
+- Live QA added a holiday over the open 2026-08-18 07:00–08:00 slot, then tried
+  to claim appointment 77 as `ogi@momentum.rs`: the API returned 400 with the
+  holiday date, the appointment remained unassigned, and no exact shift existed.

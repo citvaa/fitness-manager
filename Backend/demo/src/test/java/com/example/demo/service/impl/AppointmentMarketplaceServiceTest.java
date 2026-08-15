@@ -13,6 +13,7 @@ import com.example.demo.model.user.Trainer;
 import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.repository.HolidayRepository;
+import com.example.demo.model.schedule.GymSchedule;
 import com.example.demo.model.schedule.TrainerSchedule;
 import com.example.demo.enums.WorkStatus;
 import com.example.demo.model.user.User;
@@ -68,6 +69,8 @@ class AppointmentMarketplaceServiceTest {
                 trainerSchedules, holidays, trackings, notifications, clientAppointments);
         lenient().when(appointments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(mapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+        lenient().when(gymSchedules.findByDay(any())).thenAnswer(invocation -> Optional.of(GymSchedule.builder()
+                .day(invocation.getArgument(0)).openingTime(LocalTime.of(6, 0)).closingTime(LocalTime.of(23, 0)).build()));
     }
 
     @AfterEach void clearSecurityContext() { SecurityContextHolder.clearContext(); }
@@ -173,6 +176,33 @@ class AppointmentMarketplaceServiceTest {
     }
 
     @Test
+    void holidayBlocksAssignmentAndMissingShiftCreation() {
+        Appointment open = arrangeMissingShiftAssignment(16);
+        when(holidays.existsByDate(open.getDate())).thenReturn(true);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.assign(16));
+
+        assertTrue(error.getMessage().contains("holiday on " + open.getDate()));
+        assertNull(open.getTrainer());
+        verify(trainerSchedules, never()).save(any());
+        verify(appointments, never()).save(open);
+    }
+
+    @Test
+    void changedGymHoursBlockAssignmentAndMissingShiftCreation() {
+        Appointment open = arrangeMissingShiftAssignment(17);
+        when(gymSchedules.findByDay(open.getDate().getDayOfWeek())).thenReturn(Optional.of(GymSchedule.builder()
+                .day(open.getDate().getDayOfWeek()).openingTime(LocalTime.of(12, 0)).closingTime(LocalTime.of(20, 0)).build()));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.assign(17));
+
+        assertTrue(error.getMessage().contains("outside gym working hours"));
+        assertNull(open.getTrainer());
+        verify(trainerSchedules, never()).save(any());
+        verify(appointments, never()).save(open);
+    }
+
+    @Test
     void ownAppointmentsUseJwtRoleAndNeverAcceptAProfileId() {
         authenticate("trainer@example.com", "TRAINER");
         Trainer trainer = Trainer.builder().id(7).build();
@@ -201,6 +231,19 @@ class AppointmentMarketplaceServiceTest {
     private Appointment futureAppointment(int id, Session session, Trainer trainer) {
         return Appointment.builder().id(id).date(LocalDate.now().plusDays(2)).startTime(LocalTime.of(10, 0))
                 .endTime(LocalTime.of(11, 0)).session(session).trainer(trainer).clientAppointments(new HashSet<>()).build();
+    }
+
+    private Appointment arrangeMissingShiftAssignment(int appointmentId) {
+        authenticate("trainer@example.com", "TRAINER");
+        Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trainer@example.com").build()).build();
+        Appointment appointment = futureAppointment(appointmentId, session(2, 3), null);
+        when(trainers.findByUserEmail("trainer@example.com")).thenReturn(Optional.of(trainer));
+        when(trainers.findById(7)).thenReturn(Optional.of(trainer));
+        when(trainerSchedules.findByTrainerIdAndDate(7, appointment.getDate())).thenReturn(List.of());
+        when(trainerSchedules.findOverlapping(7, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime())).thenReturn(List.of());
+        when(appointments.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(7, appointment.getDate(), appointment.getEndTime(), appointment.getStartTime())).thenReturn(Optional.empty());
+        when(appointments.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        return appointment;
     }
 
     private Session session(int id, int maxParticipants) {
