@@ -732,3 +732,14 @@ real inbox; template rendering is independently covered. Captured UI states are
   the same padding, border, radius, foreground and dark background it previously
   received only incidentally from `.sidebar select`. The rendered appearance is
   unchanged, but future sidebar selector refactors cannot silently unstyle it.
+
+## 2026-08-15 - Trainer roster action consistency
+
+- The appointment-scoped trainer roster now uses the same action vocabulary as
+  manager reception: compact green `primary-button` for Check-in, bordered
+  `secondary-button` for Check-out, and the shared `checkin-actions` flex gap.
+  Roster rows keep email left/actions right and prevent the action group shrinking.
+- Frontend production build passed. Browser inspection confirmed the shared
+  classes and computed green primary treatment; the user independently completed
+  the live “Započni trening” check-in/check-out flow and confirmed layout,
+  disabled/busy behavior and both actions work correctly.
