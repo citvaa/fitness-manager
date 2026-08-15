@@ -310,6 +310,13 @@ button {
   letter-spacing: .1em;
   text-transform: uppercase;
 }
+.notification-preference {
+  padding: 9px;
+  border: 1px solid #33463a;
+  border-radius: 8px;
+  color: #e6eee8;
+  background: #1b2a21;
+}
 .notification-center details {
   position: relative;
 }

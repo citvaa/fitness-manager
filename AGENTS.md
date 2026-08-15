@@ -185,6 +185,8 @@ Every entity is also `@Audited` (Hibernate Envers).
   subscribes to held-role topics and exposes the current user's preference. Its
   sidebar UI uses an explicit dark-theme notification pill and upward-opening
   card panel so expanding history does not displace the bottom profile controls.
+  The preference select owns its visual contract through
+  `.notification-preference`, rather than relying on the broad `.sidebar select` rule.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
   digests at 20:00, and an hourly sweep for appointments starting within the
   next hour. The latter accepts `app.notifications.upcoming-cron` for isolated

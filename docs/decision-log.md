@@ -725,3 +725,10 @@ real inbox; template rendering is independently covered. Captured UI states are
   remained visible. Before/after evidence is
   `docs/live-qa-notification-sidebar-before.png` and
   `docs/live-qa-notification-sidebar-after.png`.
+
+## 2026-08-15 - Explicit notification-preference styling
+
+- The preference select now carries `notification-preference` and directly owns
+  the same padding, border, radius, foreground and dark background it previously
+  received only incidentally from `.sidebar select`. The rendered appearance is
+  unchanged, but future sidebar selector refactors cannot silently unstyle it.
