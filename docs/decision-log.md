@@ -798,3 +798,15 @@ real inbox; template rendering is independently covered. Captured UI states are
   three sections with exact-time classification inside the current date.
 - Owned appointments and marketplace availability are filtered locally to the
   selected ISO date; cancellation and reservation rules remain backend-enforced.
+
+## 2026-08-15 - Client booking/history route separation
+
+- Client navigation now separates “Moji termini” (`/app/my-appointments`) from
+  “Zakaži trening” (`/app/appointments`). The booking page owns only the
+  date-scoped marketplace; the new client-only page loads `/api/appointment/me`
+  and never renders marketplace data or actions.
+- The reservations page uses `MonthCalendar` and the shared ISO selected-day
+  rules: past is held-only, future is upcoming-only, and today shows both.
+- A clean backend rebuild/restart against `fm_codex_live` followed by live trainer
+  login proved “Moj raspored” and “Moji termini” both render calendars without
+  403. The reported error was stale runtime bytecode, not an authorization defect.

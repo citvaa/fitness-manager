@@ -250,6 +250,10 @@ uses one hour per client, with explicit refresh/eviction.
   Both trainer calendars visually mute personal HOLIDAY/SICK_LEAVE/VACATION
   dates and gym-wide Holiday dates without changing appointment highlights;
   authenticated trainers may read the holiday list for this purpose.
+- Client booking is split into two routes: “Zakaži trening” contains only the
+  date-scoped available marketplace, while “Moji termini” contains only the
+  client's existing reservations. The latter shows held-only for past dates,
+  upcoming-only for future dates, and both sections today.
 - The manager daily schedule also uses `MonthCalendar`; changing the selected
   day reloads its date-scoped aggregate timeline.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
