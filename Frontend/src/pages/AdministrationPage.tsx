@@ -34,6 +34,7 @@ export function AdministrationPage() {
   });
   const [invite, setInvite] = useState("");
   const [notice, setNotice] = useState("");
+  const [emailEdit, setEmailEdit] = useState<{ item: UserAccount | TrainerProfile | ClientProfile; value: string } | null>(null);
   async function load() {
     try {
       if (tab === "users") {
@@ -99,16 +100,22 @@ export function AdministrationPage() {
       setNotice(errorMessage(x));
     }
   }
-  async function edit(item: UserAccount | TrainerProfile | ClientProfile) {
+  function edit(item: UserAccount | TrainerProfile | ClientProfile) {
     const current = "email" in item ? item.email : item.user.email;
-    const next = prompt("Nova email adresa", current);
-    if (!next || next === current) return;
+    setEmailEdit({ item, value: current });
+  }
+  async function saveEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailEdit) return;
+    const { item, value: next } = emailEdit;
     try {
-      if (tab === "users") await usersApi.update((item as UserAccount).id, next);
-      else if (tab === "trainers") {
+      if ("email" in item) await usersApi.update(item.id, next);
+      else if ("employmentDate" in item) {
         const trainer = item as TrainerProfile;
         await trainersApi.update(trainer.id, { email: next, employmentDate: trainer.employmentDate, birthYear: trainer.birthYear, status: trainer.status });
-      } else await clientsApi.update((item as ClientProfile).id, next);
+      } else await clientsApi.update(item.id, next);
+      setEmailEdit(null);
+      setNotice("Email adresa je sačuvana.");
       await load();
     } catch (x) { setNotice(errorMessage(x)); }
   }
@@ -320,6 +327,22 @@ export function AdministrationPage() {
           )}
         </section>
       </section>
+      {emailEdit && (
+        <div className="modal-backdrop" onMouseDown={() => setEmailEdit(null)}>
+          <section className="modal" onMouseDown={(event) => event.stopPropagation()}>
+            <form onSubmit={saveEmail}>
+              <div className="modal-head">
+                <div><p className="eyebrow">Izmena naloga</p><h2>Promena email adrese</h2></div>
+                <button type="button" onClick={() => setEmailEdit(null)}>×</button>
+              </div>
+              <div className="form-grid">
+                <label>Email<input autoFocus required type="email" value={emailEdit.value} onChange={(event) => setEmailEdit({ ...emailEdit, value: event.target.value })} /></label>
+              </div>
+              <button className="primary-button">Sačuvaj email</button>
+            </form>
+          </section>
+        </div>
+      )}
       {invite && (
         <div className="modal-backdrop">
           <div className="modal invite-modal">

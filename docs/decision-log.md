@@ -761,3 +761,10 @@ real inbox; template rendering is independently covered. Captured UI states are
   and a common-zone fallback containing `Europe/Belgrade`; the current persisted
   value is always retained as an option. Backend `ZoneId` validation remains the
   authoritative final check.
+
+## 2026-08-15 - Part 9 email-edit modal
+
+- Administration email changes now use the application's existing modal form
+  language instead of `prompt()`. One typed edit state covers User, Trainer, and
+  Client rows, retains their existing update endpoints, uses native email
+  validation, and reports backend failures through the page's visible feedback.

@@ -133,6 +133,8 @@ Every entity is also `@Audited` (Hibernate Envers).
 - Destructive frontend actions use the shared promise-based `useConfirm` dialog
   and the existing in-app overlay/card visual language; browser-native
   `confirm()` is not part of the UI contract.
+- Administration email changes use an in-app validated modal; browser-native
+  `prompt()` is not used for account editing.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - **Appointment** optionally belongs to Room and has no persisted status or
