@@ -218,6 +218,11 @@ uses one hour per client, with explicit refresh/eviction.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.
+- Trainer self-assignment is the one missing-shift exception: claiming an open
+  appointment creates an exact-time WORKING row in the same transaction when no
+  schedule row overlaps it. A real appointment conflict is checked first and
+  still rejects the claim; existing non-WORKING/other schedule rows are never
+  silently overwritten.
 - Trainer appointment and own-schedule pages use the shared dependency-free
   `MonthCalendar`; full API lists remain loaded, selected-day rows are filtered
   locally, and dates with data are highlighted. On trainer appointments, past
@@ -277,3 +282,6 @@ Only currently open items belong here; resolved history is in `docs/decision-log
 - `application.yaml` and `application-dev.yaml` duplicate nearly every property.
 - A Gmail App Password remains recoverable from Git history and must be rotated.
 - Appointment reservation/roster addition can reduce remaining session credits below zero.
+- `RoleInterceptor` casts every resolved handler to `HandlerMethod`; an authenticated
+  request to an unmapped `/api/**` URL can therefore return 400 with a class-cast
+  message instead of the normal 404 response.

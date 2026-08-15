@@ -104,7 +104,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Trainer trainer = trainerRepository.findById(trainerId)
                 .orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
 
-        validateTrainerAvailability(trainerId, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime(), appointmentId);
+        validateTrainerAvailability(trainerId, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime(), appointmentId, false);
 
         appointment.setTrainer(trainer);
 
@@ -234,7 +234,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new IllegalStateException("Appointment already has an assigned trainer!");
         }
         validateTrainerAvailability(trainerAppointment.getFirst().getId(), trainerAppointment.getSecond().getDate(),
-                trainerAppointment.getSecond().getStartTime(), trainerAppointment.getSecond().getEndTime(), appointmentId);
+                trainerAppointment.getSecond().getStartTime(), trainerAppointment.getSecond().getEndTime(), appointmentId, true);
         trainerAppointment.getSecond().setTrainer(trainerAppointment.getFirst());
         return appointmentMapper.toDto(appointmentRepository.save(trainerAppointment.getSecond()));
     }
@@ -304,7 +304,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (holidayRepository.existsByDate(request.getDate())) {
             throw new IllegalArgumentException("Gym is closed for a holiday on " + request.getDate() + ".");
         }
-        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime(), null);
+        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime(), null, false);
         validateRoomAvailability(request.getRoomId(), request.getDate(), request.getStartTime(), request.getEndTime(), null);
         validateClientAvailability(request.getClientIds(), request.getDate(), request.getStartTime(), request.getEndTime());
     }
@@ -328,15 +328,27 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime, Integer ignoredAppointmentId) {
+    private void validateTrainerAvailability(Integer id, LocalDate date, LocalTime startTime, LocalTime endTime,
+                                             Integer ignoredAppointmentId, boolean createMissingShift) {
         if (id == null) return;
         Trainer trainer = trainerRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Trainer not found"));
-        if (!isTrainerAvailable(id, date, startTime, endTime)) {
-            throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " has no working shift covering " + date + " " + startTime + "-" + endTime + ".");
-        }
         appointmentRepository.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(id, date, endTime, startTime)
                 .filter(conflict -> ignoredAppointmentId == null || !conflict.getId().equals(ignoredAppointmentId))
                 .ifPresent(conflict -> { throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " is already booked on " + date + " " + conflict.getStartTime() + "-" + conflict.getEndTime() + "."); });
+        if (isTrainerAvailable(id, date, startTime, endTime)) return;
+        if (!createMissingShift) {
+            throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " has no working shift covering " + date + " " + startTime + "-" + endTime + ".");
+        }
+        if (!trainerScheduleRepository.findOverlapping(id, date, startTime, endTime).isEmpty()) {
+            throw new IllegalArgumentException("Trainer " + trainer.getUser().getEmail() + " has another schedule entry overlapping " + date + " " + startTime + "-" + endTime + ".");
+        }
+        trainerScheduleRepository.save(TrainerSchedule.builder()
+                .trainer(trainer)
+                .date(date)
+                .startTime(startTime)
+                .endTime(endTime)
+                .status(WorkStatus.WORKING)
+                .build());
     }
 
     public List<AppointmentDTO> getMyUpcomingToday() {

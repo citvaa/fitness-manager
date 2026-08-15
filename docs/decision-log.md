@@ -656,3 +656,24 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live browser QA loaded a real cached Anthropic narrative for a seeded trainer
   client, asserted both labelled regions and non-empty recommendation content,
   and captured `docs/live-qa-progress-narrative.png`.
+
+## 2026-08-15 - Self-assign creates the missing exact shift
+
+- Trainer marketplace assignment now checks genuine appointment overlap first.
+  When there is no conflict and no WORKING row covers the slot, it creates one
+  exact appointment-length WORKING schedule row and assigns the appointment in
+  the same transaction. Manager appointment creation and manager trainer changes
+  retain the existing strict missing-shift rejection.
+- An overlapping holiday/vacation/other schedule row is still rejected instead
+  of being silently overwritten; the explicit schedule-overwrite confirmation
+  flow remains the only operation authorized to replace schedule state.
+- Focused tests cover the exact generated date/time/status and prove that a real
+  appointment collision prevents both appointment assignment and schedule save.
+- Live browser QA claimed previously unassigned 09:00–10:00 slots on 16 and 17
+  August for a trainer with no covering shift. Each claim moved into “Moji
+  termini”, and “Moj raspored” immediately showed an exact 09:00–10:00 “Radno
+  vreme” row on the selected date. Evidence: `docs/live-qa-auto-shift-assignment.png`.
+- Unrelated observation (reported, not fixed in this scoped change): probing an
+  incorrect appointment helper URL reproduced the existing `RoleInterceptor`
+  assumption that every handler is a `HandlerMethod`; the unmapped request became
+  a 400 class-cast response instead of 404. It is now listed under Known issues.

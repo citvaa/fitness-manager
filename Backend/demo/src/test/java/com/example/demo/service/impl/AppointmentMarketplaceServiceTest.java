@@ -133,6 +133,46 @@ class AppointmentMarketplaceServiceTest {
     }
 
     @Test
+    void assigningWithoutCoveringShiftCreatesExactWorkingShift() {
+        authenticate("trainer@example.com", "TRAINER");
+        Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trainer@example.com").build()).build();
+        Appointment appointment = futureAppointment(14, session(2, 3), null);
+        when(trainers.findByUserEmail("trainer@example.com")).thenReturn(Optional.of(trainer));
+        when(trainers.findById(7)).thenReturn(Optional.of(trainer));
+        when(trainerSchedules.findByTrainerIdAndDate(7, appointment.getDate())).thenReturn(List.of());
+        when(trainerSchedules.findOverlapping(7, appointment.getDate(), appointment.getStartTime(), appointment.getEndTime())).thenReturn(List.of());
+        when(appointments.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(7, appointment.getDate(), appointment.getEndTime(), appointment.getStartTime())).thenReturn(Optional.empty());
+        when(appointments.findById(14)).thenReturn(Optional.of(appointment));
+
+        service.assign(14);
+
+        assertSame(trainer, appointment.getTrainer());
+        verify(trainerSchedules).save(argThat(shift -> shift.getTrainer() == trainer
+                && shift.getDate().equals(appointment.getDate())
+                && shift.getStartTime().equals(appointment.getStartTime())
+                && shift.getEndTime().equals(appointment.getEndTime())
+                && shift.getStatus() == WorkStatus.WORKING));
+    }
+
+    @Test
+    void realAppointmentConflictStillBlocksAssignmentBeforeCreatingShift() {
+        authenticate("trainer@example.com", "TRAINER");
+        Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trainer@example.com").build()).build();
+        Appointment open = futureAppointment(15, session(2, 3), null);
+        Appointment conflict = futureAppointment(99, session(2, 3), trainer);
+        when(trainers.findByUserEmail("trainer@example.com")).thenReturn(Optional.of(trainer));
+        when(trainers.findById(7)).thenReturn(Optional.of(trainer));
+        when(appointments.findById(15)).thenReturn(Optional.of(open));
+        when(appointments.findFirstByTrainerIdAndDateAndStartTimeLessThanAndEndTimeGreaterThan(7, open.getDate(), open.getEndTime(), open.getStartTime())).thenReturn(Optional.of(conflict));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.assign(15));
+
+        assertTrue(error.getMessage().contains("already booked"));
+        verify(trainerSchedules, never()).save(any());
+        verify(appointments, never()).save(open);
+    }
+
+    @Test
     void ownAppointmentsUseJwtRoleAndNeverAcceptAProfileId() {
         authenticate("trainer@example.com", "TRAINER");
         Trainer trainer = Trainer.builder().id(7).build();
