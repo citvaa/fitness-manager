@@ -19,7 +19,6 @@ public interface UserMapper {
     UserDTO toDto(User user);
 
     User toEntity(CreateUserRequest createUserRequest);
-    User toEntity(UserDTO userDTO);
 
     default List<Role> mapRoles(@NotNull Set<UserRole> userRoles) {
         return userRoles.stream()

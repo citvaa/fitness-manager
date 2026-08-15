@@ -17,7 +17,6 @@ import java.util.List;
 public class UserDTO {
     private Integer id;
     private String email;
-    private String password;
     private List<Role> roles;
     private NotificationPreference notificationPreference;
     private Boolean isActivated;

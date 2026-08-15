@@ -245,7 +245,11 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User findOrCreateUser(@NotNull CreateUserRequest request) {
         return userRepository.findByEmail(request.getEmail())
-                .orElseGet(() -> userMapper.toEntity(create(request)));
+                .orElseGet(() -> {
+                    create(request);
+                    return userRepository.findByEmail(request.getEmail())
+                            .orElseThrow(() -> new IllegalStateException("Created user could not be reloaded"));
+                });
     }
 
     @Transactional
