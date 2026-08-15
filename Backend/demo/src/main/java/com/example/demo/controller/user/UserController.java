@@ -37,6 +37,7 @@ public class UserController {
     @RoleRequired("MANAGER")
     @PostMapping
     public ResponseEntity<UserDTO> create(@RequestBody CreateUserRequest request) {
+        if (request.getRole() != Role.MANAGER) throw new IllegalArgumentException("Generic account creation requires the MANAGER operational role");
         UserDTO createdUser = userService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }

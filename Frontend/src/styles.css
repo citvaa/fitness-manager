@@ -1289,6 +1289,23 @@ button {
   background: none;
   font-weight: 800;
 }
+.content-success {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  padding: 15px 18px;
+  border: 1px solid #b9d99c;
+  border-radius: 12px;
+  color: #3d681e;
+  background: #f0f8e8;
+}
+.content-success button {
+  border: 0;
+  color: #3d681e;
+  background: none;
+  font-weight: 800;
+}
 .progress-page {
   background: #eef2ed;
 }
@@ -1702,25 +1719,6 @@ button {
   border-radius: 8px;
   background: #fff;
 }
-.invite-modal code {
-  display: block;
-  overflow: auto;
-  margin: 20px 0;
-  padding: 14px;
-  border-radius: 10px;
-  color: #d8f2ba;
-  background: #15231a;
-}
-.invite-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.invite-modal > small {
-  display: block;
-  margin-top: 14px;
-  color: #99a199;
-}
 .schedule-admin-grid {
   display: grid;
   grid-template-columns: 1.25fr 0.75fr;
@@ -1866,12 +1864,6 @@ button {
   }
   .shift-controls h3 {
     grid-column: auto;
-  }
-  .invite-actions {
-    flex-direction: column;
-  }
-  .invite-actions a {
-    justify-content: center;
   }
 }
 .payments-layout { display:grid; grid-template-columns:310px minmax(0,1fr); gap:18px; }

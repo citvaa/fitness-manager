@@ -3,7 +3,7 @@ import type { ClientProfile, EmploymentStatus, PageResponse, Role, TrainerProfil
 
 export const usersApi={
   list:async(search='',page=0)=>(await api.get<PageResponse<UserAccount>>('/api/user',{params:{search,page,size:8,sortBy:'id'}})).data,
-  create:async(email:string)=>(await api.post<UserAccount>('/api/user',{email})).data,
+  create:async(email:string,role:'MANAGER')=>(await api.post<UserAccount>('/api/user',{email,role})).data,
   update:async(id:number,email:string)=>(await api.put<UserAccount>(`/api/user/${id}`,{email})).data,
   remove:(id:number)=>api.delete(`/api/user/${id}`),
   addRole:(id:number,role:Role)=>api.post(`/api/user/${id}/role`,null,{params:{role}}),

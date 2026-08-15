@@ -62,7 +62,7 @@ export type RecordUnit='KG'|'LB'|'REPS'|'SECONDS'|'MINUTES'|'METERS'|'KM'
 export interface ProgressEntry { id:number; client:ClientSummary; entryDate:string; weightKg:number|null; bodyFatPercent:number|null; waistCm:number|null; chestCm:number|null; hipCm:number|null; thighCm:number|null; armCm:number|null; notes:string|null }
 export interface PersonalRecord { id:number; client:ClientSummary; exerciseName:string; value:number; unit:RecordUnit; recordDate:string }
 export type EmploymentStatus='FULL_TIME'|'CONTRACT'|'FORMER_EMPLOYEE'
-export interface UserAccount{id:number;email:string;roles:Role[];notificationPreference:'EMAIL'|'PUSH'|'BOTH';isActivated:boolean;registrationKey:string|null;registrationKeyValidity:string|null}
+export interface UserAccount{id:number;email:string;roles:Role[];notificationPreference:'EMAIL'|'PUSH'|'BOTH';isActivated:boolean}
 export interface TrainerProfile{id:number;user:UserAccount;employmentDate:string;birthYear:number;status:EmploymentStatus}
 export interface ClientProfile{id:number;user:UserAccount}
 export interface PageResponse<T>{content:T[];number:number;totalPages:number;totalElements:number}

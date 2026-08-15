@@ -79,7 +79,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   registration/reset keys with validity timestamps, `Set<UserRole>`. Password
   is deliberately absent from `UserDTO`, so it also cannot leak through the
   nested user in `TrainerDTO` or `ClientDTO`; password input belongs only in
-  purpose-specific command objects.
+  purpose-specific command objects. Registration and password-reset keys are
+  persisted only for their dedicated flows and are never exposed through
+  `UserDTO`, including nested trainer/client responses.
 - **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`.
   Every User has exactly one operational MANAGER/TRAINER/CLIENT role; ADMIN is
   additive only to the single seeded MANAGER administrator and cannot be changed

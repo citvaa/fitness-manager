@@ -17,12 +17,16 @@ class UserDtoSecurityTest {
     private final UserMapper mapper = Mappers.getMapper(UserMapper.class);
 
     @Test
-    void passwordHashCannotEnterUserOrNestedProfileJson() throws Exception {
+    void credentialsAndRecoveryKeysCannotEnterUserOrNestedProfileJson() throws Exception {
         User user = User.builder().id(1).email("member@example.com").password("$2a$10$sensitive-hash")
+                .registrationKey("registration-secret").resetKey("reset-secret")
                 .userRoles(new HashSet<>()).build();
         UserDTO dto = mapper.toDto(user);
 
-        assertFalse(objectMapper.writeValueAsString(dto).contains("password"));
+        String userJson = objectMapper.writeValueAsString(dto);
+        assertFalse(userJson.contains("password"));
+        assertFalse(userJson.contains("registrationKey"));
+        assertFalse(userJson.contains("resetKey"));
 
         TrainerDTO trainer = new TrainerDTO();
         trainer.setUser(dto);

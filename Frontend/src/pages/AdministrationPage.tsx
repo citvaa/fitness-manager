@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { clientsApi, trainersApi, usersApi } from "../api/administration";
-import { API_URL, errorMessage } from "../api/client";
+import { errorMessage } from "../api/client";
 import { useConfirm } from "../components/ConfirmDialog";
 import type {
   ClientProfile,
@@ -32,8 +32,7 @@ export function AdministrationPage() {
     birthYear: 1990,
     status: "FULL_TIME" as EmploymentStatus,
   });
-  const [invite, setInvite] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ message: string; success: boolean } | null>(null);
   const [emailEdit, setEmailEdit] = useState<{ item: UserAccount | TrainerProfile | ClientProfile; value: string } | null>(null);
   async function load() {
     try {
@@ -45,7 +44,7 @@ export function AdministrationPage() {
       if (tab === "trainers") setTrainers(await trainersApi.list());
       if (tab === "clients") setClients(await clientsApi.list());
     } catch (e) {
-      setNotice(errorMessage(e));
+      setNotice({ message: errorMessage(e), success: false });
     }
   }
   useEffect(() => {
@@ -56,31 +55,22 @@ export function AdministrationPage() {
     try {
       if (tab === "users") {
         if (initialRole === "MANAGER") {
-          const u = await usersApi.create(email);
-          await usersApi.addRole(u.id, initialRole);
-          setInvite(`${location.origin}/complete-registration?key=${u.registrationKey}`);
+          await usersApi.create(email, "MANAGER");
         } else if (initialRole === "TRAINER") {
-          const trainer = await trainersApi.create({ email, ...profile });
-          setInvite(`${location.origin}/complete-registration?key=${trainer.user.registrationKey}`);
+          await trainersApi.create({ email, ...profile });
         } else {
-          const client = await clientsApi.create(email);
-          setInvite(`${location.origin}/complete-registration?key=${client.user.registrationKey}`);
+          await clientsApi.create(email);
         }
       } else if (tab === "trainers") {
-        const t = await trainersApi.create({ email, ...profile });
-        setInvite(
-          `${location.origin}/complete-registration?key=${t.user.registrationKey}`,
-        );
+        await trainersApi.create({ email, ...profile });
       } else {
-        const c = await clientsApi.create(email);
-        setInvite(
-          `${location.origin}/complete-registration?key=${c.user.registrationKey}`,
-        );
+        await clientsApi.create(email);
       }
+      setNotice({ message: `Nalog kreiran, aktivacioni email poslat na ${email}.`, success: true });
       setEmail("");
       await load();
     } catch (x) {
-      setNotice(errorMessage(x));
+      setNotice({ message: errorMessage(x), success: false });
     }
   }
   async function remove(id: number) {
@@ -93,7 +83,7 @@ export function AdministrationPage() {
           : await clientsApi.remove(id);
       await load();
     } catch (x) {
-      setNotice(errorMessage(x));
+      setNotice({ message: errorMessage(x), success: false });
     }
   }
   function edit(item: UserAccount | TrainerProfile | ClientProfile) {
@@ -111,9 +101,9 @@ export function AdministrationPage() {
         await trainersApi.update(trainer.id, { email: next, employmentDate: trainer.employmentDate, birthYear: trainer.birthYear, status: trainer.status });
       } else await clientsApi.update(item.id, next);
       setEmailEdit(null);
-      setNotice("Email adresa je sačuvana.");
+      setNotice({ message: "Email adresa je sačuvana.", success: true });
       await load();
-    } catch (x) { setNotice(errorMessage(x)); }
+    } catch (x) { setNotice({ message: errorMessage(x), success: false }); }
   }
   return (
     <main className="workspace-page admin-page">
@@ -147,9 +137,9 @@ export function AdministrationPage() {
         ))}
       </div>
       {notice && (
-        <div className="content-error">
-          {notice}
-          <button onClick={() => setNotice("")}>×</button>
+        <div className={notice.success ? "content-success" : "content-error"}>
+          {notice.message}
+          <button onClick={() => setNotice(null)}>×</button>
         </div>
       )}
       <section className="admin-grid">
@@ -214,7 +204,7 @@ export function AdministrationPage() {
             </>
           )}
           <button className="primary-button">
-            Kreiraj i pripremi aktivaciju
+            Kreiraj i pošalji aktivacioni email
           </button>
         </form>
         <section className="progress-card table-card">
@@ -329,41 +319,6 @@ export function AdministrationPage() {
               <button className="primary-button">Sačuvaj email</button>
             </form>
           </section>
-        </div>
-      )}
-      {invite && (
-        <div className="modal-backdrop">
-          <div className="modal invite-modal">
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Dev / demo način</p>
-                <h2>Aktivacioni link je spreman</h2>
-              </div>
-              <button onClick={() => setInvite("")}>×</button>
-            </div>
-            <p>
-              U produkciji se ovaj link dostavlja{" "}
-              <strong>isključivo emailom</strong>. Prikazan je ovde zato što
-              demo okruženje nema stvarne SMTP kredencijale.
-            </p>
-            <code>{invite}</code>
-            <div className="invite-actions">
-              <button
-                className="secondary-button"
-                onClick={() => void navigator.clipboard.writeText(invite)}
-              >
-                Kopiraj link
-              </button>
-              <a
-                className="primary-button compact"
-                href={invite}
-                target="_blank"
-              >
-                Otvori aktivaciju ↗
-              </a>
-            </div>
-            <small>Backend: {API_URL}</small>
-          </div>
         </div>
       )}
     </main>

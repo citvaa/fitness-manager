@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @AllArgsConstructor
@@ -20,8 +19,4 @@ public class UserDTO {
     private List<Role> roles;
     private NotificationPreference notificationPreference;
     private Boolean isActivated;
-    private String registrationKey;
-    private LocalDateTime registrationKeyValidity;
-    private String resetKey;
-    private LocalDateTime resetKeyValidity;
 }

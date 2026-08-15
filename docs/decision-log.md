@@ -849,3 +849,17 @@ real inbox; template rendering is independently covered. Captured UI states are
   including red debt and an all-clear message only when total debt is zero.
 - Focused service coverage proves future reservations are not held usage,
   advance payment cannot create negative debt, and zero-valued types remain.
+
+## 2026-08-15 - Part 10 activation email is the only invitation channel
+
+- User, Trainer, and Client API responses no longer expose registration or
+  password-reset keys. Those values remain persisted only for the dedicated
+  activation/reset endpoints and email templates.
+- Administration removed the dev/demo activation-link modal. Successful account
+  creation now reports that an activation email was sent to the submitted
+  address; errors and successful delivery acknowledgements have distinct visual
+  treatments.
+- Generic User creation now accepts exactly the MANAGER operational role and
+  persists it in the same transaction before the activation email is queued.
+  TRAINER and CLIENT creation continue through their profile endpoints, so every
+  newly created account immediately satisfies the one-operational-role invariant.

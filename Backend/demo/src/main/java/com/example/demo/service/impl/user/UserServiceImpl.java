@@ -79,6 +79,7 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public UserDTO create(@NotNull CreateUserRequest request) {
+        if (request.getRole() != null) requireAdminForManagerRole(request.getRole());
         String registration_key = UUID.randomUUID().toString();
         LocalDateTime registration_key_validity = LocalDateTime.now().plusMinutes(appConfig.getRegistrationKeyValidityMinutes());
 
@@ -92,7 +93,15 @@ public class UserServiceImpl implements UserService {
                 .userRoles(new HashSet<>())
                 .build();
 
-        User savedUser = userRepository.saveAndFlush(user);
+        User savedUser = userRepository.save(user);
+        if (request.getRole() != null) {
+            UserRole role = new UserRole();
+            role.setUser(savedUser);
+            role.setRole(request.getRole());
+            userRoleRepository.save(role);
+            savedUser.getUserRoles().add(role);
+        }
+        userRepository.flush();
         ActivationEmailData emailData = ActivationEmailData.builder()
                 .registrationKey(registration_key)
                 .registrationKeyValidity(DateTimeUtil.formatTime(registration_key_validity))
