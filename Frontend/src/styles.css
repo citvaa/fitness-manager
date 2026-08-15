@@ -1735,6 +1735,13 @@ button {
   align-items: center;
   gap: 7px;
 }
+.save-indicator {
+  grid-column: 5;
+  color: #527b2e;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+}
 .hours-list input,
 .holiday-form input,
 .shift-controls input,

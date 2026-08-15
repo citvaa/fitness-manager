@@ -886,3 +886,14 @@ real inbox; template rendering is independently covered. Captured UI states are
   room is fixed by the appointment, only booked clients are actionable, and
   check-in/check-out reuse the existing occupancy endpoints. The trainer view
   retains its intentional next-two limit.
+
+## 2026-08-15 - Part 12 schedule ownership and form feedback
+
+- The manager “Raspored izabranog trenera” editor was removed; manager access to
+  trainer schedules is read-only. Legacy non-`/me` write routes now require
+  TRAINER and delegate to the same authenticated-self methods, so a body-supplied
+  `trainerId` cannot target somebody else.
+- Gym-hour inputs are controlled by the latest server-loaded values, reload after
+  save, and show a short per-day “Sačuvano ✓” acknowledgement. The holiday date
+  is controlled and defaults to today, eliminating the broken empty native-date
+  placeholder while keeping the description reset after creation.

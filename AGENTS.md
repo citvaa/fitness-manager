@@ -108,6 +108,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   returns 409 code `SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED`, and only an explicit
   `confirmOverwrite` retry replaces the overlapping rows. The frontend uses an
   in-app confirmation modal for both directions.
+  Managers retain read-only trainer-schedule access; every write route, including
+  legacy non-`/me` URLs, resolves the authenticated Trainer and ignores any
+  body-supplied `trainerId`.
 - **Holiday** - a gym-wide non-working date.
 - **Gym** - audited single-installation configuration with branding/contact
   data and IANA timezone.

@@ -25,26 +25,21 @@ public class TrainerScheduleController {
     @RoleRequired("TRAINER") @GetMapping("/me")
     public List<TrainerScheduleDTO> getOwn() { return trainerScheduleService.getOwn(); }
 
-    @RoleRequired("MANAGER")
-    @PostMapping
+    @RoleRequired("TRAINER") @PostMapping
     public ResponseEntity<TrainerScheduleDTO> createSchedule(@RequestBody CreateTrainerScheduleRequest request) {
-        TrainerScheduleDTO trainerScheduleDTO = trainerScheduleService.createSchedule(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleDTO);
+        return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleService.createOwnSchedule(request));
     }
-    @RoleRequired("MANAGER") @PostMapping("/recurring")
-    public RecurringScheduleResponse createRecurring(@RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.createRecurring(request); }
-
-    @RoleRequired("MANAGER")
-    @PostMapping("/unavailable")
+    @RoleRequired("TRAINER") @PostMapping("/recurring")
+    public RecurringScheduleResponse createRecurring(@RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.createOwnRecurring(request); }
+    @RoleRequired("TRAINER") @PostMapping("/unavailable")
     public ResponseEntity<Void> createUnavailability(@RequestBody CreateTrainerUnavailabilityRequest request) {
-        trainerScheduleService.createUnavailability(request);
+        trainerScheduleService.createOwnUnavailability(request);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
-
-    @RoleRequired("MANAGER") @PutMapping("/{id}")
-    public TrainerScheduleDTO update(@PathVariable Integer id, @RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.update(id, request, false); }
-    @RoleRequired("MANAGER") @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) { trainerScheduleService.delete(id, false); return ResponseEntity.noContent().build(); }
+    @RoleRequired("TRAINER") @PutMapping("/{id}")
+    public TrainerScheduleDTO update(@PathVariable Integer id, @RequestBody CreateTrainerScheduleRequest request) { return trainerScheduleService.update(id, request, true); }
+    @RoleRequired("TRAINER") @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) { trainerScheduleService.delete(id, true); return ResponseEntity.noContent().build(); }
 
     @RoleRequired("TRAINER") @PostMapping("/me")
     public ResponseEntity<TrainerScheduleDTO> createOwn(@RequestBody CreateTrainerScheduleRequest request) { return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleService.createOwnSchedule(request)); }

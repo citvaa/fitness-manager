@@ -5,14 +5,12 @@ import {
   holidayApi,
   trainerScheduleApi,
 } from "../api/schedules";
-import { trainersApi } from "../api/administration";
 import { errorMessage } from "../api/client";
 import { MonthCalendar } from "../components/MonthCalendar";
 import axios from "axios";
 import type {
   GymSchedule,
   Holiday,
-  TrainerProfile,
   TrainerSchedule,
 } from "../types";
 const days = [
@@ -41,10 +39,10 @@ export function SchedulesPage() {
   const own = useAuthStore((s) => s.session?.activeRole) === "TRAINER";
   const [gym, setGym] = useState<GymSchedule[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
-  const [trainerId, setTrainerId] = useState<number>();
   const [rows, setRows] = useState<TrainerSchedule[]>([]);
   const [notice, setNotice] = useState("");
+  const [savedDay, setSavedDay] = useState("");
+  const [holidayForm, setHolidayForm] = useState({ date: new Date().toISOString().slice(0, 10), description: "" });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [recurring, setRecurring] = useState(false);
   const [overwrite, setOverwrite] = useState<{message:string;run:()=>Promise<void>}|null>(null);
@@ -63,9 +61,6 @@ export function SchedulesPage() {
       setHolidays(await holidayApi.list());
       if (!own) {
         setGym(await gymScheduleApi.list());
-        const ts = await trainersApi.list();
-        setTrainers(ts);
-        if (!trainerId && ts[0]) setTrainerId(ts[0].id);
       }
     } catch (e) {
       setNotice(errorMessage(e));
@@ -73,8 +68,7 @@ export function SchedulesPage() {
   }
   async function loadRows() {
     try {
-      if (own || trainerId)
-        setRows(await trainerScheduleApi.list(own ? undefined : trainerId));
+      if (own) setRows(await trainerScheduleApi.list());
     } catch (e) {
       setNotice(errorMessage(e));
     }
@@ -84,17 +78,16 @@ export function SchedulesPage() {
   }, [own]);
   useEffect(() => {
     void loadRows();
-  }, [own, trainerId]);
+  }, [own]);
   async function addShift(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const request={ ...shift, ...(!own && { trainerId }) };
-      if(recurring){const result=await trainerScheduleApi.recurring(request,own);setNotice(`Kreirano smena: ${result.createdCount}${result.skippedReasons.length?`. Preskočeno: ${result.skippedReasons.length}`:''}`)}
-      else await trainerScheduleApi.create(request,own);
+      if(recurring){const result=await trainerScheduleApi.recurring(shift,true);setNotice(`Kreirano smena: ${result.createdCount}${result.skippedReasons.length?`. Preskočeno: ${result.skippedReasons.length}`:''}`)}
+      else await trainerScheduleApi.create(shift,true);
       await loadRows();
     } catch (x) {
       if(axios.isAxiosError(x)&&x.response?.data?.code==='SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED'){
-        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.create({...shift,...(!own&&{trainerId}),confirmOverwrite:true},own);await loadRows()}});return
+        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.create({...shift,confirmOverwrite:true},true);await loadRows()}});return
       }
       setNotice(errorMessage(x));
     }
@@ -103,13 +96,13 @@ export function SchedulesPage() {
     e.preventDefault();
     try {
       await trainerScheduleApi.unavailable(
-        { ...away, ...(!own && { trainerId }) },
-        own,
+        away,
+        true,
       );
       await loadRows();
     } catch (x) {
       if(axios.isAxiosError(x)&&x.response?.data?.code==='SCHEDULE_OVERLAP_CONFIRMATION_REQUIRED'){
-        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.unavailable({...away,...(!own&&{trainerId}),confirmOverwrite:true},own);await loadRows()}});return
+        setOverwrite({message:x.response.data.message,run:async()=>{await trainerScheduleApi.unavailable({...away,confirmOverwrite:true},true);await loadRows()}});return
       }
       setNotice(errorMessage(x));
     }
@@ -119,7 +112,7 @@ export function SchedulesPage() {
     const endTime = prompt("Kraj smene (HH:mm)", row.endTime.slice(0, 5));
     if (!startTime || !endTime) return;
     try {
-      await trainerScheduleApi.update(row.id, { trainerId: own ? undefined : trainerId, date: row.date, startTime: `${startTime}:00`, endTime: `${endTime}:00` }, own);
+      await trainerScheduleApi.update(row.id, { date: row.date, startTime: `${startTime}:00`, endTime: `${endTime}:00` }, true);
       await loadRows();
     } catch (x) { setNotice(errorMessage(x)); }
   }
@@ -139,6 +132,8 @@ export function SchedulesPage() {
         id,
       );
       setGym(await gymScheduleApi.list());
+      setSavedDay(day);
+      window.setTimeout(() => setSavedDay(current => current === day ? "" : current), 1800);
     } catch (x) {
       setNotice(errorMessage(x));
     }
@@ -182,12 +177,11 @@ export function SchedulesPage() {
                     key={day}
                     onSubmit={(e) => {
                       e.preventDefault();
-                      const f = new FormData(e.currentTarget);
                       void saveGym(
                         day,
-                        String(f.get("start")),
-                        String(f.get("end")),
-                        row?.id,
+                        row?.openingTime?.slice(0, 5) ?? "07:00",
+                        row?.closingTime?.slice(0, 5) ?? "22:00",
+                        row?.id || undefined,
                       );
                     }}
                   >
@@ -195,15 +189,22 @@ export function SchedulesPage() {
                     <input
                       name="start"
                       type="time"
-                      defaultValue={row?.openingTime?.slice(0, 5) ?? "07:00"}
+                      value={row?.openingTime?.slice(0, 5) ?? "07:00"}
+                      onChange={(event) => setGym(current => row
+                        ? current.map(item => item.day === day ? { ...item, openingTime: event.target.value + ":00" } : item)
+                        : [...current, { id: 0, day, openingTime: event.target.value + ":00", closingTime: "22:00:00" }])}
                     />
                     <span>—</span>
                     <input
                       name="end"
                       type="time"
-                      defaultValue={row?.closingTime?.slice(0, 5) ?? "22:00"}
+                      value={row?.closingTime?.slice(0, 5) ?? "22:00"}
+                      onChange={(event) => setGym(current => row
+                        ? current.map(item => item.day === day ? { ...item, closingTime: event.target.value + ":00" } : item)
+                        : [...current, { id: 0, day, openingTime: "07:00:00", closingTime: event.target.value + ":00" }])}
                     />
                     <button>Sačuvaj</button>
+                    {savedDay === day && <small className="save-indicator">Sačuvano ✓</small>}
                   </form>
                 );
               })}
@@ -220,17 +221,13 @@ export function SchedulesPage() {
               className="holiday-form"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                await holidayApi.create({
-                  date: String(f.get("date")),
-                  description: String(f.get("description")),
-                });
+                await holidayApi.create(holidayForm);
                 setHolidays(await holidayApi.list());
-                e.currentTarget.reset();
+                setHolidayForm(current => ({ ...current, description: "" }));
               }}
             >
-              <input required name="date" type="date" />
-              <input required name="description" placeholder="Opis praznika" />
+              <input required name="date" type="date" value={holidayForm.date} onChange={event => setHolidayForm({ ...holidayForm, date: event.target.value })} />
+              <input required name="description" placeholder="Opis praznika" value={holidayForm.description} onChange={event => setHolidayForm({ ...holidayForm, description: event.target.value })} />
               <button>Dodaj</button>
             </form>
             <div className="holiday-list">
@@ -256,7 +253,7 @@ export function SchedulesPage() {
           </section>
         </div>
       )}
-      <section className="progress-card trainer-schedule-card">
+      {own && <section className="progress-card trainer-schedule-card">
         <div className="card-head">
           <div>
             <p className="eyebrow">
@@ -266,19 +263,6 @@ export function SchedulesPage() {
               {own ? "Moje smene i odsustva" : "Raspored izabranog trenera"}
             </h2>
           </div>
-          {!own && (
-            <select
-              className="client-picker"
-              value={trainerId ?? ""}
-              onChange={(e) => setTrainerId(+e.target.value)}
-            >
-              {trainers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.user.email}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
         <div className="shift-controls">
           <form onSubmit={addShift}>
@@ -349,14 +333,14 @@ export function SchedulesPage() {
                   {r.startTime.slice(0, 5)} — {r.endTime.slice(0, 5)}
                 </small>
               </div>
-              <div className="row-actions">{r.status === "WORKING" && <button onClick={() => void editShift(r)}>Izmeni</button>}<button className="icon-danger" onClick={async () => { await trainerScheduleApi.remove(r.id, own); await loadRows(); }}>×</button></div>
+              <div className="row-actions">{r.status === "WORKING" && <button onClick={() => void editShift(r)}>Izmeni</button>}<button className="icon-danger" onClick={async () => { await trainerScheduleApi.remove(r.id, true); await loadRows(); }}>×</button></div>
             </article>
           ))}
           {!rows.length && (
             <div className="empty-panel">Još nema unetih termina.</div>
           )}
         </div></div>
-      </section>
+      </section>}
     </main>
   );
 }
