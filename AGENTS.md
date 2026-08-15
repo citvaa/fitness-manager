@@ -141,8 +141,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   appointments (`date + endTime` before current Gym-zone time) versus summed
   purchased appointments. It always returns every type and clamps debt at zero;
   tracking reserved/remaining counters are not an input.
-- Payment-form and client-filter selects are width-constrained to their cards so
-  long account emails cannot expand the layout.
+- Payment-form selects are width-constrained to their cards so long account
+  emails cannot expand the layout. The reusable header `.client-picker` keeps
+  its content-width/min-width behavior outside the existing mobile breakpoint.
 - **Appointment** optionally belongs to Room and has no persisted status or
   cancellation timestamp.
 

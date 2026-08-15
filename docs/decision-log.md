@@ -781,6 +781,14 @@ real inbox; template rendering is independently covered. Captured UI states are
   `max-width: 100%`, preventing long client emails from expanding the fixed-width
   payment card or overflowing the page header.
 
+### Part 15a scoping correction
+
+- The containment selector was narrowed from `.payment-form select,.client-picker`
+  to `.payment-form select`. A global `width:100%` on `.client-picker` incorrectly
+  stretched Progress and Schedules header filters even though those controls are
+  flex siblings of the title; their established `min-width:240px` and mobile-only
+  full-width behavior now remain authoritative.
+
 ## 2026-08-15 - Part 2 trainer non-working calendar dates
 
 - `MonthCalendar` gained an optional muted-date set independent of its existing
