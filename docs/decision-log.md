@@ -789,3 +789,12 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Trainer appointment and self-schedule pages combine personal non-WORKING rows
   with gym-wide Holiday dates. Holiday reads now authorize TRAINER as well as
   MANAGER; holiday writes remain manager-only.
+
+## 2026-08-15 - Part 3 client appointment calendar
+
+- The client appointment view now uses the same selected-day `MonthCalendar`
+  pattern as the trainer view. Past dates render only completed history, future
+  dates render upcoming reservations plus available slots, and today renders all
+  three sections with exact-time classification inside the current date.
+- Owned appointments and marketplace availability are filtered locally to the
+  selected ISO date; cancellation and reservation rules remain backend-enforced.

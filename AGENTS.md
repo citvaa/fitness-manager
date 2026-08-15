@@ -240,11 +240,13 @@ uses one hour per client, with explicit refresh/eviction.
   silently overwritten. Before the generated shift is saved, current gym hours
   and holidays are revalidated so stale open slots cannot create invalid shifts.
 - Trainer appointment and own-schedule pages use the shared dependency-free
+- Trainer and client appointment pages, plus trainer own-schedule, use the shared dependency-free
   `MonthCalendar`; full API lists remain loaded, selected-day rows are filtered
-  locally, and dates with data are highlighted. On trainer appointments, past
+  locally, and dates with data are highlighted. On both appointment pages, past
   selected dates show only the held section (including no marketplace), future
   dates only the upcoming section plus marketplace, and today shows both plus
-  marketplace; unassigned marketplace rows are scoped to the selected date.
+  marketplace; trainer-unassigned and client-available marketplace rows are
+  scoped to the selected date.
   Both trainer calendars visually mute personal HOLIDAY/SICK_LEAVE/VACATION
   dates and gym-wide Holiday dates without changing appointment highlights;
   authenticated trainers may read the holiday list for this purpose.
