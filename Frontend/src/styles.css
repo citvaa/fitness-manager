@@ -1872,6 +1872,7 @@ button {
 .payment-form h2 { margin:0 0 20px; font:750 25px "Manrope"; }
 .payment-form label { display:grid; gap:7px; margin:13px 0; color:#69756d; font-size:11px; font-weight:800; text-transform:uppercase; }
 .payment-form input,.payment-form select,.date-picker { padding:12px; border:1px solid #d9e1da; border-radius:9px; background:#fff; }
+.payment-form select,.client-picker { width:100%; max-width:100%; }
 .payment-list article { display:grid; grid-template-columns:110px 1fr auto; align-items:center; gap:18px; padding:16px 4px; border-bottom:1px solid #e6ebe6; }
 .payment-list article > div { display:grid; }
 .payment-list time,.payment-list small { color:#839087; }

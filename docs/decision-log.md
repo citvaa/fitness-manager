@@ -774,3 +774,9 @@ real inbox; template rendering is independently covered. Captured UI states are
 - The manager daily schedule replaced its native date input with the shared
   dependency-free `MonthCalendar`. Selection still drives the same date-scoped
   aggregate endpoint and timeline; only navigation and layout changed.
+
+## 2026-08-15 - Part 15a payment selector containment
+
+- Payment-form selects and the shared client picker now own `width` and
+  `max-width: 100%`, preventing long client emails from expanding the fixed-width
+  payment card or overflowing the page header.

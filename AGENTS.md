@@ -137,6 +137,8 @@ Every entity is also `@Audited` (Hibernate Envers).
   `prompt()` is not used for account editing.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
+- Payment-form and client-filter selects are width-constrained to their cards so
+  long account emails cannot expand the layout.
 - **Appointment** optionally belongs to Room and has no persisted status or
   cancellation timestamp.
 
