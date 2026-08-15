@@ -643,3 +643,16 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Live browser QA selected 14, 16, and 15 August respectively and confirmed the
   past-only, future-only, and today-both section states; marketplace cards on the
   16th all belonged to that date. Evidence: `docs/live-qa-appointments-date-sections.png`.
+
+## 2026-08-15 - Structured progress narrative presentation
+
+- The client-progress narrative now splits on the blank line required by the
+  backend prompt and presents labelled “Sažetak” and “Preporuka” regions. The
+  recommendation receives a distinct accent treatment so the actionable part is
+  visually separate without changing or interpreting model content.
+- If an upstream response lacks a blank line, the former per-line plain-text
+  rendering remains the fallback. Both paths strip only optional bullet prefixes
+  and continue to render React text nodes, never HTML or Markdown.
+- Live browser QA loaded a real cached Anthropic narrative for a seeded trainer
+  client, asserted both labelled regions and non-empty recommendation content,
+  and captured `docs/live-qa-progress-narrative.png`.

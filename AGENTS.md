@@ -122,6 +122,10 @@ Every entity is also `@Audited` (Hibernate Envers).
   existing exercise names through an editable datalist, and lists every body
   metric. AI summary failures remain visible beside the narrative and never
   erase the previous successful insight.
+- Client progress AI text is rendered as two labelled plain-text regions when
+  the backend's promised blank-line separator is present: “Sažetak” followed by
+  a visually emphasized “Preporuka”. Unexpected single-block output falls back
+  to safe per-line paragraphs; neither path interprets Markdown or HTML.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - **Appointment** optionally belongs to Room and has no persisted status or

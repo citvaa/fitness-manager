@@ -8,11 +8,20 @@ import type { AiInsight, ClientSummary, PersonalRecord, ProgressEntry, RecordUni
 const today=()=>new Date().toISOString().slice(0,10)
 const measurements=[['weightKg','Težina','kg'],['bodyFatPercent','Masti','%'],['waistCm','Struk','cm'],['chestCm','Grudi','cm'],['hipCm','Kukovi','cm'],['thighCm','Butina','cm'],['armCm','Ruka','cm']] as const
 
+function NarrativeText({text}:{text:string}) {
+  const blocks=text.trim().split(/\r?\n\s*\r?\n/).filter(Boolean)
+  if(blocks.length>=2)return <div className="narrative-sections">
+    <section><span>Sažetak</span><p>{blocks[0].replace(/^[-•]\s*/gm,'')}</p></section>
+    <section className="narrative-recommendation"><span>Preporuka</span><p>{blocks.slice(1).join('\n\n').replace(/^[-•]\s*/gm,'')}</p></section>
+  </div>
+  return <div className="narrative-copy">{text.split(/\n+/).filter(Boolean).map((line,index)=><p key={index}>{line.replace(/^[-•]\s*/,'')}</p>)}</div>
+}
+
 function Narrative({insight,loading,error,onRefresh,trainer}:{insight:AiInsight|null;loading:boolean;error:string;onRefresh:()=>void;trainer:boolean}) {
   return <article className="progress-card narrative-card">
     <div className="card-head"><div><p className="eyebrow">Claude trener</p><h2>Rezime i preporuka</h2></div>{trainer&&<button className="secondary-button" disabled={loading} onClick={onRefresh}>↻ Regeneriši</button>}</div>
     {error&&<div className="content-error">{error}</div>}
-    {loading&&!insight?<div className="insight-skeleton dark"><i/><i/><i/></div>:insight?<><div className="narrative-copy">{insight.text.split(/\n+/).filter(Boolean).map((line,index)=><p key={index}>{line.replace(/^[-•]\s*/,'')}</p>)}</div><small>Generisano {new Date(insight.generatedAt).toLocaleString('sr-RS')} · {insight.model}</small></>:!error&&<div className="empty-panel">Dodajte merenje ili rekord da bi AI mogao da napravi rezime.</div>}
+    {loading&&!insight?<div className="insight-skeleton dark"><i/><i/><i/></div>:insight?<><NarrativeText text={insight.text}/><small>Generisano {new Date(insight.generatedAt).toLocaleString('sr-RS')} · {insight.model}</small></>:!error&&<div className="empty-panel">Dodajte merenje ili rekord da bi AI mogao da napravi rezime.</div>}
   </article>
 }
 

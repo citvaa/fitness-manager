@@ -1362,6 +1362,38 @@ button {
   color: #ccd9d0;
   line-height: 1.7;
 }
+.narrative-sections {
+  display: grid;
+  gap: 14px;
+  max-width: 900px;
+}
+.narrative-sections section {
+  padding: 16px 18px;
+  border: 1px solid #ffffff18;
+  border-radius: 14px;
+  background: #ffffff08;
+}
+.narrative-sections span {
+  display: block;
+  margin-bottom: 7px;
+  color: #9dac9f;
+  font: 700 11px "Manrope";
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.narrative-sections p {
+  margin: 0;
+  color: #d4dfd7;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.narrative-sections .narrative-recommendation {
+  border-color: #baf25242;
+  background: #baf25212;
+}
+.narrative-sections .narrative-recommendation span {
+  color: var(--green);
+}
 .narrative-card > small {
   color: #829489;
 }
