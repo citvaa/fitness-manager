@@ -1289,6 +1289,34 @@ button {
   background: none;
   font-weight: 800;
 }
+.insight-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  gap: 28px;
+  margin-bottom: 18px;
+  padding: 26px;
+  border-radius: 20px;
+  color: #eef8e7;
+  background: #15231a;
+}
+.insight-summary h2 { margin: 4px 0 10px; font-size: 24px; }
+.insight-summary small { color: #aebcaf; }
+.insight-summary ol { margin: 0; padding-left: 22px; }
+.insight-summary li { margin: 8px 0; }
+.insight-metric-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.insight-metric { padding: 21px; border: 1px solid #dbe3da; border-radius: 17px; background: #fff; }
+.insight-metric h3 { margin: 0; font-size: 15px; }
+.insight-metric > strong { display: block; margin: 18px 0 10px; font: 800 31px "Manrope"; }
+.insight-metric > strong small { color: #7b877e; font-size: 13px; }
+.insight-metric p { margin-bottom: 0; color: #68756c; }
+.rating-badge { padding: 6px 9px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.rating-badge.excellent { color: #27631c; background: #dff3d2; }
+.rating-badge.good { color: #37661e; background: #ebf5df; }
+.rating-badge.average { color: #735d1c; background: #fff2c7; }
+.rating-badge.poor { color: #8b342e; background: #ffe0dc; }
+.metric-visual { height: 7px; overflow: hidden; border-radius: 999px; background: #e9eee7; }
+.metric-visual i { display: block; height: 100%; border-radius: inherit; background: #83bf38; }
+@media(max-width:800px){.insight-summary,.insight-metric-grid{grid-template-columns:1fr}}
 .content-success {
   display: flex;
   justify-content: space-between;

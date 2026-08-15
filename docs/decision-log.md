@@ -916,3 +916,23 @@ real inbox; template rendering is independently covered. Captured UI states are
   used because the live database currently closes at 08:00; inspection also
   exposed an out-of-scope invalid Wednesday `16:00-05:00` GymSchedule row and
   the missing backend ordering validation is recorded as a known issue.
+
+## 2026-08-15 - Part 7 structured manager AI insights
+
+- Java now calculates the prompt metrics: live occupancy for every room,
+  individual/group appointment mix, manual check-ins relative to scheduled
+  client visits, and paid appointment units. The model cannot supply or replace
+  these numeric values.
+- Claude is asked for strict JSON containing a short summary, 2-4
+  recommendations, and keyed rating/comment objects. Unknown ratings, omitted
+  metrics, malformed JSON, or a model failure fall back per metric to AVERAGE
+  plus a generic suggestion; calculated data remains renderable.
+- The frontend renders a compact summary/recommendation section followed by
+  separate metric cards with real values, progress visuals, colored rating
+  badges, and metric-specific comments.
+- Live QA exposed that the Redis serializer's `NON_FINAL` type-wrapper policy
+  cannot restore a final root record. The manager response now follows the
+  existing non-final DTO convention; force regeneration and the following cache
+  read returned the same timestamp with all nine metrics. The live model call
+  produced fallback ratings, confirming that unavailable/malformed AI output
+  does not take the page down.

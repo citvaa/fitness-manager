@@ -56,6 +56,9 @@ export interface OccupancySnapshot {
 }
 
 export interface AiInsight { text: string; model: string; generatedAt: string }
+export type InsightRating='EXCELLENT'|'GOOD'|'AVERAGE'|'POOR'
+export interface ManagerMetricInsight { key:string;label:string;value:number;unit:string;rating:InsightRating;comment:string }
+export interface ManagerInsight { summary:string;recommendations:string[];metrics:ManagerMetricInsight[];model:string;generatedAt:string }
 
 export interface ClientSummary { id:number; email:string }
 export type RecordUnit='KG'|'LB'|'REPS'|'SECONDS'|'MINUTES'|'METERS'|'KM'

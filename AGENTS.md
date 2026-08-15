@@ -239,6 +239,12 @@ JSON serialization) in `config/cache/RedisConfig`. `TRAINER_CACHE` uses the
 default TTL; `managerInsights` uses six hours and `clientProgressInsights`
 uses one hour per client, with explicit refresh/eviction.
 
+Manager AI insights calculate every numeric metric in Java (per-room live
+occupancy, individual/group mix, check-in ratio, and paid appointment units).
+Claude receives those fixed values and returns JSON containing only summary,
+recommendations, and per-key rating/comment. Missing or invalid AI fields fall
+back to `AVERAGE` and a generic comment without hiding the calculated cards.
+
 ## Conventions
 
 - `ADMIN` is additive to `MANAGER` and immutable through REST. Generic role

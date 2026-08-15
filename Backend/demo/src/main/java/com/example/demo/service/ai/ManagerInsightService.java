@@ -1,7 +1,7 @@
 package com.example.demo.service.ai;
 
-import com.example.demo.service.params.response.ai.AiInsightResponse;
+import com.example.demo.service.params.response.ai.ManagerInsightResponse;
 
 public interface ManagerInsightService {
-    AiInsightResponse getInsights(boolean forceRegeneration);
+    ManagerInsightResponse getInsights(boolean forceRegeneration);
 }
