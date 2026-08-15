@@ -753,3 +753,11 @@ real inbox; template rendering is independently covered. Captured UI states are
 - The four browser-native `confirm()` calls were removed. Backdrop cancellation,
   explicit cancellation, focus on the confirm action, and alert-dialog semantics
   are centralized so future destructive actions do not invent another pattern.
+
+## 2026-08-15 - Part 6 timezone selection
+
+- Gym settings no longer accept an unconstrained free-text timezone. The editor
+  uses the browser's IANA `Intl.supportedValuesOf('timeZone')` list where available
+  and a common-zone fallback containing `Europe/Belgrade`; the current persisted
+  value is always retained as an option. Backend `ZoneId` validation remains the
+  authoritative final check.

@@ -250,6 +250,8 @@ uses one hour per client, with explicit refresh/eviction.
   preserving ADMIN in the held-role set used for backend authorization.
 - Room geometry minimums are content-aware on server and canvas: width
   `max(100, trimmed-name-length * 10 + 32)`, height 80.
+- Gym timezone editing uses an IANA-zone select sourced from browser-supported
+  values, with a stable common-zone fallback containing `Europe/Belgrade`.
 - Dev data can be destructively rebuilt through manager-only `POST
   /api/dev/reseed`; it preserves Flyway history and rebuilds all application
   tables plus the relative operational fixture. The fixture contains exactly
