@@ -805,6 +805,11 @@ real inbox; template rendering is independently covered. Captured UI states are
   role. Live pre-migration inspection found one real drifted account with
   CLIENT+TRAINER but no Client profile, exactly the failure mode this cleanup
   addresses.
+- Part 10 live cleanup exposed a Hibernate transient-reference failure when a
+  loaded profile called whole-account deletion. Profile deletion now detaches
+  that managed instance first, and account deletion flushes cleared UserRole
+  orphans before bulk profile cleanup. Repeating the same API deletion removed
+  both the Client and User rows successfully.
 
 ## 2026-08-15 - Part 2 trainer non-working calendar dates
 

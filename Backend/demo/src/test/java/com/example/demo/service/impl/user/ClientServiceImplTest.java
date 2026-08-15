@@ -74,6 +74,7 @@ class ClientServiceImplTest {
         service.delete(3);
 
         assertEquals("new@example.com", user.getEmail());
+        verify(entityManager).detach(client);
         verify(users).delete(12);
         verify(clients, never()).delete(any());
     }

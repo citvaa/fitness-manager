@@ -68,6 +68,7 @@ public class ClientServiceImpl implements ClientService {
     public void delete(Integer id) {
         Client client = clientRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Client not found"));
         Integer userId = client.getUser().getId();
+        entityManager.detach(client);
         userService.delete(userId);
     }
 

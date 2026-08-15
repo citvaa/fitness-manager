@@ -126,10 +126,11 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
+        user.getUserRoles().clear();
+        userRepository.flush();
         paymentRepository.deleteByUser(user);
         clientRepository.deleteByUser(user);
         trainerRepository.deleteByUser(user);
-        userRoleRepository.deleteByUser(user);
 
         userRepository.delete(user);
     }

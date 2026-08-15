@@ -241,7 +241,9 @@ uses one hour per client, with explicit refresh/eviction.
 - `ADMIN` is additive to `MANAGER` and immutable through REST. Generic role
   mutation rejects a second or zero operational roles. Trainer/Client creation
   atomically creates its profile and role; deleting either profile deletes the
-  whole account so a role-less User cannot remain.
+  whole account so a role-less User cannot remain. The loaded profile is
+  detached before bulk cleanup and UserRole orphans are flushed first, avoiding
+  stale managed profile-to-deleted-user references.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.
