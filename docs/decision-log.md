@@ -334,6 +334,35 @@ deliberately deferred to the following phase.
 
 ## Session log
 
+## Codex parity audit (items 1-20)
+
+- **Items 1, 3, 5 and 6:** added additive ADMIN and the backend MANAGER-role
+  gate; user creation now flushes before activation email; activation/reset
+  links use `FRONTEND_URL`; network errors no longer disclose backend port.
+- **Items 7, 9, 10, 12 and 14:** adjacent overnight gym hours cannot overlap.
+  Appointment create/assignment rejects holidays and trainer/room conflicts,
+  distinguishes missing shift from double-booking, and reports email/name plus
+  the exact conflicting time instead of numeric IDs.
+- **Items 11 and 13:** room create/update and Konva resize share content-aware
+  minimum dimensions; `.content-error` preserves multiline server messages.
+- **Item 8:** immutable applied migrations were not edited. Dev-only manager
+  `POST /api/dev/reseed` truncates application tables except Flyway history,
+  rebuilds roles/sessions/base accounts/floor plan, then generates relative
+  operational data in one transaction.
+- **Items 16-18:** all trainer/client notification methods honor EMAIL/PUSH/BOTH.
+  Self lookup and preference endpoints let `NotificationCenter` subscribe to
+  every held trainer/client topic and edit preference without a foreign ID.
+- **Item 19:** full reseed replaces username-only legacy identities with
+  email-shaped `admin@momentum.rs`, `ogi@momentum.rs`, `citva@momentum.rs`.
+  Deployment must map these to owned mailboxes for real delivery.
+- **Items 2, 4, 15 and 20:** no change: DB exceptions were already masked;
+  explicit repository deletion avoids the BaseEntity/Set cascade path; the
+  seeder's two daily slots/resource rotation do not collide; and appointment
+  room selection already excludes LOCKER_ROOM. The rebuilt fifth room is also
+  training-suitable.
+
+Verification on 2026-08-15: `mvnw.cmd test -q` and `npm run build` passed.
+
 - 2026-08-03: Repo-hygiene baseline pass (`chore/repo-hygiene` -> `main`,
   tagged `baseline-v1`). Merged the already-diverged `feature/notification`
   work into `main` (it turned out `origin/main` already had it via a merged

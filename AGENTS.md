@@ -75,7 +75,7 @@ Every entity is also `@Audited` (Hibernate Envers).
 - **User** (`model/user/User.java`) - email, password (null until account
   activation), `isActivated`, `notificationPreference` (`EMAIL`/`PUSH`/`BOTH`),
   registration/reset keys with validity timestamps, `Set<UserRole>`.
-- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT`.
+- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`.
   A single `User` can hold multiple roles.
 - **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus`
   (`FULL_TIME` / `CONTRACT` / `FORMER_EMPLOYEE`).
@@ -151,7 +151,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   not yet unified).
 - WebSocket/STOMP (`config/web/WebSocketConfig`, endpoint `/ws`, simple broker
   on `/topic`): `NotificationServiceImpl` pushes to per-user topics and
-  additionally sends email based on `User.notificationPreference`.
+  additionally sends email based on `User.notificationPreference`. Every
+  trainer/client path observes EMAIL/PUSH/BOTH; frontend `NotificationCenter`
+  subscribes to held-role topics and exposes the current user's preference.
 - `NotificationScheduler` (`@Scheduled`): daily trainer/client appointment
   digests at 20:00, and an hourly sweep for appointments starting within the
   next hour.
@@ -184,6 +186,18 @@ default TTL; `managerInsights` uses six hours and `clientProgressInsights`
 uses one hour per client, with explicit refresh/eviction.
 
 ## Conventions
+
+- `ADMIN` is additive to `MANAGER`; only ADMIN may grant/revoke MANAGER.
+- Appointment creation rejects holidays, missing trainer shifts, trainer/room
+  overlaps and client overlaps. Conflict text names trainers by email and rooms
+  by name, and includes the conflicting slot.
+- Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
+  `http://localhost:5173`); user creation flushes before email is queued.
+- Room geometry minimums are content-aware on server and canvas: width
+  `max(100, trimmed-name-length * 10 + 32)`, height 80.
+- Dev data can be destructively rebuilt through manager-only `POST
+  /api/dev/reseed`; it preserves Flyway history and rebuilds all application
+  tables plus the relative operational fixture.
 
 - Layered packages: `controller` (thin, `@RoleRequired`-gated) -> `service`
   interface + `service.impl` -> `repository` (Spring Data JPA) -> `model`

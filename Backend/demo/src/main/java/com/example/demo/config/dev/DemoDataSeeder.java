@@ -48,6 +48,36 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.info("✅ Demo seeder završen: {} trenera, {} klijenata i relativna istorija/ponuda termina.", trainers.size(), clients.size());
     }
 
+    @Transactional
+    public void reseed() {
+        jdbc.execute("DO $$ DECLARE table_name text; BEGIN FOR table_name IN " +
+                "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'flyway_schema_history' " +
+                "LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', table_name); END LOOP; END $$");
+        jdbc.execute("DO $$ DECLARE sequence_name text; BEGIN FOR sequence_name IN " +
+                "SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP " +
+                "EXECUTE format('ALTER SEQUENCE %I RESTART WITH 1', sequence_name); END LOOP; END $$");
+        seedFoundations();
+        seedGymHoursAndHoliday();
+        List<Integer> trainers = seedTrainers();
+        List<Integer> clients = seedClients();
+        seedTrainerSchedules(trainers);
+        seedOperationalHistory(trainers, clients);
+        log.info("✅ Dev baza je potpuno ponovo posejana.");
+    }
+
+    private void seedFoundations() {
+        for (String role : List.of("MANAGER", "TRAINER", "CLIENT", "ADMIN")) jdbc.update("INSERT INTO role(name) VALUES (?)", role);
+        jdbc.update("INSERT INTO session(type,max_participants) VALUES ('INDIVIDUAL',1),('GROUP',3),('GROUP',10)");
+        int admin = insertUser("admin@momentum.rs", "MANAGER"); jdbc.update("INSERT INTO user_role(user_id,role) VALUES (?, 'ADMIN')", admin);
+        int trainerUser = insertUser("ogi@momentum.rs", "TRAINER"); jdbc.update("INSERT INTO trainer(user_id,employment_date,birth_year,status) VALUES (?,?,?,?)", trainerUser, Date.valueOf(LocalDate.now().minusYears(2)), 1992, "FULL_TIME");
+        int clientUser = insertUser("citva@momentum.rs", "CLIENT"); jdbc.update("INSERT INTO client(user_id) VALUES (?)", clientUser);
+        Integer gym = jdbc.queryForObject("INSERT INTO gym(name,address,phone,email,brand_color,timezone) VALUES (?,?,?,?,?,?) RETURNING id", Integer.class,
+                "Momentum Fitness", "Bulevar oslobođenja 88, Novi Sad", "+381 21 555 018", "zdravo@momentum.rs", "#BAF252", "Europe/Belgrade");
+        Object[][] rooms = {{"Kardio panorama","CARDIO",18,55d,55d,370d,205d},{"Zona snage","WEIGHTS",22,455d,55d,485d,205d},{"Pulse studio","GROUP_STUDIO",16,55d,295d,285d,260d},{"Funkcionalna arena","FUNCTIONAL",20,370d,295d,360d,260d},{"Boks studio","GROUP_STUDIO",12,760d,295d,180d,260d}};
+        for (Object[] room : rooms) jdbc.update("INSERT INTO room(gym_id,name,type,capacity,pos_x,pos_y,width,height,rotation_degrees) VALUES (?,?,?,?,?,?,?,?,0)",
+                gym, room[0], room[1], room[2], room[3], room[4], room[5], room[6]);
+    }
+
     private void seedGymHoursAndHoliday() {
         for (DayOfWeek day : DayOfWeek.values()) {
             LocalTime opening = day == DayOfWeek.SUNDAY ? LocalTime.of(8, 0) : LocalTime.of(6, 0);
