@@ -1074,6 +1074,19 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Verification: frontend production build succeeded. Live manager QA selected
   the seeded equipment-service holiday and displayed its full name; live trainer
   QA selected an isolated SICK_LEAVE fixture and displayed “bolovanje”.
+
+## 2026-08-16 - Notification receipt time
+
+- Notification history state now stores message text together with an immutable
+  ISO timestamp captured by the browser at STOMP receipt time. This accurately
+  describes when the current session received the push without changing every
+  backend notification DTO.
+- Every history item renders a visible localized `Primljeno u HH:mm` label in a
+  semantic `<time dateTime="...">` element beneath the message.
+- Verification: frontend production build succeeded. Live QA kept a manager
+  WebSocket subscription open, reserved an appointment through a real client API
+  flow, and observed the manager alert together with `Primljeno u 12:15` and its
+  ISO `dateTime` value.
 - Verification: frontend production build succeeded. Live visual QA rendered
   the hero, all four chart/KPI cards, and all nine current metrics at 1905px
   without horizontal overflow; the hierarchy and color system were inspected

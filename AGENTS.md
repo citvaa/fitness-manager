@@ -213,7 +213,10 @@ Every entity is also `@Audited` (Hibernate Envers).
   sidebar UI uses an explicit dark-theme notification pill and upward-opening
   card panel so expanding history does not displace the bottom profile controls.
   The preference select owns its visual contract through
-  `.notification-preference`, rather than relying on the broad `.sidebar select` rule.
+  `.notification-preference`, rather than relying on the broad `.sidebar select`
+  rule. Each in-memory history item captures an immutable browser receipt
+  timestamp when its STOMP message arrives and displays `Primljeno u HH:mm` in
+  the user's locale; backend notification payloads do not supply event time.
 - Managers subscribe to `/topic/manager` and receive live operational broadcasts
   for client self-reservations, trainer self-assignment, and completed user
   registration. Payment creation sends the client a preference-aware PUSH/email

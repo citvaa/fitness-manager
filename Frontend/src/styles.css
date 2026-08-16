@@ -380,14 +380,27 @@ button {
   background: #16251b;
   box-shadow: 0 16px 36px #07100bb8;
 }
-.notification-panel p {
+.notification-panel article,
+.notification-panel > p {
   margin: 0;
   padding: 10px 0;
   border-bottom: 1px solid #2a3c30;
+}
+.notification-panel article p,
+.notification-panel > p {
+  margin: 0;
   font-size: 11px;
   line-height: 1.45;
 }
-.notification-panel p:last-child {
+.notification-panel article time {
+  display: block;
+  margin-top: 4px;
+  color: #8fa197;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.notification-panel > :last-child {
   border-bottom: 0;
 }
 .profile-chip {
