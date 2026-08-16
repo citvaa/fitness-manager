@@ -37,7 +37,7 @@ popuni bazu sa ~110 termina (8 nedelja istorije + 3 nedelje unapred), 4
 trenera, 6 klijenata (uključujući `ogi`/`citva`), uplatama, prijavama u sale
 i mesecima podataka o napretku - tako da svaki ekran ima realan sadržaj bez
 ručne pripreme podataka. Postoji i gym `FitPro Gym` sa 5 sala ("Sala za
-tegove", "Kardio zona", "Joga studio", "Svlačionica", "Recepcija").
+tegove", "Kardio zona", "Joga studio", "Boks studio", "TRX sala").
 
 Za korak "Registracija novog naloga" **ne koristi se** postojeći nalog -
 kreira se potpuno novi nalog uživo, uz `manager+demo@fitpro.dev` (ili slično)
@@ -92,19 +92,26 @@ Ovo demonstrira samostalni onboarding flow dodat u Fazi 6 - pre toga je
 jedini način da nalog postoji bio ručni SQL insert.
 
 1. U Tab A (`admin`), otvori `/manager/administracija` → tab "Klijenti" (ili
-   "Treneri"). Popuni formu sa novim email-om (npr.
-   `demo.klijent@fitpro.dev`) i klikni "Kreiraj".
-2. Odmah nakon kreiranja pojavljuje se **banner sa aktivacionim linkom** -
-   objasni: *"Ovo je namerno vidljivo samo u dev okruženju - u produkciji bi
-   ovaj link stigao na email, ali pravi mail server nije podešen u ovom
-   okruženju, pa je link ovde prikazan direktno."* Klikni dugme za
-   kopiranje linka.
-3. Otvori link u **trećem tabu** (ili incognito prozoru - ostavi Tab A i Tab
-   B netaknute) - vodi na `/register/complete?registration_key=...`. Postavi
-   lozinku (npr. `Demo1234!`), potvrdi.
+   "Treneri"). Popuni formu sa novim email-om - **stvarnom adresom do koje
+   uživo imaš pristup** (npr. svojim Gmail nalogom), pošto je pravi Gmail
+   SMTP ožičen (`MAIL_USERNAME`/`MAIL_PASSWORD` u `.env`) i aktivacioni link
+   stiže isključivo na email, ne više preko UI banera - taj dev/demo baner je
+   uklonjen u ovoj sesiji. Klikni "Kreiraj".
+2. Otvori inbox (na telefonu ili drugom uređaju da ne gubiš Tab A/B) i
+   pronađi mejl "Aktivacija naloga" - objasni: *"Ovo više nije placeholder -
+   link u mejlu vodi na pravu `FRONTEND_URL` adresu, ne na stari hardkodovani
+   `nesto.com` domen."*
+3. Otvori link iz mejla u **trećem tabu** (ili incognito prozoru - ostavi Tab
+   A i Tab B netaknute) - vodi na `/register/complete?registration_key=...`.
+   Postavi lozinku (npr. `Demo1234!`), potvrdi.
 4. U tom trećem tabu, uloguj se sa novim nalogom da pokažeš da radi
    kraj-do-kraja, pa ga zatvori - Tab A je i dalje prijavljen kao `admin`,
    nastavi tamo na sledeći korak.
+
+**Ako nema pristupa mejlu uživo pred komisijom**: pripremi unapred (dan pre)
+jedan test-nalog kreiran na stvarnu adresu kojoj imaš pristup na telefonu, pa
+tokom demonstracije samo otvori taj već primljeni mejl - ne moraš kreirati
+nalog uživo da bi pokazao aktivacioni mejl koji izgleda ispravno.
 
 **Ako komisija pita o zaboravljenoj lozinci**: `/forgot-password` i
 `/reset-password` postoje i radi identično (isti razlog za "vidljivo u
@@ -231,7 +238,54 @@ klijenti ih rezervišu, treneri se sami dodeljuju.
 već dodeljenim trenerom/klijentima preko Swagger-a, kao kontrast prema
 samostalnom booking-u iznad.)*
 
-### 9. Zaključak [CORE] (~30s)
+### 9. Notifikacioni centar [EKSTRA] (~1 min)
+
+Demonstrira push-obaveštenja koja stižu uživo kroz WebSocket, ne samo email -
+najlakše se uklapa odmah posle koraka 8 (booking flow), pošto ta rezervacija
+sama po sebi okida jedno obaveštenje.
+
+1. Vrati se u Tab A (`admin`) - ne odjavljuj se. U zaglavlju bočne trake
+   primeti zvonce ikonicu pored naziva aplikacije.
+2. Ako je Tab A ostao otvoren tokom koraka 8 (klijent `citva` rezerviše
+   termin), zvonce bi već trebalo da pokazuje broj nepročitanih - to je
+   `POST /{id}/reserve` koji šalje "manager alert" na `/topic/manager`,
+   primljen uživo, bez ikakvog refresh-a. Ako nije ostao otvoren, ponovi
+   jednu rezervaciju kao `citva` u pozadini dok gledaš Tab A.
+3. Klikni zvonce - otvara se padajuća lista sa vremenom prijema svakog
+   obaveštenja (`HH:mm`). Reci: *"Padajuća lista se renderuje kroz portal u
+   `document.body`, ne unutar bočne trake - ranija verzija je bila
+   podsečena jer je uža bočna traka imala `overflow` koji je sekao širi
+   panel."*
+4. Otvori podnožje bočne trake i pokaži padajući meni za preferencu
+   obaveštenja (EMAIL/PUSH/OBOJE) - svaka uloga bira sama za sebe, nezavisno
+   od toga koju aktivnu ulogu trenutno koristi.
+
+### 10. Praćenje uplata i duga [EKSTRA] (~1-1.5 min)
+
+1. U Tab A (`admin`), otvori `/manager/placanja`. Izaberi klijenta iz
+   pretrage (npr. `citva`) - pojavljuje se sažetak "Plaćeno X/Y
+   individualnih, Z/W grupnih", i, ako klijent duguje, crveni okvir "Duguje N
+   termina" po tipu sesije. Reci: *"Ovo poredi stvarno održane termine sa
+   plaćenim terminima po tipu sesije - ne čita direktno iz internog brojača
+   rezervacija, jer bi taj brojao i buduće, još neodržane termine kao da su
+   'iskorišćeni'."*
+2. Odjavi se, prijavi se kao `citva` (CLIENT), otvori `/client/uplate` ("Moje
+   uplate") - pokaži da klijent vidi identičan sažetak za sebe, read-only.
+
+### 11. Kalendarski UI kroz čitavu aplikaciju [EKSTRA] (~30s)
+
+Ne mora biti poseban korak ako je vreme ograničeno - iskoristi ga kao
+napomenu dok si već na `/client/zakazivanje` ili `/trainer/raspored` (koraci
+7-8): *"Svaki ekran koji bira dan - zakazivanje, moji termini, raspored
+trenera, dnevni raspored menadžera - koristi isti kalendarski
+komponent-za-biranje-dana. Dani koji nisu dostupni (praznik teretane, dan bez
+definisanog radnog vremena, ili - na trenerskim ekranima - trenerov slobodan
+dan) su precrtani, ali i dalje klikabilni; klik prikazuje tačan razlog ispod
+kalendara, umesto da korisnik sazna tek posle pokušaja zakazivanja."* Klikni
+na jedan precrtan dan (ako postoji u vidljivom mesecu) da pokažeš baner sa
+razlogom uživo.
+
+### 12. Zaključak [CORE] (~30s)
 
 *"Sistem sada pokriva ceo tok - od samostalne registracije, kroz
 administraciju od strane menadžera, do sve tri 'wow' funkcionalnosti i
@@ -265,11 +319,13 @@ postojećim sistemom, bez narušavanja postojeće funkcionalnosti."*
   za `admin`/`ogi`/`citva` - ako login ne radi, provjeri da li je baza
   stvarno na `dev` Flyway profilu (`spring.profiles.active=dev`) - samo taj
   profil učitava `V1.0017` i pokreće `DevDataSeeder`.
-- **Registracija (korak 1) - aktivacioni link ne radi ili nalog "već
-  postoji"**: ako je email već iskorišćen na ovoj bazi (npr. ponovljena
-  proba istog demo-a), koristi drugi email umesto da pokušavaš isti
-  ponovo - `findOrCreateUser` će vratiti postojećeg korisnika bez novog
-  `registrationKey`-a, pa banner neće prikazati koristan link.
+- **Registracija (korak 1) - mejl ne stiže ili nalog "već postoji"**: ako je
+  email već iskorišćen na ovoj bazi (npr. ponovljena proba istog demo-a),
+  koristi drugi email umesto da pokušavaš isti ponovo - `findOrCreateUser` će
+  vratiti postojećeg korisnika bez novog `registrationKey`-a, pa novi mejl
+  neće stići. Ako Gmail SMTP otkaže uživo (retko, ali moguće - vidi i "Nema
+  interneta" ispod), prijavi to otvoreno i pređi na unapred pripremljeni
+  primljeni mejl (vidi napomenu u koraku 1) umesto uživo slanja.
 - **Booking flow (korak 8) - nema dostupnih termina bez trenera/sa slobodnim
   mestom**: seeder namerno pravi samo deo budućih termina bez trenera
   (~45%) i sa punim kapacitetom - ako baš svi vidljivi termini u trenutku
@@ -300,3 +356,9 @@ kao referencu ako komisija pita "zašto baš tako", npr.:
   decisions"),
 - koja poznata ograničenja postoje i zašto nisu popravljena u ovoj sesiji
   (sekcija "Known issues" u `AGENTS.md`).
+
+Za noviju funkcionalnost dodatu posle Faze 7 (notifikacije, uplate/dug,
+kalendarski UI, potvrda brisanja) pogledaj i `docs/decision-log.md` sekcije
+"Upgrade: notification decisions", "Upgrade: notification-bell clipping
+fix", "Upgrade: payment debt tracking decisions", "Upgrade: MonthCalendar
+unavailability decisions", i "Upgrade: custom confirm-dialog decisions".
