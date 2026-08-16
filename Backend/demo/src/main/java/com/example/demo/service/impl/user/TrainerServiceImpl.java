@@ -98,8 +98,10 @@ public class TrainerServiceImpl implements TrainerService {
         // own (see AGENTS.md "Upgrade: Faza 6 decisions" - addRole/removeRole are the only thing
         // that manage the roles set) - without this, the account would be left with a dangling
         // TRAINER role and no matching domain row, the same class of gap the admin UI already
-        // works around on the create/assign side.
-        userService.removeRole(userId, Role.TRAINER);
+        // works around on the create/assign side. Uses removeRoleForProfileDeletion, not
+        // removeRole - this is exactly the one legitimate case of ending up with zero operational
+        // roles (see AGENTS.md "Upgrade: operational-role cardinality decisions").
+        userService.removeRoleForProfileDeletion(userId, Role.TRAINER);
     }
 
     public List<TrainerDTO> getAll() {

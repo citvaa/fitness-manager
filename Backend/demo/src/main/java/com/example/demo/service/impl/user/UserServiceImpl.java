@@ -287,6 +287,17 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("Korisnik već ima rolu " + role);
         }
 
+        // A user may hold at most one operational role (MANAGER/TRAINER/CLIENT) at a time - this
+        // mirrors TrainerServiceImpl/ClientServiceImpl's existing practice of atomically creating
+        // a matching domain profile (Trainer/Client row) alongside the role, which only makes
+        // sense for a single, unambiguous "what kind of account is this" answer. ADMIN is
+        // additive and exempt (blocked above regardless). See AGENTS.md "Upgrade: operational-role
+        // cardinality decisions".
+        if (isOperationalRole(role) && hasAnyOperationalRole(user)) {
+            throw new IllegalArgumentException(
+                    "Korisnik već ima operativnu rolu (MANAGER/TRAINER/CLIENT) - ukloni je pre dodavanja nove.");
+        }
+
         UserRole userRole = new UserRole();
         userRole.setUser(user);
         userRole.setRole(role);
@@ -299,6 +310,15 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void removeRole(Integer id, Role role) {
+        removeRoleInternal(id, role, true);
+    }
+
+    @Transactional
+    public void removeRoleForProfileDeletion(Integer id, Role role) {
+        removeRoleInternal(id, role, false);
+    }
+
+    private void removeRoleInternal(Integer id, Role role, boolean enforceLastOperationalRoleGuard) {
         // Same ADMIN-is-never-touchable-here rule as addRole above - without this, any MANAGER
         // could call DELETE /api/user/{id}/role?role=ADMIN and strip ADMIN from the one seeded
         // admin account, with no other ADMIN able to restore it via the API.
@@ -328,10 +348,36 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("Korisnik nema rolu " + role);
         }
 
+        // Mirrors the addRole guard above - removing your only operational role through the
+        // generic endpoint would leave the account role-less with no domain profile ever having
+        // been deleted, an inconsistent state a plain role removal shouldn't be able to produce.
+        // Deliberately skipped when called from TrainerServiceImpl/ClientServiceImpl.delete()
+        // (enforceLastOperationalRoleGuard = false) - that path is intentionally leaving the
+        // account role-less, right after actually deleting the matching domain profile.
+        if (enforceLastOperationalRoleGuard && isOperationalRole(role) && countOperationalRoles(user) <= 1) {
+            throw new IllegalArgumentException("Ne može se ukloniti poslednja operativna rola korisnika.");
+        }
+
         userRoleRepository.delete(userRoleToRemove.get());
         user.getUserRoles().remove(userRoleToRemove.get());
 
         userRepository.save(user);
+    }
+
+    private static boolean isOperationalRole(Role role) {
+        return role == Role.MANAGER || role == Role.TRAINER || role == Role.CLIENT;
+    }
+
+    private static boolean hasAnyOperationalRole(User user) {
+        return user.getUserRoles() != null
+                && user.getUserRoles().stream().anyMatch(userRole -> isOperationalRole(userRole.getRole()));
+    }
+
+    private static long countOperationalRoles(User user) {
+        if (user.getUserRoles() == null) {
+            return 0;
+        }
+        return user.getUserRoles().stream().filter(userRole -> isOperationalRole(userRole.getRole())).count();
     }
 
     /** Same JWT->email idiom used across the codebase (see AGENTS.md, "Upgrade: service layer

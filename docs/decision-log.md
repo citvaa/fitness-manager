@@ -4146,3 +4146,54 @@ one).
 existing MANAGER-gate tests. Ran `UserServiceImplTest` standalone (same pre-existing
 `ManagerInsightsServiceImplTest` compile-blocker workaround as the previous session's entry -
 temporarily moved that one file aside, restored unchanged afterward) - all tests pass.
+
+## Upgrade: operational-role cardinality decisions
+
+**Problem**: the generic `UserService.addRole`/`removeRole` (backing `POST`/`DELETE
+/api/user/{id}/role`) only ever touched the `user_role` join table - no cardinality check at all.
+A user could end up with `TRAINER` + `CLIENT` simultaneously (or any other combination), or with
+zero roles, purely by calling this endpoint directly - inconsistent with `TrainerService`/
+`ClientService`'s own `create()` methods, which each atomically build exactly one domain profile
+per role. `ClientServiceImpl` also had no `delete()` at all, asymmetric with the pre-existing
+`TrainerServiceImpl.delete()`.
+
+**Fix**:
+- `addRole` now rejects adding a second operational role (`MANAGER`/`TRAINER`/`CLIENT`) if the user
+  already holds one (`hasAnyOperationalRole`), and `removeRole` rejects removing the user's last one
+  (`countOperationalRoles(user) <= 1`). `ADMIN` is exempt from both (already blocked outright from
+  this endpoint per the previous "ADMIN-role security hole" fix).
+- The last-operational-role guard would otherwise break the pre-existing, intentional "deleting a
+  Trainer/Client domain profile also removes the matching role, leaving a role-less shell account"
+  behavior (`TrainerServiceImpl.delete()`, and the new `ClientServiceImpl.delete()` below) - both
+  call a new `UserService.removeRoleForProfileDeletion(id, role)` instead of the public
+  `removeRole`, which skips only that one guard (all the ADMIN/self-removal/not-found checks still
+  apply). This method is never reachable from a controller - only from the two domain-delete flows,
+  right after the domain row itself is already gone.
+- Added `ClientServiceImpl.delete(Integer id)`, mirroring `TrainerServiceImpl.delete()`: bulk-JPQL
+  deletes every table FK'd to the client (session trackings, appointments, room check-ins, progress
+  entries, personal records, payments - same repositories/pattern as `UserServiceImpl.delete()`'s
+  own `Client` cleanup, deliberately not an entity-level cascade delete for the same
+  `BaseEntity` id-less `equals()`/`hashCode()` reason documented in AGENTS.md's "Known issues"),
+  then the `Client` row itself (`clientRepository.deleteByUser`, also bulk JPQL - an entity-level
+  `clientRepository.delete(client)` here would still be exposed to that bug via the just-loaded
+  `client` object's own cascade=ALL collections, even after their rows are already gone), then
+  `removeRoleForProfileDeletion(userId, Role.CLIENT)`. Wired to `DELETE /api/client/{id}`
+  (MANAGER-only, new `ClientController` endpoint) and a "Obriši" button per row in `ClientsTab.tsx`
+  (using the `useConfirm()` dialog from the confirm-dialog round, not a bare `confirm()`).
+
+**Verification**: added `addRole_rejectsAddingSecondOperationalRole`,
+`removeRole_rejectsRemovingLastOperationalRole`, and
+`removeRoleForProfileDeletion_allowsRemovingLastOperationalRole` to `UserServiceImplTest`; updated
+two pre-existing tests (`removeRole_removesExistingRole`,
+`removeRole_allowsManagerRemovingAnotherUsersManagerRole`) to give their fixture user a second
+operational role, since removing a user's *only* role is now rejected by design. Both fixtures
+needed distinct `version` values on their two `UserRole` objects - otherwise the pre-existing
+`BaseEntity` id-less `equals()`/`hashCode()` bug (AGENTS.md "Known issues") collapsed them into a
+single entry inside the `HashSet` constructor, silently defeating the "two roles present" setup;
+this is the same bug class documented elsewhere in the decision log, hit here in test fixtures
+rather than production code. Added `ClientServiceImplTest.delete_*` tests (new mocks for the 6
+newly-injected repositories) and updated `TrainerServiceImplTest`'s two `delete()` tests to verify
+`removeRoleForProfileDeletion` instead of `removeRole`. Ran `UserServiceImplTest`/
+`TrainerServiceImplTest`/`ClientServiceImplTest` standalone (same pre-existing
+`ManagerInsightsServiceImplTest` compile-blocker workaround as earlier entries) - all pass. `mvn -o
+compile` and `npx tsc -b` both clean.

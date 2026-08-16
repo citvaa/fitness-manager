@@ -75,6 +75,10 @@ export function createClient(email: string) {
   return http.post<ClientDTO>('/api/client', { email }).then((r) => r.data)
 }
 
+export function deleteClient(id: number) {
+  return http.delete(`/api/client/${id}`)
+}
+
 // ---- Gym opening hours ----
 
 export function getGymSchedule() {

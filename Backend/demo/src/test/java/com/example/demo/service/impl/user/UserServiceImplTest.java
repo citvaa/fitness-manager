@@ -277,6 +277,21 @@ class UserServiceImplTest {
     }
 
     @Test
+    void addRole_rejectsAddingSecondOperationalRole() {
+        // A user may hold at most one operational role (MANAGER/TRAINER/CLIENT) at a time - see
+        // AGENTS.md "Upgrade: operational-role cardinality decisions".
+        UserRole existing = new UserRole();
+        existing.setRole(Role.CLIENT);
+        User user = User.builder().id(1).userRoles(new HashSet<>(java.util.List.of(existing))).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.addRole(1, Role.TRAINER))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(userRoleRepository, never()).save(any());
+    }
+
+    @Test
     void addRole_rejectsNonAdminGrantingManagerRole() {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
@@ -336,12 +351,50 @@ class UserServiceImplTest {
 
     @Test
     void removeRole_removesExistingRole() {
+        // Two operational roles present so this exercises plain removal, not the "last
+        // operational role" guard (covered separately by removeRole_rejectsRemovingLastOperationalRole).
+        // Distinct `version` values are required - BaseEntity's Lombok @Data equals()/hashCode()
+        // only compares its own fields (never the subclass id, see AGENTS.md "Known issues"), so
+        // two otherwise-default UserRole instances would collapse into one entry in a HashSet.
+        UserRole existing = new UserRole();
+        existing.setRole(Role.TRAINER);
+        existing.setVersion(1);
+        UserRole other = new UserRole();
+        other.setRole(Role.CLIENT);
+        other.setVersion(2);
+        User user = User.builder().id(1).userRoles(new HashSet<>(java.util.List.of(existing, other))).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        service.removeRole(1, Role.TRAINER);
+
+        verify(userRoleRepository).delete(existing);
+        assertThat(user.getUserRoles()).containsExactly(other);
+    }
+
+    @Test
+    void removeRole_rejectsRemovingLastOperationalRole() {
         UserRole existing = new UserRole();
         existing.setRole(Role.TRAINER);
         User user = User.builder().id(1).userRoles(new HashSet<>(java.util.List.of(existing))).build();
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
 
-        service.removeRole(1, Role.TRAINER);
+        assertThatThrownBy(() -> service.removeRole(1, Role.TRAINER))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(userRoleRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeRoleForProfileDeletion_allowsRemovingLastOperationalRole() {
+        // The one legitimate exception to the guard above - TrainerServiceImpl/
+        // ClientServiceImpl.delete() call this variant right after the domain profile itself is
+        // gone, intentionally leaving the account role-less.
+        UserRole existing = new UserRole();
+        existing.setRole(Role.TRAINER);
+        User user = User.builder().id(1).userRoles(new HashSet<>(java.util.List.of(existing))).build();
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+
+        service.removeRoleForProfileDeletion(1, Role.TRAINER);
 
         verify(userRoleRepository).delete(existing);
         assertThat(user.getUserRoles()).isEmpty();
@@ -386,9 +439,16 @@ class UserServiceImplTest {
 
     @Test
     void removeRole_allowsManagerRemovingAnotherUsersManagerRole() {
+        // Two operational roles present so this exercises the ADMIN/self-removal gates, not the
+        // separately-covered "last operational role" guard. Distinct `version` values needed for
+        // the same HashSet-collapsing reason noted in removeRole_removesExistingRole above.
         UserRole existing = new UserRole();
         existing.setRole(Role.MANAGER);
-        User user = User.builder().id(2).email("other@gym.com").userRoles(new HashSet<>(java.util.List.of(existing))).build();
+        existing.setVersion(1);
+        UserRole other = new UserRole();
+        other.setRole(Role.TRAINER);
+        other.setVersion(2);
+        User user = User.builder().id(2).email("other@gym.com").userRoles(new HashSet<>(java.util.List.of(existing, other))).build();
         when(userRepository.findById(2)).thenReturn(Optional.of(user));
 
         Jwt jwt = Jwt.withTokenValue("token")

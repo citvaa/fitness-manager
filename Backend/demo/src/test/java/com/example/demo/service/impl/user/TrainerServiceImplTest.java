@@ -118,7 +118,10 @@ class TrainerServiceImplTest {
         // The mirror-image of the addRole-doesn't-create-domain-rows gap: deleting the domain
         // row must also strip the TRAINER role, or the account is left with a dangling role and
         // no matching Trainer row. See AGENTS.md "Upgrade: Faza 6 decisions (continued, part 2)".
-        verify(userService).removeRole(1, Role.TRAINER);
+        // Uses removeRoleForProfileDeletion (not removeRole) - see AGENTS.md "Upgrade:
+        // operational-role cardinality decisions" for why this legitimately leaves zero
+        // operational roles, unlike the generic role-removal endpoint.
+        verify(userService).removeRoleForProfileDeletion(1, Role.TRAINER);
     }
 
     @Test
@@ -127,7 +130,7 @@ class TrainerServiceImplTest {
 
         assertThatThrownBy(() -> service.delete(9)).isInstanceOf(EntityNotFoundException.class);
 
-        verify(userService, never()).removeRole(any(), any());
+        verify(userService, never()).removeRoleForProfileDeletion(any(), any());
     }
 
     @Test

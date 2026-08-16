@@ -103,17 +103,34 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
 - **User** (`model/user/User.java`) - email, password (null until account activation),
   `isActivated`, `notificationPreference` (`EMAIL`/`PUSH`/`BOTH`), registration/reset keys with
   validity timestamps, `Set<UserRole>`.
-- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`. A single
-  `User` can hold multiple roles. Adding a role via `UserService.addRole` only inserts this join
-  row - it does **not** create the matching `Trainer`/`Client` domain entity (only
+- **UserRole** - join entity; `role` is one of `MANAGER` / `TRAINER` / `CLIENT` / `ADMIN`. A `User`
+  can hold **at most one operational role** (`MANAGER`/`TRAINER`/`CLIENT`) at a time -
+  `UserService.addRole` rejects adding a second one, and `removeRole` rejects removing the last one
+  (both via a new `isOperationalRole`/`countOperationalRoles` check in `UserServiceImpl`); `ADMIN`
+  is exempt from this cardinality rule (it's additive, see below) and was already unconditionally
+  blocked from this endpoint regardless of caller (see "Upgrade: ADMIN-role security hole" in
+  `docs/decision-log.md`). Adding a role via `UserService.addRole` only inserts this join row - it
+  does **not** create the matching `Trainer`/`Client` domain entity (only
   `TrainerController.create`/`ClientController.create` do that); removing a `Trainer`/`Client`
-  correspondingly also removes the matching role via `UserService.removeRole`. `ADMIN` is additive
-  to `MANAGER` (never held alone) and is the only role allowed to grant/revoke `MANAGER` itself -
-  see "Upgrade: manager-hierarchy decisions" below and `docs/decision-log.md`. Exactly one seed
-  account (`admin`, via migration `V1.0020__add_admin_role.sql`) has it.
+  correspondingly also removes the matching role, but via a separate
+  `UserService.removeRoleForProfileDeletion` - not the public `removeRole` - since that path
+  legitimately leaves the account with zero operational roles (a role-less shell, matching this
+  codebase's pre-existing convention) right after the domain profile itself is actually deleted;
+  the cardinality guard would otherwise block it. See `docs/decision-log.md` "Upgrade:
+  operational-role cardinality decisions". `ADMIN` is additive to `MANAGER` (never held alone) and
+  is the only role allowed to grant/revoke `MANAGER` itself - see "Upgrade: manager-hierarchy
+  decisions" below and `docs/decision-log.md`. Exactly one seed account (`admin`, via migration
+  `V1.0020__add_admin_role.sql`) has it.
 - **Trainer** - 1:1 with `User`; employment date, birth year, `EmploymentStatus` (`FULL_TIME` /
   `CONTRACT` / `FORMER_EMPLOYEE`).
 - **Client** - 1:1 with `User`; owns `Payment`s, `ClientSessionTracking`s, `ClientAppointment`s.
+  `ClientServiceImpl.delete()` (new - previously asymmetric with `TrainerServiceImpl.delete()`,
+  which already existed) bulk-JPQL-deletes every FK'd table (payments, session trackings,
+  appointments, room check-ins, progress entries, personal records) before the `Client` row itself,
+  same pattern as `UserServiceImpl.delete()`'s own `Client` cleanup - deliberately not an
+  entity-level cascade delete, which would hit the `BaseEntity` id-less `equals()`/`hashCode()` bug
+  (see "Known issues"). `DELETE /api/client/{id}` (MANAGER-only), wired into `ClientsTab.tsx`'s
+  per-row "Obriši" button.
 - **Session** - a session *type* (`INDIVIDUAL` / `GROUP`) with `maxParticipants`. Seeded rows only
   (INDIVIDUAL/1, GROUP/3, GROUP/10) - not created via the API. Neither `Session` nor `Payment` has
   a price/amount column - manager-insights "revenue" is a paid-appointment-count proxy, not

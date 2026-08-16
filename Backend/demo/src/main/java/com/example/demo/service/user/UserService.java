@@ -36,6 +36,14 @@ public interface UserService {
 
     void removeRole(Integer id, Role role);
 
+    /** Same removal as {@link #removeRole}, but skips the "can't remove your last operational
+     * role" cardinality check - used exclusively by TrainerServiceImpl/ClientServiceImpl.delete()
+     * when a domain profile itself is being deleted, which legitimately leaves the account with
+     * zero operational roles (a role-less shell, matching this codebase's pre-existing "removing
+     * a Trainer/Client also removes the matching role" convention). Not reachable from any
+     * controller - only ever called internally right after the domain row itself is already gone. */
+    void removeRoleForProfileDeletion(Integer id, Role role);
+
     User findOrCreateUser(CreateUserRequest request);
 
     void updateNotificationPreference(Integer id, NotificationPreference notificationPreference);
