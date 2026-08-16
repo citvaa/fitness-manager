@@ -999,3 +999,15 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Verification: frontend production build succeeded and all three focused
   `OccupancyServiceImplTest` cases passed. Live toggle QA requires restarting
   the already-running backend so it exposes the new endpoint.
+
+## 2026-08-16 - Upgrade part 3 appointment planning layout
+
+- “Novi slot” now sits immediately below the manager month calendar in one
+  compact planning sidebar. The selected day's appointment roster uses the full
+  right column instead of sharing it with the form, removing the former empty
+  block while preserving all create, recurring, trainer, and roster actions.
+- The layout collapses to calendar, form, then roster at the shared mobile
+  breakpoint.
+- Verification: frontend production build succeeded. Live geometry inspection
+  confirmed the 310px form is directly below the 310px calendar and the roster
+  independently fills the 1207px right column.
