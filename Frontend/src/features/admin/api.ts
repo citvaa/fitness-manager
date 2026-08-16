@@ -7,8 +7,6 @@ import type {
   CreateGymScheduleRequest,
   CreateHolidayRequest,
   CreateTrainerRequest,
-  CreateTrainerScheduleRequest,
-  CreateTrainerUnavailabilityRequest,
   GymScheduleDTO,
   HolidayDTO,
   PageResponse,
@@ -95,22 +93,12 @@ export function createHoliday(request: CreateHolidayRequest) {
   return http.post<HolidayDTO>('/api/schedule/holiday', request).then((r) => r.data)
 }
 
-// ---- Trainer schedule (manager oversight) ----
+// ---- Trainer schedule (manager oversight - read-only; writes are TRAINER self-service only,
+// see features/schedule/api.ts and AGENTS.md "Upgrade: manager schedule-write removal
+// decisions") ----
 
 export function getTrainerSchedule(trainerId: number) {
   return http.get<TrainerScheduleDTO[]>(`/api/schedule/trainer/${trainerId}`).then((r) => r.data)
-}
-
-export function createTrainerSchedule(request: CreateTrainerScheduleRequest) {
-  return http.post<TrainerScheduleDTO>('/api/schedule/trainer', request).then((r) => r.data)
-}
-
-export function createTrainerUnavailability(request: CreateTrainerUnavailabilityRequest) {
-  return http.post('/api/schedule/trainer/unavailable', request)
-}
-
-export function deleteTrainerScheduleEntry(id: number) {
-  return http.delete(`/api/schedule/trainer/${id}`)
 }
 
 // ---- Appointment slot management (Faza 9) ----

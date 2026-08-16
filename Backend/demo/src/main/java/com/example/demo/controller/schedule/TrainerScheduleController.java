@@ -5,8 +5,6 @@ import com.example.demo.dto.schedule.TrainerScheduleDTO;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateOwnTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateOwnTrainerUnavailabilityRequest;
-import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
-import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,21 +25,9 @@ public class TrainerScheduleController {
 
     private final TrainerScheduleService trainerScheduleService;
 
-    @RoleRequired("MANAGER")
-    @PostMapping
-    public ResponseEntity<TrainerScheduleDTO> createSchedule(@RequestBody CreateTrainerScheduleRequest request) {
-        TrainerScheduleDTO trainerScheduleDTO = trainerScheduleService.createSchedule(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(trainerScheduleDTO);
-    }
-
-    @RoleRequired("MANAGER")
-    @PostMapping("/unavailable")
-    public ResponseEntity<Void> createUnavailability(@RequestBody CreateTrainerUnavailabilityRequest request) {
-        trainerScheduleService.createUnavailability(request);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-
-    /** MANAGER oversight - view any trainer's schedule. See AGENTS.md "Upgrade: Faza 6 decisions". */
+    /** MANAGER oversight - view any trainer's schedule. Read-only: writing to a trainer's own
+     * schedule is TRAINER self-service only (POST .../me, .../me/recurring, .../me/unavailable
+     * below) - see AGENTS.md "Upgrade: manager schedule-write removal decisions". */
     @RoleRequired("MANAGER")
     @GetMapping("/{trainerId}")
     public ResponseEntity<List<TrainerScheduleDTO>> getSchedule(@PathVariable Integer trainerId) {
@@ -80,12 +66,12 @@ public class TrainerScheduleController {
     }
 
     /**
-     * MANAGER may delete any entry; TRAINER may only delete their own - enforced in
-     * TrainerScheduleServiceImpl.deleteSchedule, which throws AccessDeniedException (-> 403)
-     * otherwise. Both roles share this one endpoint rather than a separate "/me/{id}" variant,
-     * since the ownership check already fully covers the self-service case.
+     * TRAINER self-service - a trainer may only delete their own entries, enforced in
+     * TrainerScheduleServiceImpl.deleteSchedule (throws AccessDeniedException -> 403 otherwise).
+     * MANAGER no longer has a bypass here - see AGENTS.md "Upgrade: manager schedule-write removal
+     * decisions".
      */
-    @RoleRequired({"MANAGER", "TRAINER"})
+    @RoleRequired("TRAINER")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSchedule(@PathVariable Integer id) {
         trainerScheduleService.deleteSchedule(id);

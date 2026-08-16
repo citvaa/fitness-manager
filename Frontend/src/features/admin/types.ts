@@ -90,20 +90,6 @@ export interface TrainerScheduleDTO {
   status: WorkStatus
 }
 
-export interface CreateTrainerScheduleRequest {
-  trainerId: number
-  date: string
-  startTime: string
-  endTime: string
-}
-
-export interface CreateTrainerUnavailabilityRequest {
-  trainerId: number
-  startDate: string
-  endDate: string
-  status: WorkStatus
-}
-
 // ---- Appointment slot management (Faza 9) ----
 // Minimal duplicate of features/appointments/types.ts's shape, extended with `room` (wired into
 // AppointmentDTO/CreateAppointmentRequest this phase - see AGENTS.md "Upgrade: Faza 9

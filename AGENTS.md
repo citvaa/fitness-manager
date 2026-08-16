@@ -218,7 +218,12 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   (TRAINER self-service only - see "Upgrade: trainer fixed-schedule decisions" in
   `docs/decision-log.md`) generates weekly-repeating `WORKING` shifts from one request, same
   `RECURRING_WEEKS_AHEAD = 8` convention and "skip one bad week, only report reasons if the whole
-  series fails" behavior as `AppointmentService#createRecurringWeekly`.
+  series fails" behavior as `AppointmentService#createRecurringWeekly`. Writing to a trainer's own
+  schedule (create shift/unavailability, delete an entry) is TRAINER self-service only - a MANAGER
+  has read-only oversight (`GET /api/schedule/trainer/{trainerId}`), not write access; the old
+  MANAGER-facing `createSchedule`/`createUnavailability`/manager-bypass-in-`deleteSchedule` were
+  removed as dead/dangerous surface once the TRAINER self-service endpoints existed to cover the
+  same need. See "Upgrade: manager schedule-write removal decisions" in `docs/decision-log.md`.
 - **Holiday** - a gym-wide non-working date; insert-only by design (no update/delete).
 - **Gym** (`model/gym/Gym.java`) - single-installation config (name, address, contact info,
   logo/brand color, timezone). A real table (not a `@ConfigurationProperties` bean), even though

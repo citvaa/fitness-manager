@@ -4341,3 +4341,69 @@ the "Manager hierarchy" paragraph in AGENTS.md's Auth flow section to stop descr
 removal). Not screenshotted live - a pure UI-simplification removal with no new interactive
 surface, and the button's own behavior was already `403` in every case per the cardinality-round
 Verification.
+
+## Upgrade: manager schedule-write removal decisions
+
+**Problem**: `TrainerScheduleController` gave MANAGER full write access to any trainer's
+schedule - `POST /api/schedule/trainer` (createSchedule), `POST /api/schedule/trainer/unavailable`
+(createUnavailability), and a manager-bypass branch inside `deleteSchedule` that let a MANAGER
+delete any trainer's entry. This predates the TRAINER self-service side of the same feature
+(`POST /api/schedule/trainer/me`, `.../me/recurring`, `.../me/unavailable`, all added later, see
+"Upgrade: Faza 6 decisions"/"Upgrade: trainer fixed-schedule decisions") - once self-service
+existed, a MANAGER silently editing/deleting a trainer's own working hours or unavailability
+behind their back was leftover surface from before the trainer had a way to manage it themselves,
+not an intentional oversight capability. `TrainersTab.tsx`'s embedded `TrainerScheduleManager`
+exposed this: "Nova smena"/"Neradni period" create forms and a per-entry "Obriši" button, all
+MANAGER-only.
+
+**Fix**:
+- Backend: deleted `createSchedule`/`createUnavailability` entirely from
+  `TrainerScheduleService`/`TrainerScheduleServiceImpl`/`TrainerScheduleController` (no
+  replacement - the TRAINER self-service equivalents already cover the same need, resolving the
+  trainer from the JWT rather than a client-supplied `trainerId`). Deleted the now-dead
+  `CreateTrainerScheduleRequest`/`CreateTrainerUnavailabilityRequest` request DTOs (nothing else
+  referenced them - `CreateOwnTrainerScheduleRequest`/`CreateOwnTrainerUnavailabilityRequest`,
+  used by the `/me` endpoints, are separate types and untouched).
+- `deleteSchedule`'s manager-bypass branch (`if (!isManager()) { ... ownership check ... }`) was
+  removed - the ownership check now always runs, for every caller. Also removed the now-dead
+  `isManager()`/`fetchTrainer()` private helpers (both only existed to serve the removed manager
+  paths). `DELETE /api/schedule/trainer/{id}` at the controller layer changed from
+  `@RoleRequired({"MANAGER", "TRAINER"})` to `@RoleRequired("TRAINER")` alone - a MANAGER can no
+  longer reach this endpoint at all now, not even to attempt-and-403 at the service layer.
+  `GET /api/schedule/trainer/{trainerId}` (MANAGER oversight) is untouched - still read-only,
+  still works for any trainer.
+- Frontend: `TrainerScheduleManager.tsx` rewritten from a full create/delete UI into a pure
+  read-only list (date/time-range/status per entry, no forms, no buttons) - `TrainersTab.tsx`'s
+  existing "Raspored"/"Sakrij raspored" toggle embed is unchanged, it just now shows a read-only
+  view instead of an editable one. Removed the now-unused `createTrainerSchedule`/
+  `createTrainerUnavailability`/`deleteTrainerScheduleEntry` functions from `features/admin/api.ts`
+  (`getTrainerSchedule` stays - still used here and by `DailySchedulePage.tsx`) and the matching
+  `CreateTrainerScheduleRequest`/`CreateTrainerUnavailabilityRequest` types from
+  `features/admin/types.ts`.
+
+**Verification**: updated `TrainerScheduleServiceImplTest.deleteSchedule_managerMayDeleteAnyTrainersEntry`
+(no longer true) into `deleteSchedule_managerWithNoTrainerProfileCannotDeleteAnyEntry`, asserting
+`EntityNotFoundException` when a caller with no Trainer profile (e.g. a MANAGER) tries to delete
+any entry - defense-in-depth confirmation that the service itself has no manager bypass anymore,
+even though the controller's `@RoleRequired("TRAINER")` already stops a MANAGER JWT from reaching
+it in the real API. Ran `TrainerScheduleServiceImplTest` standalone (same pre-existing
+`ManagerInsightsServiceImplTest` compile-blocker workaround as earlier entries) - all 10 tests
+pass. `mvn -o compile` and `npx tsc -b` both clean.
+
+**Live verification**: restarted the backend (`mvn -o -Dmaven.test.skip=true spring-boot:run`,
+replacing a stale already-running instance from before this round's changes) against the seeded
+dev database, logged in as `admin` (MANAGER+ADMIN) and `ogi` (TRAINER) via `POST
+/api/user/login`, then exercised the endpoints directly with `curl`:
+- MANAGER `POST /api/schedule/trainer/me` (impersonating a trainer path it never owned) -> `403`.
+- MANAGER `DELETE /api/schedule/trainer/{id}` -> `403` (endpoint no longer permits MANAGER at all).
+- MANAGER `GET /api/schedule/trainer/{trainerId}` (oversight) -> `200`, unaffected.
+- The old MANAGER-only `POST /api/schedule/trainer` and `POST /api/schedule/trainer/unavailable`
+  routes no longer exist at all (fell through to the static-resource handler / `405`, not a
+  handled `403` - confirming they were actually deleted, not just re-gated).
+- TRAINER (`ogi`) `POST /api/schedule/trainer/me` -> `201`, created entry visible in `GET
+  /api/schedule/trainer/me`; `DELETE /api/schedule/trainer/{id}` on that same entry (as `ogi`) ->
+  `204`.
+Also screenshotted the live frontend (`/manager/administracija` -> Treneri tab -> "Raspored" on
+trainer `ogi`): the panel now renders a plain read-only list of date/time/status rows with no
+"Nova smena"/"Neradni period" forms and no per-row "Obriši" button, confirming the UI change
+matches the backend's removed write access.

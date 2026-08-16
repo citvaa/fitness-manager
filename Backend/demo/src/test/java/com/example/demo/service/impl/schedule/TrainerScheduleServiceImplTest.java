@@ -41,8 +41,14 @@ import static org.mockito.Mockito.*;
 /**
  * Unit tests for {@link TrainerScheduleServiceImpl} - the Faza 6 self-service schedule
  * endpoints (a trainer resolved from the JWT, never a client-supplied trainerId - see AGENTS.md
- * "Upgrade: Faza 6 decisions") and the shared delete's MANAGER-may-delete-any /
- * TRAINER-may-delete-own-only ownership check.
+ * "Upgrade: Faza 6 decisions") and deleteSchedule's TRAINER-may-delete-own-only ownership check.
+ * MANAGER no longer has any write access to a trainer's schedule at all (createSchedule/
+ * createUnavailability were removed, and deleteSchedule's manager bypass was removed) - see
+ * AGENTS.md "Upgrade: manager schedule-write removal decisions". The controller layer enforces
+ * this by requiring @RoleRequired("TRAINER") on every write endpoint including DELETE /{id}, so
+ * a MANAGER JWT can no longer reach deleteSchedule() at all in practice; the service-level test
+ * below confirms the service itself is unusable for a caller with no Trainer profile too (defense
+ * in depth, not reachable through the real API).
  */
 @ExtendWith(MockitoExtension.class)
 class TrainerScheduleServiceImplTest {
@@ -224,16 +230,20 @@ class TrainerScheduleServiceImplTest {
     // ---------- deleteSchedule ownership ----------
 
     @Test
-    void deleteSchedule_managerMayDeleteAnyTrainersEntry() {
+    void deleteSchedule_managerWithNoTrainerProfileCannotDeleteAnyEntry() {
+        // MANAGER can no longer reach this at all via the real API (controller now requires
+        // @RoleRequired("TRAINER")) - this confirms the service itself has no manager bypass
+        // either: a caller with no Trainer profile of their own can't delete anyone's entry.
         authenticateAsManager("admin@gym.com");
         Trainer owner = Trainer.builder().id(1).build();
         TrainerSchedule schedule = TrainerSchedule.builder().id(50).trainer(owner).build();
         when(trainerScheduleRepository.findById(50)).thenReturn(Optional.of(schedule));
+        when(trainerRepository.findByUserEmail("admin@gym.com")).thenReturn(Optional.empty());
 
-        service.deleteSchedule(50);
+        assertThatThrownBy(() -> service.deleteSchedule(50))
+                .isInstanceOf(EntityNotFoundException.class);
 
-        verify(trainerScheduleRepository).delete(schedule);
-        verifyNoInteractions(trainerRepository);
+        verify(trainerScheduleRepository, never()).delete(any());
     }
 
     @Test

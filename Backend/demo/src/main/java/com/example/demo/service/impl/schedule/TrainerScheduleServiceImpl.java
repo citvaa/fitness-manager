@@ -13,8 +13,6 @@ import com.example.demo.service.HolidayService;
 import com.example.demo.service.schedule.TrainerScheduleService;
 import com.example.demo.service.params.request.schedule.CreateOwnTrainerScheduleRequest;
 import com.example.demo.service.params.request.schedule.CreateOwnTrainerUnavailabilityRequest;
-import com.example.demo.service.params.request.schedule.CreateTrainerScheduleRequest;
-import com.example.demo.service.params.request.schedule.CreateTrainerUnavailabilityRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,25 +46,6 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
     private final TrainerScheduleRepository trainerScheduleRepository;
     private final TrainerScheduleMapper trainerScheduleMapper;
     private final HolidayService holidayService;
-
-    @Transactional
-    public TrainerScheduleDTO createSchedule(@NotNull CreateTrainerScheduleRequest request) {
-        validateScheduleRequest(request.getDate(), request.getStartTime(), request.getEndTime());
-        validateGymHours(request.getDate(), request.getStartTime(), request.getEndTime());
-        validateTrainerAvailability(request.getTrainerId(), request.getDate(), request.getStartTime(), request.getEndTime());
-
-        Trainer trainer = fetchTrainer(request.getTrainerId());
-        TrainerSchedule trainerSchedule = buildTrainerSchedule(trainer, request.getDate(), request.getStartTime(), request.getEndTime());
-
-        return trainerScheduleMapper.toDto(trainerScheduleRepository.save(trainerSchedule));
-    }
-
-    @Transactional
-    public void createUnavailability(@NotNull CreateTrainerUnavailabilityRequest request) {
-        Trainer trainer = trainerRepository.findById(request.getTrainerId())
-                .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen"));
-        saveUnavailabilityRange(trainer, request.getStartDate(), request.getEndDate(), request.getStatus());
-    }
 
     @Transactional
     public TrainerScheduleDTO createMySchedule(@NotNull CreateOwnTrainerScheduleRequest request) {
@@ -135,11 +114,9 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         TrainerSchedule schedule = trainerScheduleRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Stavka rasporeda trenera nije pronađena"));
 
-        if (!isManager()) {
-            Trainer trainer = getAuthenticatedTrainer();
-            if (!schedule.getTrainer().getId().equals(trainer.getId())) {
-                throw new AccessDeniedException("Možete brisati samo svoje stavke rasporeda");
-            }
+        Trainer trainer = getAuthenticatedTrainer();
+        if (!schedule.getTrainer().getId().equals(trainer.getId())) {
+            throw new AccessDeniedException("Možete brisati samo svoje stavke rasporeda");
         }
 
         trainerScheduleRepository.delete(schedule);
@@ -183,15 +160,6 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
                 .orElseThrow(() -> new EntityNotFoundException("Trener nije pronađen za prijavljenog korisnika!"));
     }
 
-    private boolean isManager() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            return false;
-        }
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        return roles != null && roles.contains("MANAGER");
-    }
-
     private void validateScheduleRequest(LocalDate date, @NotNull LocalTime startTime, LocalTime endTime) {
         if (startTime.isAfter(endTime)) {
             throw new IllegalArgumentException("Vreme početka je posle vremena završetka");
@@ -220,11 +188,6 @@ public class TrainerScheduleServiceImpl implements TrainerScheduleService {
         if (overlapExists) {
             throw new IllegalArgumentException("Trener već ima smenu koja se preklapa sa ovim vremenskim periodom");
         }
-    }
-
-    private Trainer fetchTrainer(Integer trainerId) {
-        return trainerRepository.findById(trainerId)
-                .orElseThrow(() -> new RuntimeException("Trener nije pronađen"));
     }
 
     private TrainerSchedule buildTrainerSchedule(Trainer trainer, LocalDate date, LocalTime startTime, LocalTime endTime) {
