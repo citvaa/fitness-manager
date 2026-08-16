@@ -4314,3 +4314,30 @@ pre-existing `ManagerInsightsServiceImplTest` compile-blocker workaround as earl
 log) - both existing tests (the idempotency-guard skip, and the "guard doesn't short-circuit early"
 check) still pass unchanged, since neither reaches the appointment-generation code this round
 touched.
+
+## Upgrade: remove dead "Dodaj/Oduzmi MANAGER" toggle from UsersTab
+
+**Problem**: commit 7e44ae0 (the users/roles round) introduced the "at most one operational role
+per user" cardinality rule (`UserServiceImpl.addRole`/`removeRole`, see "Upgrade: operational-role
+cardinality decisions" above) but left `UsersTab.tsx`'s `toggleManagerRole` handler and its
+"Dodaj MANAGER"/"Oduzmi MANAGER" button in place. Every real account already holds exactly one
+operational role, so both branches of that handler now always hit the new cardinality guard:
+`addRole` 403s (adding MANAGER to a TRAINER/CLIENT would give them two operational roles) and
+`removeRole` 403s (removing MANAGER from a MANAGER-only account would leave zero). The button was
+therefore never actually usable post-round, just a click that always surfaced an error toast.
+
+**Fix**: removed the button, its `toggleManagerRole` handler, and the `togglingRoleId` state from
+`UsersTab.tsx` entirely, with no replacement - converting an existing account into a MANAGER is not
+a representable operation in the new one-operational-role architecture; a MANAGER account is only
+ever created via `ManagersTab`'s own create-as-MANAGER form (`addUserRole` at creation time, before
+the account has any other operational role to conflict with). Also removed the now-unused
+`isAdmin`/`currentUserId` reads (`useAuthStore`) that existed solely to gate/disable that button,
+and the now-unused `removeUserRole` API function from `features/admin/api.ts` (`addUserRole` stays
+- still called by `ManagersTab`'s create flow). Updated the stale doc comment above `UsersTab` and
+the "Manager hierarchy" paragraph in AGENTS.md's Auth flow section to stop describing a
+`UsersTab`-side MANAGER toggle that no longer exists.
+
+**Verification**: `npx tsc -b` clean (confirms no dangling imports/unused-var errors from the
+removal). Not screenshotted live - a pure UI-simplification removal with no new interactive
+surface, and the button's own behavior was already `403` in every case per the cardinality-round
+Verification.

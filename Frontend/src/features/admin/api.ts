@@ -43,10 +43,6 @@ export function addUserRole(id: number, role: Role) {
   return http.post(`/api/user/${id}/role`, null, { params: { role } })
 }
 
-export function removeUserRole(id: number, role: Role) {
-  return http.delete(`/api/user/${id}/role`, { params: { role } })
-}
-
 // ---- Trainers (domain profile) ----
 
 export function getTrainers() {

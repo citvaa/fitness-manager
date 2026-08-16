@@ -339,8 +339,11 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   for `MANAGER` gets `403` (`AccessDeniedException`), same as any other `@RoleRequired` gap - there
   is deliberately no separate `@RoleRequired("ADMIN")` annotation-level gate, since `addRole`/
   `removeRole` are one shared endpoint pair for every role and only the `MANAGER` case needs the
-  extra check. Frontend (`UsersTab`/`ManagersTab`) hides the now-403-doomed buttons/form for
-  non-`ADMIN` users, but the backend check is what actually enforces this. `Role.ADMIN` itself is
+  extra check. Frontend `ManagersTab` hides its now-403-doomed create-as-MANAGER path for
+  non-`ADMIN` users, but the backend check is what actually enforces this. `UsersTab` no longer has
+  a MANAGER grant/revoke toggle at all (removed in the operational-role-cardinality follow-up
+  round - see below), so this ADMIN gate is now reachable only via `ManagersTab`'s create form
+  (`addRole`) or a direct API call. `Role.ADMIN` itself is
   now unconditionally rejected by both `addRole`/`removeRole`, for every caller including an
   existing ADMIN - previously there was no check at all for this case, so any ordinary MANAGER
   could call `POST /api/user/{id}/role?role=ADMIN` and grant themselves ADMIN outright (or strip

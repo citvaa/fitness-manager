@@ -1,8 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { isAxiosError } from 'axios'
 import type { Role } from '../../auth/types'
-import { useAuthStore } from '../../auth/store'
-import { addUserRole, deleteUser, getUsers, removeUserRole, updateUser } from './api'
+import { deleteUser, getUsers, updateUser } from './api'
 import type { UserDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { useConfirm } from '../../components/ConfirmDialog'
@@ -28,16 +27,13 @@ const PAGE_SIZE = 10
  * The "Novi nalog" create form used to live here, with a "Dodeli MANAGER rolu odmah" checkbox -
  * moved to its own "Menadžeri" tab (ManagersTab) that always creates a MANAGER account, the same
  * way "Treneri"/"Klijenti" each default their own role. This tab is now purely the full
- * cross-role account list (search/edit email/toggle MANAGER/delete) - see AGENTS.md
- * ("Upgrade: manager-testing fixes").
+ * cross-role account list (search/edit email/delete) - see AGENTS.md ("Upgrade: manager-testing
+ * fixes"). There is deliberately no MANAGER-toggle here anymore: since every real account already
+ * holds exactly one operational role (see "one operational role per user" in AGENTS.md), converting
+ * an existing user into a MANAGER post-hoc is not a representable operation - a MANAGER account is
+ * only ever created via the "Menadžeri" tab's own create form.
  */
 export function UsersTab() {
-  const currentUserId = useAuthStore((s) => s.user?.id)
-  // Only an ADMIN may grant/revoke MANAGER - backend-enforced (UserServiceImpl
-  // addRole/removeRole -> 403 for non-ADMIN callers); this just hides the now-unusable button
-  // for everyone else instead of leaving it clickable-but-always-403.
-  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
-
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [search, setSearch] = useState('')
@@ -49,7 +45,6 @@ export function UsersTab() {
   const [editEmail, setEditEmail] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
-  const [togglingRoleId, setTogglingRoleId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   async function reload() {
@@ -106,23 +101,6 @@ export function UsersTab() {
       setActionError(extractErrorMessage(err, 'Izmena naloga nije uspela.'))
     } finally {
       setSavingEdit(false)
-    }
-  }
-
-  async function toggleManagerRole(user: UserDTO) {
-    setActionError(null)
-    setTogglingRoleId(user.id)
-    try {
-      if (user.roles.includes('MANAGER')) {
-        await removeUserRole(user.id, 'MANAGER')
-      } else {
-        await addUserRole(user.id, 'MANAGER')
-      }
-      await reload()
-    } catch (err) {
-      setActionError(extractErrorMessage(err, 'Izmena role nije uspela.'))
-    } finally {
-      setTogglingRoleId(null)
     }
   }
 
@@ -217,22 +195,6 @@ export function UsersTab() {
                             className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
                           >
                             Izmeni email
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => toggleManagerRole(u)}
-                            disabled={(u.roles.includes('MANAGER') && u.id === currentUserId) || togglingRoleId === u.id}
-                            className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                            title={
-                              u.roles.includes('MANAGER') && u.id === currentUserId
-                                ? 'Ne možete sami sebi oduzeti MANAGER rolu'
-                                : 'TRAINER/CLIENT role se dodeljuju kroz tabove Treneri/Klijenti, jer tamo se uz rolu kreira i domenski profil'
-                            }
-                          >
-                            {togglingRoleId === u.id
-                              ? '...'
-                              : u.roles.includes('MANAGER') ? 'Oduzmi MANAGER' : 'Dodaj MANAGER'}
                           </button>
                         )}
                         <button
