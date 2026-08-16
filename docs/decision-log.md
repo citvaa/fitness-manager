@@ -1065,6 +1065,18 @@ real inbox; template rendering is independently covered. Captured UI states are
   Managers, and no operational-role selector. Live server-side role filtering
   requires restarting the already-running backend.
 
+## 2026-08-16 - Upgrade part 8 hidden activation key
+
+- Complete Registration reads the generated UUID from `?key=` once and keeps it
+  outside editable state and rendered controls. A valid activation form asks
+  only for the new password and confirmation.
+- Missing, blank, or malformed UUID keys replace the form with a dedicated
+  invalid-link explanation and return-to-login action. Server rejection still
+  handles expired, revoked, or otherwise unknown well-formed keys on submit.
+- Verification: frontend production build succeeded. Live QA found an alert,
+  zero forms, and zero inputs without a key; a well-formed URL rendered exactly
+  one form with two password inputs and no registration-key label.
+
 ## 2026-08-16 - Upgrade part 5 manager insights command center
 
 - Reframed AI insights as an executive dashboard: the dark command-center hero

@@ -316,7 +316,9 @@ for presentation but never recalculates the backend's numeric values.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
   `http://localhost:5173`); activation targets the frontend's real
   `/complete-registration?key=...` route, and user creation flushes before
-  email is queued.
+  email is queued. Registration silently reads a UUID key from that URL and
+  renders only password/confirmation controls; a missing or malformed key
+  replaces the form with a clear invalid-link state.
 - `ADMIN` is an authorization capability, not a standalone workspace. The
   frontend active-role switcher considers MANAGER/TRAINER/CLIENT only, while
   preserving ADMIN in the held-role set used for backend authorization.
