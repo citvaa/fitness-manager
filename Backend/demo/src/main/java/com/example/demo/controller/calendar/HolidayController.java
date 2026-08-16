@@ -17,7 +17,7 @@ public class HolidayController {
 
     private final HolidayService holidayService;
 
-    @RoleRequired({"MANAGER", "TRAINER"}) @GetMapping
+    @RoleRequired({"MANAGER", "TRAINER", "CLIENT"}) @GetMapping
     public List<HolidayDTO> getAll() { return holidayService.getAll(); }
 
     @RoleRequired("MANAGER")

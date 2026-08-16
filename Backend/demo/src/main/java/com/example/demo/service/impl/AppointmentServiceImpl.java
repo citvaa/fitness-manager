@@ -204,6 +204,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!isFuture(appointment)) {
             throw new IllegalArgumentException("Only future appointments can be reserved!");
         }
+        validateGymSchedule(appointment.getDate(), appointment.getStartTime(), appointment.getEndTime());
+        if (holidayRepository.existsByDate(appointment.getDate())) {
+            throw new IllegalArgumentException("Gym is closed for a holiday on " + appointment.getDate() + ".");
+        }
         if (appointment.getClientAppointments().stream().anyMatch(link -> link.getClient().getId().equals(client.getId()))) {
             throw new IllegalStateException("Client is already registered for this appointment!");
         }

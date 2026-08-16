@@ -17,7 +17,7 @@ public class GymScheduleController {
 
     private final GymScheduleService gymScheduleService;
 
-    @RoleRequired("MANAGER")
+    @RoleRequired({"MANAGER", "TRAINER", "CLIENT"})
     @GetMapping
     public List<GymScheduleDTO> getAll() { return gymScheduleService.getAll(); }
 

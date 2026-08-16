@@ -281,7 +281,11 @@ back to `AVERAGE` and a generic comment without hiding the calculated cards.
   scoped to the selected date.
   Both trainer calendars visually mute personal HOLIDAY/SICK_LEAVE/VACATION
   dates and gym-wide Holiday dates without changing appointment highlights;
-  authenticated trainers may read the holiday list for this purpose.
+  authenticated trainers may read the holiday list for this purpose. Both
+  client calendars also mute gym holidays and weekdays without valid GymSchedule
+  coverage; CLIENT may read both lists, and booking controls are unavailable on
+  those dates. Manager creation uses the same closure model while backend create
+  and reserve validation remains authoritative.
 - Client booking is split into two routes: “Zakaži trening” contains only the
   date-scoped available marketplace, while “Moji termini” contains only the
   client's existing reservations. The latter shows held-only for past dates,
@@ -308,6 +312,8 @@ back to `AVERAGE` and a generic comment without hiding the calculated cards.
   measurements and three monthly personal-record points per client, two holidays,
   and weekday/weekend gym hours. Reseed truncates all application tables in one
   statement so the occupancy scheduler cannot deadlock a partially locked wipe.
+  Appointment generation queries the persisted holiday and gym-hour rows before
+  every candidate slot; skipped slots cannot produce derived WORKING shifts.
 - `docs/defense-demo-script.md` is the current end-to-end defense runbook. Keep
   its CORE + optional structure and update it only after the user-visible flows
   it demonstrates are final, so its roles, routes, credentials, and plans B do

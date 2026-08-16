@@ -146,6 +146,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                 default -> List.of(LocalTime.of(7, 0), LocalTime.of(9, 0), LocalTime.of(17, 0), LocalTime.of(18, 30), LocalTime.of(20, 0));
             };
             for (LocalTime start : slots) {
+                if (!isGymOpen(date, start, start.plusHours(1))) continue;
                 Integer trainer = sequence % 4 == 0 ? null : trainers.get(sequence % trainers.size());
                 int roll = random.nextInt(100);
                 int session = roll < 15 ? sessions.get(0) : roll < 50 ? sessions.get(1) : sessions.get(2);
@@ -177,6 +178,17 @@ public class DemoDataSeeder implements ApplicationRunner {
             LocalDateTime in = LocalDate.now().minusDays(3 + i * 2L).atTime(17 + i % 3, 0);
             jdbc.update("INSERT INTO room_check_in(room_id,client_id,checked_in_at,checked_out_at) VALUES (?,?,?,?)", rooms.get(i % rooms.size()), clients.get(i % clients.size()), Timestamp.valueOf(in), Timestamp.valueOf(in.plusMinutes(55 + i % 20)));
         }
+    }
+
+    private boolean isGymOpen(LocalDate date, LocalTime start, LocalTime end) {
+        Boolean holiday = jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM holiday WHERE date = ?)", Boolean.class, Date.valueOf(date));
+        if (Boolean.TRUE.equals(holiday)) return false;
+        List<Map<String, Object>> schedules = jdbc.queryForList(
+                "SELECT opening_time, closing_time FROM gym_schedule WHERE day = ?", date.getDayOfWeek().name());
+        if (schedules.isEmpty()) return false;
+        LocalTime opening = ((java.sql.Time) schedules.getFirst().get("opening_time")).toLocalTime();
+        LocalTime closing = ((java.sql.Time) schedules.getFirst().get("closing_time")).toLocalTime();
+        return opening.isBefore(closing) && !start.isBefore(opening) && !end.isAfter(closing);
     }
 
     private void seedPaymentsAndTracking(List<Integer> clients, List<Integer> sessions) {

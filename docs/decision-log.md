@@ -966,3 +966,22 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Retained the existing CORE + “ako ima vremena” organization and added explicit
   preparation and fallback guidance for SMTP, Claude, WebSocket, late-day
   check-in data, and a complete local failure.
+
+## 2026-08-16 - Upgrade part 1 client closure calendars and safe demo seeding
+
+- The shared month calendar can mute recurring weekdays as well as explicit
+  dates. Both client routes now load read-only gym hours and holidays, mute full
+  closure days like the trainer calendar, and replace booking actions with a
+  closure explanation. The manager create form uses the same availability model.
+- CLIENT gained read-only access to gym schedules and holidays. Appointment
+  creation already rejected missing/out-of-range gym hours and holidays; client
+  reservation now repeats those checks so stale pre-existing slots cannot bypass
+  a newly declared closure.
+- Demo appointment generation checks the persisted holiday and GymSchedule rows
+  for each candidate hour. Closed candidates are skipped before appointment and
+  client links are inserted, so the derived trainer WORKING ranges are also clean.
+- Verification: frontend production build succeeded; focused
+  `AppointmentMarketplaceServiceTest` passed all 14 tests, including new holiday
+  and removed-schedule reservation cases. Live manager QA selected an actually
+  muted closure date from the current database, displayed the closure message,
+  and confirmed that “Kreiraj termin” was disabled.

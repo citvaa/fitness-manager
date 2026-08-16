@@ -186,6 +186,36 @@ class AppointmentMarketplaceServiceTest {
     }
 
     @Test
+    void clientCannotReserveAppointmentThatFallsOnANewHoliday() {
+        authenticate("client@example.com", "CLIENT");
+        Client client = Client.builder().id(5).user(User.builder().email("client@example.com").build()).build();
+        Appointment appointment = futureAppointment(23, session(2, 3), null);
+        when(clients.findByUserEmail("client@example.com")).thenReturn(Optional.of(client));
+        when(appointments.findById(23)).thenReturn(Optional.of(appointment));
+        when(holidays.existsByDate(appointment.getDate())).thenReturn(true);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.reserve(23));
+
+        assertTrue(error.getMessage().contains("holiday"));
+        verify(appointments, never()).save(appointment);
+    }
+
+    @Test
+    void clientCannotReserveAppointmentAfterGymScheduleCoverageIsRemoved() {
+        authenticate("client@example.com", "CLIENT");
+        Client client = Client.builder().id(5).user(User.builder().email("client@example.com").build()).build();
+        Appointment appointment = futureAppointment(24, session(2, 3), null);
+        when(clients.findByUserEmail("client@example.com")).thenReturn(Optional.of(client));
+        when(appointments.findById(24)).thenReturn(Optional.of(appointment));
+        when(gymSchedules.findByDay(appointment.getDate().getDayOfWeek())).thenReturn(Optional.empty());
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.reserve(24));
+
+        assertTrue(error.getMessage().contains("No gym schedule"));
+        verify(appointments, never()).save(appointment);
+    }
+
+    @Test
     void assigningWithoutCoveringShiftCreatesExactWorkingShift() {
         authenticate("trainer@example.com", "TRAINER");
         Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trainer@example.com").build()).build();
