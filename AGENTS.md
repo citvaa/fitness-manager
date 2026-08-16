@@ -253,6 +253,14 @@ occupancy, individual/group mix, check-in ratio, and paid appointment units).
 Claude receives those fixed values and returns JSON containing only summary,
 recommendations, and per-key rating/comment. Missing or invalid AI fields fall
 back to `AVERAGE` and a generic comment without hiding the calculated cards.
+The manager dashboard presents the executive summary and numbered actions first,
+then rating-colored room bars, session-mix donut, attendance gauge, sold-units
+KPI, and a complete diagnostic card grid. The frontend groups stable metric keys
+for presentation but never recalculates the backend's numeric values.
+The manager dashboard presents the executive summary and numbered actions first,
+then rating-colored room bars, session-mix donut, attendance gauge, sold-units
+KPI, and a complete diagnostic card grid. The frontend groups stable metric keys
+for presentation but never recalculates the backend's numeric values.
 
 ## Conventions
 

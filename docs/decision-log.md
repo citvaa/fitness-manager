@@ -1024,3 +1024,31 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Verification: frontend production build succeeded. Live QA changed the
   manager calendar date, observed the global “Sačekajte…” indicator during the
   request, and confirmed that it disappeared after the response.
+
+## 2026-08-16 - Upgrade part 5 manager insights command center
+
+- Reframed AI insights as an executive dashboard: the dark command-center hero
+  puts the narrative, generation context, rating distribution, and numbered
+  next actions before all supporting detail.
+- Existing immutable backend metrics now drive purpose-specific Recharts:
+  rating-colored horizontal room bars, a training-mix donut, an attendance
+  gauge, and a focused sold-units KPI. The detailed cards remain below for full
+  comments and use the same rating color in their accent and progress scale.
+- No numeric derivation moved to the browser; grouping is based only on stable
+  metric keys, and every server metric still appears in the diagnostic grid.
+- Verification: frontend production build succeeded. Live visual QA rendered
+  the hero, all four chart/KPI cards, and all nine current metrics at 1905px
+  without horizontal overflow; the hierarchy and color system were inspected
+  from a real screenshot rather than DOM structure alone.
+
+## 2026-08-16 - Upgrade part 5 manager insights command center
+
+- Reframed AI insights as an executive dashboard: the dark command-center hero
+  puts the narrative, generation context, rating distribution, and numbered
+  next actions before all supporting detail.
+- Existing immutable backend metrics now drive purpose-specific Recharts:
+  rating-colored horizontal room bars, a training-mix donut, an attendance
+  gauge, and a focused sold-units KPI. The detailed cards remain below for full
+  comments and use the same rating color in their accent and progress scale.
+- No numeric derivation moved to the browser; grouping is based only on stable
+  metric keys, and every server metric still appears in the diagnostic grid.
