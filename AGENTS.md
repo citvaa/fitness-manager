@@ -323,7 +323,12 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   is deliberately no separate `@RoleRequired("ADMIN")` annotation-level gate, since `addRole`/
   `removeRole` are one shared endpoint pair for every role and only the `MANAGER` case needs the
   extra check. Frontend (`UsersTab`/`ManagersTab`) hides the now-403-doomed buttons/form for
-  non-`ADMIN` users, but the backend check is what actually enforces this.
+  non-`ADMIN` users, but the backend check is what actually enforces this. `Role.ADMIN` itself is
+  now unconditionally rejected by both `addRole`/`removeRole`, for every caller including an
+  existing ADMIN - previously there was no check at all for this case, so any ordinary MANAGER
+  could call `POST /api/user/{id}/role?role=ADMIN` and grant themselves ADMIN outright (or strip
+  it from the one seeded admin via the `DELETE` variant). See `docs/decision-log.md` "Upgrade:
+  ADMIN-role security hole".
 
 ## Notifications
 

@@ -410,6 +410,50 @@ class UserServiceImplTest {
     }
 
     @Test
+    void addRole_rejectsGrantingAdminRoleEvenAsAdmin() {
+        // ADMIN must never be grantable through this generic endpoint at all - not even by an
+        // existing ADMIN caller. See AGENTS.md "Upgrade: ADMIN-role security hole".
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "admin@gym.com")
+                .claim("roles", java.util.List.of("ADMIN", "MANAGER"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            assertThatThrownBy(() -> service.addRole(1, Role.ADMIN))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            verify(userRepository, never()).findById(any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void removeRole_rejectsRevokingAdminRoleEvenAsAdmin() {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("email", "admin@gym.com")
+                .claim("roles", java.util.List.of("ADMIN", "MANAGER"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null));
+
+        try {
+            assertThatThrownBy(() -> service.removeRole(1, Role.ADMIN))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            verify(userRepository, never()).findById(any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void removeRole_rejectsNonAdminRevokingManagerRole() {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")

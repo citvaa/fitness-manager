@@ -4121,3 +4121,28 @@ pre-existing failures, neither touched by this session's change and both invisib
   `reserve_addsClientWhenSpotAvailable` fixture gap fixed in this session (a `Client` with no
   `.user(...)`) - `assign()`'s test just wasn't fixed since it's unrelated to this session's actual
   change.
+
+## Upgrade: ADMIN-role security hole
+
+**Problem**: `UserServiceImpl.addRole`/`removeRole` (backing `POST`/`DELETE /api/user/{id}/role`)
+only ever gated `role == Role.MANAGER` on `isCurrentUserAdmin()` - there was no check at all for
+`role == Role.ADMIN`. Since these are the same generic endpoint pair for every role, any
+authenticated MANAGER could call `POST /api/user/{id}/role?role=ADMIN` on their own account and
+grant themselves ADMIN outright, or call the `DELETE` variant against the one seeded admin account
+and strip ADMIN from the only administrator in the system, with nobody left able to undo it via the
+API. A real privilege-escalation hole, not a theoretical one - `@RoleRequired` on the controller
+method only requires *some* authenticated role, and neither `addRole` nor `removeRole` treated
+`ADMIN` as special before this fix.
+
+**Fix**: both methods now reject `role == Role.ADMIN` unconditionally, before any other check -
+for every caller, including an already-authenticated ADMIN. ADMIN grant/revoke simply isn't a
+supported operation through this generic role endpoint (there's no other endpoint that does it
+either - by design, per the existing "one seed account (`admin`) has it" convention in AGENTS.md's
+`UserRole` section; changing who holds ADMIN is an operational/DB-level action, not a runtime API
+one).
+
+**Verification**: added `addRole_rejectsGrantingAdminRoleEvenAsAdmin`/
+`removeRole_rejectsRevokingAdminRoleEvenAsAdmin` to `UserServiceImplTest`, alongside the pre-
+existing MANAGER-gate tests. Ran `UserServiceImplTest` standalone (same pre-existing
+`ManagerInsightsServiceImplTest` compile-blocker workaround as the previous session's entry -
+temporarily moved that one file aside, restored unchanged afterward) - all tests pass.

@@ -262,6 +262,14 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void addRole(Integer id, Role role) {
+        // ADMIN is never grantable through this generic endpoint, by anyone, including an
+        // existing ADMIN - unlike MANAGER (gated below), there was previously NO check at all for
+        // this case, so any MANAGER could call POST /api/user/{id}/role?role=ADMIN and grant
+        // themselves ADMIN outright. See AGENTS.md "Upgrade: ADMIN-role security hole".
+        if (role == Role.ADMIN) {
+            throw new AccessDeniedException("ADMIN rola se ne može dodeliti preko ovog endpointa.");
+        }
+
         // Only an ADMIN may grant the MANAGER role - an ordinary MANAGER managing MANAGER
         // membership would let any manager mint arbitrary new managers. Checked here (not just
         // hidden in the frontend) since this is also directly reachable via the API.
@@ -291,6 +299,13 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void removeRole(Integer id, Role role) {
+        // Same ADMIN-is-never-touchable-here rule as addRole above - without this, any MANAGER
+        // could call DELETE /api/user/{id}/role?role=ADMIN and strip ADMIN from the one seeded
+        // admin account, with no other ADMIN able to restore it via the API.
+        if (role == Role.ADMIN) {
+            throw new AccessDeniedException("ADMIN rola se ne može oduzeti preko ovog endpointa.");
+        }
+
         // Same ADMIN-only gate as addRole above - an ordinary MANAGER must not be able to strip
         // MANAGER from anyone (including themselves) either.
         if (role == Role.MANAGER && !isCurrentUserAdmin()) {
