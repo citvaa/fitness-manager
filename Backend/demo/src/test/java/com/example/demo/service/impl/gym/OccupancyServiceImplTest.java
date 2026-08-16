@@ -1,6 +1,7 @@
 package com.example.demo.service.impl.gym;
 
 import com.example.demo.exception.ApiException;
+import com.example.demo.dto.gym.RoomCheckInDTO;
 import com.example.demo.mapper.gym.RoomCheckInMapper;
 import com.example.demo.model.Appointment;
 import com.example.demo.model.gym.Gym;
@@ -57,5 +58,14 @@ class OccupancyServiceImplTest {
         ApiException error = assertThrows(ApiException.class, () -> service.checkIn(request));
         assertEquals(HttpStatus.CONFLICT, error.getStatus());
         verify(rooms, never()).findById(anyInt()); verify(checkIns, never()).saveAndFlush(any());
+    }
+
+    @Test void returnsAuthoritativeActiveCheckInsForRosterToggles() {
+        RoomCheckIn active = RoomCheckIn.builder().id(8).build();
+        RoomCheckInDTO dto = new RoomCheckInDTO();
+        when(checkIns.findByCheckedOutAtIsNull()).thenReturn(List.of(active));
+        when(mapper.toDto(active)).thenReturn(dto);
+
+        assertEquals(List.of(dto), service.activeCheckIns());
     }
 }

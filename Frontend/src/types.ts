@@ -55,6 +55,8 @@ export interface OccupancySnapshot {
   rooms: RoomOccupancy[]
 }
 
+export interface ActiveCheckIn { id:number; client:{id:number;email:string}; room:{id:number;name:string} }
+
 export interface AiInsight { text: string; model: string; generatedAt: string }
 export type InsightRating='EXCELLENT'|'GOOD'|'AVERAGE'|'POOR'
 export interface ManagerMetricInsight { key:string;label:string;value:number;unit:string;rating:InsightRating;comment:string }

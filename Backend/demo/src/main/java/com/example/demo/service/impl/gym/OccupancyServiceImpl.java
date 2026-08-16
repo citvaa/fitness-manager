@@ -83,6 +83,10 @@ public class OccupancyServiceImpl implements OccupancyService {
         return new OccupancySnapshotResponse(now, result);
     }
 
+    public List<RoomCheckInDTO> activeCheckIns() {
+        return checkInRepository.findByCheckedOutAtIsNull().stream().map(checkInMapper::toDto).toList();
+    }
+
     public OccupancySnapshotResponse publishCurrentOccupancy() {
         OccupancySnapshotResponse snapshot = currentOccupancy();
         messagingTemplate.convertAndSend(OCCUPANCY_TOPIC, snapshot);

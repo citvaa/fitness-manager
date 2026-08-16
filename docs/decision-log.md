@@ -985,3 +985,17 @@ real inbox; template rendering is independently covered. Captured UI states are
   and removed-schedule reservation cases. Live manager QA selected an actually
   muted closure date from the current database, displayed the closure message,
   and confirmed that “Kreiraj termin” was disabled.
+
+## 2026-08-16 - Upgrade part 2 attendance toggle
+
+- Live Plan manager and trainer rosters now expose one pill-shaped attendance
+  switch per client instead of independent check-in/check-out buttons. A green
+  check state means the client is physically checked in; a neutral x state means
+  they are not, so the state is recognizable before reading the label.
+- A role-protected active-check-ins endpoint initializes every toggle from the
+  persistent `RoomCheckIn` source of truth. Successful actions update only the
+  affected client state, while backend uniqueness and not-found rules remain
+  authoritative.
+- Verification: frontend production build succeeded and all three focused
+  `OccupancyServiceImplTest` cases passed. Live toggle QA requires restarting
+  the already-running backend so it exposes the new endpoint.

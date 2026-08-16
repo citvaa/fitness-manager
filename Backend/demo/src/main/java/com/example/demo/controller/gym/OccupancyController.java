@@ -28,6 +28,10 @@ public class OccupancyController {
     public ResponseEntity<RoomCheckInDTO> checkIn(@RequestBody RoomCheckInRequest request) { return ResponseEntity.status(HttpStatus.CREATED).body(service.checkIn(request)); }
 
     @RoleRequired({"MANAGER", "TRAINER"})
+    @GetMapping("/check-ins")
+    public java.util.List<RoomCheckInDTO> activeCheckIns() { return service.activeCheckIns(); }
+
+    @RoleRequired({"MANAGER", "TRAINER"})
     @PostMapping("/check-outs/{clientId}")
     public RoomCheckInDTO checkOut(@PathVariable Integer clientId) { return service.checkOut(clientId); }
 
