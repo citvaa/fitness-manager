@@ -4407,3 +4407,29 @@ Also screenshotted the live frontend (`/manager/administracija` -> Treneri tab -
 trainer `ogi`): the panel now renders a plain read-only list of date/time/status rows with no
 "Nova smena"/"Neradni period" forms and no per-row "Obriši" button, confirming the UI change
 matches the backend's removed write access.
+
+## Upgrade: manager schedule-calendar decisions
+
+**Context**: `TrainerScheduleManager.tsx` (MANAGER's read-only oversight of a single trainer's
+schedule, embedded in `TrainersTab.tsx`'s expanded trainer row) rendered its `TrainerScheduleDTO[]`
+as one flat, unsorted `<ul>` of every entry ever created for that trainer - hard to scan once a
+trainer accumulated more than a handful of shifts/unavailability rows. The trainer's own
+self-service page, `TrainerSchedulePage.tsx`, already solved the same "browse entries by date"
+problem with a `MonthCalendar` day-picker plus a per-selected-day entry list.
+
+**Change**: restructured `TrainerScheduleManager.tsx` to the same pattern: `MonthCalendar` with
+`highlightedDates` (every date that has at least one entry) and `getMutedReason` (that trainer's
+own non-`WORKING` entries, rendered as "Nedostupnost: {Praznik/Bolovanje/Odmor}" - same
+`STATUS_LABEL` map and same derivation as `TrainerSchedulePage.tsx`'s own `getMutedReason`), then
+an entries list filtered to `selectedDate` and sorted by `startTime`, in the same
+`rounded-2xl border ... p-4` / "Raspored za {date}" visual shell. Deliberately did **not** pull in
+`buildGymMutedReason()` (the gym-wide holiday/closed-day layer `TrainerSchedulePage.tsx` also
+shows) - this is a read-only oversight view of one trainer's own entries, not a form the manager is
+about to submit into, so gym-wide context adds noise without adding a decision this screen
+supports.
+
+No backend change - `getTrainerSchedule(trainerId)` and `TrainerScheduleDTO` are unchanged; this is
+a pure frontend re-presentation of the same data.
+
+**Verification**: `npx tsc -b` clean. No backend touched, so no `mvn` re-run needed. Live browser
+verification intentionally skipped per this round's instructions (user testing live themselves).

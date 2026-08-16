@@ -224,6 +224,16 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   MANAGER-facing `createSchedule`/`createUnavailability`/manager-bypass-in-`deleteSchedule` were
   removed as dead/dangerous surface once the TRAINER self-service endpoints existed to cover the
   same need. See "Upgrade: manager schedule-write removal decisions" in `docs/decision-log.md`.
+  `TrainerScheduleManager.tsx` (the MANAGER's read-only oversight panel, embedded in
+  `TrainersTab.tsx`'s expanded trainer row) now renders that same `TrainerScheduleDTO[]` response
+  through a `MonthCalendar` (`highlightedDates` = days with any entry, `getMutedReason` = that
+  trainer's own non-WORKING days, labeled "Nedostupnost: {status}") plus a per-selected-day entry
+  list, instead of one flat unsorted `<ul>` of every entry - the same
+  calendar-plus-selected-day-list pattern `TrainerSchedulePage.tsx` (the trainer's own page) already
+  used. Purely presentational - no backend change, no gym-wide muting (unlike
+  `TrainerSchedulePage.tsx`, which also layers `buildGymMutedReason()` on top; this manager view
+  only needs the trainer's own entries to explain a muted day). See "Upgrade: manager
+  schedule-calendar decisions" in `docs/decision-log.md`.
 - **Holiday** - a gym-wide non-working date; insert-only by design (no update/delete).
 - **Gym** (`model/gym/Gym.java`) - single-installation config (name, address, contact info,
   logo/brand color, timezone). A real table (not a `@ConfigurationProperties` bean), even though
