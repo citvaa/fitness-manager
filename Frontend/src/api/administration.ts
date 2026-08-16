@@ -2,7 +2,7 @@ import { api } from './client'
 import type { ClientProfile, EmploymentStatus, PageResponse, Role, TrainerProfile, UserAccount } from '../types'
 
 export const usersApi={
-  list:async(search='',page=0)=>(await api.get<PageResponse<UserAccount>>('/api/user',{params:{search,page,size:8,sortBy:'id'}})).data,
+  list:async(search='',page=0,role?:Role)=>(await api.get<PageResponse<UserAccount>>('/api/user',{params:{search,page,size:8,sortBy:'id',role}})).data,
   create:async(email:string,role:'MANAGER')=>(await api.post<UserAccount>('/api/user',{email,role})).data,
   update:async(id:number,email:string)=>(await api.put<UserAccount>(`/api/user/${id}`,{email})).data,
   remove:(id:number)=>api.delete(`/api/user/${id}`),

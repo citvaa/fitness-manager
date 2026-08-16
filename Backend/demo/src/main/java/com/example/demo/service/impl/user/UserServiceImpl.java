@@ -66,6 +66,11 @@ public class UserServiceImpl implements UserService {
     public Page<UserDTO> getUsers(@NotNull SearchUserRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(request.getSortBy()));
 
+        if (request.getRole() != null) {
+            return userRepository.findDistinctByUserRolesRoleAndEmailContaining(
+                    request.getRole(), request.getSearch() == null ? "" : request.getSearch(), pageable).map(userMapper::toDto);
+        }
+
         if (request.getSearch() == null || request.getSearch().isEmpty()) {
             return userRepository.findAll(pageable).map(userMapper::toDto);
         }

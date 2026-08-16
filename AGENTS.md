@@ -272,8 +272,12 @@ for presentation but never recalculates the backend's numeric values.
   whole account so a role-less User cannot remain. The loaded profile is
   detached before bulk cleanup and UserRole orphans are flushed first, avoiding
   stale managed profile-to-deleted-user references.
-- Administration renders employment statuses through one Serbian label map;
-  raw `FULL_TIME`/`CONTRACT`/`FORMER_EMPLOYEE` values remain API-only.
+- Administration has four role-oriented tabs: Users is a read-only all-account
+  overview, while Managers, Trainers, and Clients each pair a role-filtered list
+  with a role-fixed create form. ADMIN is never offered. Manager filtering is
+  performed by the paged user query, not by filtering one frontend page.
+  Employment statuses use one Serbian label map; raw
+  `FULL_TIME`/`CONTRACT`/`FORMER_EMPLOYEE` values remain API-only.
 - Appointment creation rejects holidays, missing trainer shifts, trainer/room
   overlaps and client overlaps. Conflict text names trainers by email and rooms
   by name, and includes the conflicting slot.

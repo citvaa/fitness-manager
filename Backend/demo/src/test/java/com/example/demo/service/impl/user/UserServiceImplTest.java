@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.PageImpl;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
@@ -35,4 +36,5 @@ class UserServiceImplTest {
  @Test void passwordResetLifecycleStoresAndClearsKey(){User u=User.builder().email("a@b.rs").build();when(config.getResetKeyValidityMinutes()).thenReturn(15);when(users.findByEmail("a@b.rs")).thenReturn(Optional.of(u));service.requestPasswordReset("a@b.rs");assertNotNull(u.getResetKey());verify(email).sendResetPasswordEmail(eq("a@b.rs"),any());String key=u.getResetKey();when(users.findByResetKey(key)).thenReturn(Optional.of(u));when(encoder.encode("new")).thenReturn("new-hash");service.resetPassword(new ResetPasswordRequest(key,"new"));assertEquals("new-hash",u.getPassword());assertNull(u.getResetKey());}
  @Test void operationalRoleMustRemainExactlyOne(){User u=User.builder().id(7).userRoles(new HashSet<>()).build();when(users.findById(7)).thenReturn(Optional.of(u));service.addRole(7,Role.TRAINER);assertEquals(1,u.getUserRoles().size());assertThrows(IllegalArgumentException.class,()->service.addRole(7,Role.CLIENT));assertThrows(IllegalArgumentException.class,()->service.removeRole(7,Role.TRAINER));verify(roles).save(any(UserRole.class));verify(roles,never()).delete(any());}
  @Test void adminRoleCannotBeChangedThroughGenericApi(){assertThrows(IllegalArgumentException.class,()->service.addRole(7,Role.ADMIN));assertThrows(IllegalArgumentException.class,()->service.removeRole(7,Role.ADMIN));verifyNoInteractions(users,roles);}
+ @Test void managerAdministrationFilterIsAppliedInRepository(){SearchUserRequest request=new SearchUserRequest();request.setRole(Role.MANAGER);request.setSearch("momentum");when(users.findDistinctByUserRolesRoleAndEmailContaining(eq(Role.MANAGER),eq("momentum"),any())).thenReturn(new PageImpl<>(java.util.List.of()));service.getUsers(request);verify(users).findDistinctByUserRolesRoleAndEmailContaining(eq(Role.MANAGER),eq("momentum"),any());verify(users,never()).findAll(any(org.springframework.data.domain.Pageable.class));}
 }

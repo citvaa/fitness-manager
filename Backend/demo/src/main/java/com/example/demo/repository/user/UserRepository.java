@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import com.example.demo.enums.Role;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
@@ -17,4 +18,5 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByResetKey(String token);
 
     Page<User> findByEmailContaining(String username, Pageable pageable);
+    Page<User> findDistinctByUserRolesRoleAndEmailContaining(Role role, String email, Pageable pageable);
 }

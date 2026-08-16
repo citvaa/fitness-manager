@@ -1049,6 +1049,22 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Verification: frontend production build succeeded; live geometry measured a
   464×46px input and 148×42px action inside the 520px modal.
 
+## 2026-08-16 - Upgrade part 7 four-tab administration
+
+- Administration now separates all-account visibility from creation: Users is
+  a full-width read-only overview, while Managers, Trainers, and Clients each
+  own a create form fixed to exactly that operational role and their own list.
+- The new manager list uses an optional server-side Role filter on the existing
+  paged user search. This avoids incomplete client-side filtering when managers
+  fall outside the currently loaded page. ADMIN remains absent from every form.
+- Existing profile-specific trainer/client creation and deletion remain routed
+  through their domain endpoints; manager creation/deletion uses the User API.
+- Verification: frontend production build and backend compilation succeeded;
+  all seven focused `UserServiceImplTest` cases passed. Live UI QA confirmed the
+  four tab labels, zero create forms on Users, exactly one fixed manager form on
+  Managers, and no operational-role selector. Live server-side role filtering
+  requires restarting the already-running backend.
+
 ## 2026-08-16 - Upgrade part 5 manager insights command center
 
 - Reframed AI insights as an executive dashboard: the dark command-center hero

@@ -9,7 +9,6 @@ import type {
   TrainerProfile,
   UserAccount,
 } from "../types";
-const operationalRoles: Role[] = ["MANAGER", "TRAINER", "CLIENT"];
 const roleLabel: Record<Role, string> = {
   MANAGER: "Menadžer",
   TRAINER: "Trener",
@@ -23,7 +22,7 @@ const employmentStatusLabel: Record<EmploymentStatus, string> = {
 };
 export function AdministrationPage() {
   const { requestConfirmation, confirmationDialog } = useConfirm();
-  const [tab, setTab] = useState<"users" | "trainers" | "clients">("users");
+  const [tab, setTab] = useState<"users" | "managers" | "trainers" | "clients">("users");
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
@@ -31,7 +30,6 @@ export function AdministrationPage() {
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
   const [email, setEmail] = useState("");
-  const [initialRole, setInitialRole] = useState<Role>("MANAGER");
   const [profile, setProfile] = useState({
     employmentDate: new Date().toISOString().slice(0, 10),
     birthYear: 1990,
@@ -41,8 +39,8 @@ export function AdministrationPage() {
   const [emailEdit, setEmailEdit] = useState<{ item: UserAccount | TrainerProfile | ClientProfile; value: string } | null>(null);
   async function load() {
     try {
-      if (tab === "users") {
-        const d = await usersApi.list(search, page);
+      if (tab === "users" || tab === "managers") {
+        const d = await usersApi.list(search, page, tab === "managers" ? "MANAGER" : undefined);
         setUsers(d.content);
         setPages(Math.max(1, d.totalPages));
       }
@@ -58,14 +56,8 @@ export function AdministrationPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     try {
-      if (tab === "users") {
-        if (initialRole === "MANAGER") {
-          await usersApi.create(email, "MANAGER");
-        } else if (initialRole === "TRAINER") {
-          await trainersApi.create({ email, ...profile });
-        } else {
-          await clientsApi.create(email);
-        }
+      if (tab === "managers") {
+        await usersApi.create(email, "MANAGER");
       } else if (tab === "trainers") {
         await trainersApi.create({ email, ...profile });
       } else {
@@ -81,7 +73,7 @@ export function AdministrationPage() {
   async function remove(id: number) {
     if (!await requestConfirmation({ title: "Brisanje zapisa", message: "Obrisati izabrani zapis?", confirmLabel: "Obriši" })) return;
     try {
-      tab === "users"
+      tab === "users" || tab === "managers"
         ? await usersApi.remove(id)
         : tab === "trainers"
           ? await trainersApi.remove(id)
@@ -124,7 +116,7 @@ export function AdministrationPage() {
         </div>
       </header>
       <div className="tabs">
-        {(["users", "trainers", "clients"] as const).map((x) => (
+        {(["users", "managers", "trainers", "clients"] as const).map((x) => (
           <button
             className={tab === x ? "active" : ""}
             onClick={() => {
@@ -135,6 +127,8 @@ export function AdministrationPage() {
           >
             {x === "users"
               ? "Korisnici"
+              : x === "managers"
+                ? "Menadžeri"
               : x === "trainers"
                 ? "Treneri"
                 : "Klijenti"}
@@ -147,12 +141,13 @@ export function AdministrationPage() {
           <button onClick={() => setNotice(null)}>×</button>
         </div>
       )}
-      <section className="admin-grid">
+      <section className={`admin-grid ${tab === "users" ? "users-only" : ""}`}>
+        {tab !== "users" &&
         <form className="progress-card admin-form" onSubmit={create}>
           <p className="eyebrow">Novi zapis</p>
           <h2>
-            {tab === "users"
-              ? "Korisnički nalog"
+            {tab === "managers"
+              ? "Novi menadžer"
               : tab === "trainers"
                 ? "Profil trenera"
                 : "Profil klijenta"}
@@ -165,8 +160,7 @@ export function AdministrationPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
-          {tab === "users" && <label>Operativna rola<select value={initialRole} onChange={(event)=>setInitialRole(event.target.value as Role)}>{operationalRoles.map(role=><option key={role} value={role}>{roleLabel[role]}</option>)}</select></label>}
-          {(tab === "trainers" || (tab === "users" && initialRole === "TRAINER")) && (
+          {tab === "trainers" && (
             <>
               <label>
                 Datum zaposlenja
@@ -211,20 +205,20 @@ export function AdministrationPage() {
           <button className="primary-button">
             Kreiraj i pošalji aktivacioni email
           </button>
-        </form>
+        </form>}
         <section className="progress-card table-card">
           <div className="card-head">
             <div>
               <p className="eyebrow">Pregled</p>
               <h2>
-                {tab === "users"
-                  ? "Svi korisnici"
+                {tab === "users" || tab === "managers"
+                  ? tab === "users" ? "Svi korisnici" : "Menadžerski nalozi"
                   : tab === "trainers"
                     ? "Profili trenera"
                     : "Profili klijenata"}
               </h2>
             </div>
-            {tab === "users" && (
+            {(tab === "users" || tab === "managers") && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -243,7 +237,7 @@ export function AdministrationPage() {
             )}
           </div>
           <div className="data-table">
-            {tab === "users" &&
+            {(tab === "users" || tab === "managers") &&
               users.map((u) => (
                 <article key={u.id}>
                   <div>
@@ -289,7 +283,7 @@ export function AdministrationPage() {
                 </article>
               ))}
           </div>
-          {tab === "users" && (
+          {(tab === "users" || tab === "managers") && (
             <div className="pagination">
               <button
                 disabled={page === 0}
