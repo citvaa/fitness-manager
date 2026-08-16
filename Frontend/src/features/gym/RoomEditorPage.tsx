@@ -110,6 +110,7 @@ export function RoomEditorPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   async function reload() {
     const [gymData, roomList] = await Promise.all([getGym(), listRooms().catch(() => [])])
@@ -180,9 +181,14 @@ export function RoomEditorPage() {
   }
 
   async function handleDelete(id: number) {
-    await deleteRoom(id)
-    setRooms((prev) => prev.filter((r) => r.id !== id))
-    if (selectedId === id) setSelectedId(null)
+    setDeletingId(id)
+    try {
+      await deleteRoom(id)
+      setRooms((prev) => prev.filter((r) => r.id !== id))
+      if (selectedId === id) setSelectedId(null)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const selectedRoom = rooms.find((r) => r.id === selectedId) ?? null
@@ -295,9 +301,10 @@ export function RoomEditorPage() {
               <h3 className="text-sm font-semibold text-slate-200">Podešavanja sale</h3>
               <button
                 onClick={() => handleDelete(selectedRoom.id)}
-                className="text-xs text-red-400 hover:text-red-300"
+                disabled={deletingId === selectedRoom.id}
+                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-60"
               >
-                Obriši
+                {deletingId === selectedRoom.id ? 'Brišem...' : 'Obriši'}
               </button>
             </div>
 

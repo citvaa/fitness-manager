@@ -30,6 +30,8 @@ export function TrainersTab() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   async function reload() {
@@ -71,15 +73,25 @@ export function TrainersTab() {
   }
 
   async function saveEdit(id: number) {
-    await updateTrainer(id, editForm)
-    setEditingId(null)
-    await reload()
+    setSavingEdit(true)
+    try {
+      await updateTrainer(id, editForm)
+      setEditingId(null)
+      await reload()
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovog trenera? Ovo briše i njegov raspored.'))) return
-    await deleteTrainer(id)
-    await reload()
+    setDeletingId(id)
+    try {
+      await deleteTrainer(id)
+      await reload()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -190,9 +202,10 @@ export function TrainersTab() {
                     <div className="flex gap-2 md:col-span-4">
                       <button
                         onClick={() => saveEdit(t.id)}
-                        className="rounded-lg bg-brand-600 px-3 py-1 text-xs text-white hover:bg-brand-500"
+                        disabled={savingEdit}
+                        className="rounded-lg bg-brand-600 px-3 py-1 text-xs text-white hover:bg-brand-500 disabled:opacity-60"
                       >
-                        Sačuvaj
+                        {savingEdit ? 'Čuvanje...' : 'Sačuvaj'}
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
@@ -226,9 +239,10 @@ export function TrainersTab() {
                       </button>
                       <button
                         onClick={() => handleDelete(t.id)}
-                        className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                        disabled={deletingId === t.id}
+                        className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                       >
-                        Obriši
+                        {deletingId === t.id ? 'Brišem...' : 'Obriši'}
                       </button>
                     </div>
                   </div>

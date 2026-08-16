@@ -6,6 +6,7 @@ import { NotificationProvider } from '../features/notifications/NotificationCont
 import { NotificationBell } from '../features/notifications/NotificationBell'
 import { NotificationPreferenceSelect } from '../features/notifications/NotificationPreferenceSelect'
 import { ConfirmProvider } from '../components/ConfirmDialog'
+import { GlobalActivityIndicator } from '../components/GlobalActivityIndicator'
 
 // ADMIN is additive to MANAGER, never a switchable active role on its own (see
 // auth/types.ts) - it has no entry in ROLE_PRIORITY/the role switcher and these two maps'
@@ -122,6 +123,7 @@ export function AppShell() {
         <Outlet />
       </main>
     </div>
+    <GlobalActivityIndicator />
     </NotificationProvider>
     </ConfirmProvider>
   )

@@ -18,6 +18,7 @@ export function ClientsTab() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   async function reload() {
@@ -51,11 +52,14 @@ export function ClientsTab() {
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovog klijenta? Ovo briše i njegove uplate/termine/napredak.'))) return
     setDeleteError(null)
+    setDeletingId(id)
     try {
       await deleteClient(id)
       await reload()
     } catch {
       setDeleteError('Brisanje klijenta nije uspelo.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -109,9 +113,10 @@ export function ClientsTab() {
                   </span>
                   <button
                     onClick={() => handleDelete(c.id)}
-                    className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40"
+                    disabled={deletingId === c.id}
+                    className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                   >
-                    Obriši
+                    {deletingId === c.id ? 'Brišem...' : 'Obriši'}
                   </button>
                 </div>
               </li>

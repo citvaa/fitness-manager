@@ -573,7 +573,15 @@ short-text-out calls, not open-ended reasoning.
   Frontend/src` before this) with a `currentColor`-based rotating-circle SVG spinner next to the
   same text - `className` passed straight through so each call site's existing text
   size/color/spacing is unchanged; see `docs/decision-log.md` "Upgrade: shared loading-indicator
-  decisions". `AppShell.tsx`'s outer flex container changed from `min-h-screen` to `h-screen`
+  decisions". `lib/http.ts` additionally tracks a global in-flight-request counter
+  (`subscribeToActiveRequests`), rendered as a small fixed bottom-right pill by
+  `components/GlobalActivityIndicator.tsx` (mounted once in `AppShell`) - a cross-cutting
+  complement to the page-level `LoadingIndicator` for background calls/mutations that aren't
+  covered by any one page's own loading flag. Every delete/remove-type button
+  (`Obriši`/`Ukloni`/`Ukloni trenera`, previously the one class of button with no busy state at
+  all - unlike create/save buttons, which already disabled+swapped text) now tracks its own
+  in-flight id and shows `"Brišem..."`/`"Uklanjam..."` while awaited. See `docs/decision-log.md`
+  "Upgrade: global activity indicator + button busy-state decisions". `AppShell.tsx`'s outer flex container changed from `min-h-screen` to `h-screen`
   (`layout/AppShell.tsx`) - `min-h-screen` let the container grow taller than the viewport on any
   page whose content overflowed, which meant `<main>`'s `overflow-auto` never actually engaged
   (nothing was clipping it) and the whole document scrolled instead, taking the `<aside>` sidebar

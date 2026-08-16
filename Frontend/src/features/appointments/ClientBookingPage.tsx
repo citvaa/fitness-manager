@@ -40,7 +40,7 @@ export function ClientBookingPage() {
   const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
 
   useEffect(() => {
-    void buildGymMutedReason().then(setGymMutedReason)
+    void buildGymMutedReason().then((fn) => setGymMutedReason(() => fn))
   }, [])
 
   async function reload() {

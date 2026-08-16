@@ -110,11 +110,12 @@ export function TrainerSchedulePage() {
   const [unavailEnd, setUnavailEnd] = useState('')
   const [unavailStatus, setUnavailStatus] = useState<WorkStatus>('VACATION')
   const [savingUnavail, setSavingUnavail] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const confirm = useConfirm()
   const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
 
   useEffect(() => {
-    void buildGymMutedReason().then(setGymMutedReason)
+    void buildGymMutedReason().then((fn) => setGymMutedReason(() => fn))
   }, [])
 
   async function reload() {
@@ -176,8 +177,13 @@ export function TrainerSchedulePage() {
 
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovaj unos rasporeda?'))) return
-    await deleteMyScheduleEntry(id)
-    await reload()
+    setDeletingId(id)
+    try {
+      await deleteMyScheduleEntry(id)
+      await reload()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const highlightedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries])
@@ -353,9 +359,10 @@ export function TrainerSchedulePage() {
                     </span>
                     <button
                       onClick={() => handleDelete(e.id)}
-                      className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40"
+                      disabled={deletingId === e.id}
+                      className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                     >
-                      Obriši
+                      {deletingId === e.id ? 'Brišem...' : 'Obriši'}
                     </button>
                   </li>
                 ))}

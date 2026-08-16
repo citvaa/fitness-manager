@@ -127,6 +127,7 @@ export function PersonalRecordsList({
   const [editForm, setEditForm] = useState(toEditForm({ unit: 'KG' } as ClientPersonalRecordDTO))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   const sorted = [...records].sort((a, b) => b.recordDate.localeCompare(a.recordDate))
@@ -162,8 +163,13 @@ export function PersonalRecordsList({
 
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovaj rekord?'))) return
-    await deleteRecord(id)
-    onChanged?.()
+    setDeletingId(id)
+    try {
+      await deleteRecord(id)
+      onChanged?.()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -269,9 +275,10 @@ export function PersonalRecordsList({
                       </button>
                       <button
                         onClick={() => handleDelete(r.id)}
-                        className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                        disabled={deletingId === r.id}
+                        className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                       >
-                        Obriši
+                        {deletingId === r.id ? 'Brišem...' : 'Obriši'}
                       </button>
                     </div>
                   )}

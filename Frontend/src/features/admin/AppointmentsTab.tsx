@@ -106,10 +106,24 @@ export function AppointmentsTab() {
 
   const [rowError, setRowError] = useState<string | null>(null)
   const [addClientChoice, setAddClientChoice] = useState<Record<number, string>>({})
+  // Tracks in-flight remove-trainer/remove-client row actions so their buttons can show busy
+  // text - previously these fired with no visible feedback at all while awaiting the response.
+  const [busyRowKeys, setBusyRowKeys] = useState<Set<string>>(new Set())
+
+  function withRowBusy(key: string, action: () => Promise<void>) {
+    setBusyRowKeys((prev) => new Set(prev).add(key))
+    return action().finally(() => {
+      setBusyRowKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    })
+  }
   const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
 
   useEffect(() => {
-    void buildGymMutedReason().then(setGymMutedReason)
+    void buildGymMutedReason().then((fn) => setGymMutedReason(() => fn))
   }, [])
 
   // Trainer/room options for the "Novi termin" form specifically - narrowed to what's actually
@@ -274,12 +288,14 @@ export function AppointmentsTab() {
 
   async function handleRemoveTrainer(appointmentId: number) {
     setRowError(null)
-    try {
-      await removeTrainerFromAppointment(appointmentId)
-      await reload()
-    } catch (err) {
-      setRowError(extractErrorMessage(err, 'Uklanjanje trenera nije uspelo.'))
-    }
+    await withRowBusy(`trainer-${appointmentId}`, async () => {
+      try {
+        await removeTrainerFromAppointment(appointmentId)
+        await reload()
+      } catch (err) {
+        setRowError(extractErrorMessage(err, 'Uklanjanje trenera nije uspelo.'))
+      }
+    })
   }
 
   async function handleAddClient(appointmentId: number) {
@@ -297,12 +313,14 @@ export function AppointmentsTab() {
 
   async function handleRemoveClient(appointmentId: number, clientId: number) {
     setRowError(null)
-    try {
-      await removeClientFromAppointment(appointmentId, clientId)
-      await reload()
-    } catch (err) {
-      setRowError(extractErrorMessage(err, 'Uklanjanje klijenta nije uspelo.'))
-    }
+    await withRowBusy(`client-${appointmentId}-${clientId}`, async () => {
+      try {
+        await removeClientFromAppointment(appointmentId, clientId)
+        await reload()
+      } catch (err) {
+        setRowError(extractErrorMessage(err, 'Uklanjanje klijenta nije uspelo.'))
+      }
+    })
   }
 
   const highlightedDates = useMemo(() => new Set(appointments.map((a) => a.date)), [appointments])
@@ -515,9 +533,10 @@ export function AppointmentsTab() {
                       {a.trainer ? (
                         <button
                           onClick={() => handleRemoveTrainer(a.id)}
-                          className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40"
+                          disabled={busyRowKeys.has(`trainer-${a.id}`)}
+                          className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                         >
-                          Ukloni trenera
+                          {busyRowKeys.has(`trainer-${a.id}`) ? 'Uklanjam...' : 'Ukloni trenera'}
                         </button>
                       ) : (
                         <select
@@ -550,9 +569,10 @@ export function AppointmentsTab() {
                               <span>{c.email}</span>
                               <button
                                 onClick={() => handleRemoveClient(a.id, c.id)}
-                                className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40"
+                                disabled={busyRowKeys.has(`client-${a.id}-${c.id}`)}
+                                className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                               >
-                                Ukloni
+                                {busyRowKeys.has(`client-${a.id}-${c.id}`) ? 'Uklanjam...' : 'Ukloni'}
                               </button>
                             </li>
                           ))}

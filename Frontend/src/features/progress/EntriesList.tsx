@@ -53,6 +53,7 @@ export function EntriesList({
   const [editForm, setEditForm] = useState(toEditForm({} as ClientProgressEntryDTO))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   const sorted = [...entries].sort((a, b) => b.entryDate.localeCompare(a.entryDate))
@@ -91,8 +92,13 @@ export function EntriesList({
 
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovo merenje?'))) return
-    await deleteEntry(id)
-    onChanged?.()
+    setDeletingId(id)
+    try {
+      await deleteEntry(id)
+      onChanged?.()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -184,9 +190,10 @@ export function EntriesList({
                     </button>
                     <button
                       onClick={() => handleDelete(entry.id)}
-                      className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                      disabled={deletingId === entry.id}
+                      className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                     >
-                      Obriši
+                      {deletingId === entry.id ? 'Brišem...' : 'Obriši'}
                     </button>
                   </div>
                 )}

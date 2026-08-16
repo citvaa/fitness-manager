@@ -47,6 +47,9 @@ export function UsersTab() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editEmail, setEditEmail] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [togglingRoleId, setTogglingRoleId] = useState<number | null>(null)
   const confirm = useConfirm()
 
   async function reload() {
@@ -74,6 +77,7 @@ export function UsersTab() {
   async function handleDelete(id: number) {
     if (!(await confirm('Obrisati ovaj nalog?'))) return
     setActionError(null)
+    setDeletingId(id)
     try {
       await deleteUser(id)
       await reload()
@@ -81,6 +85,8 @@ export function UsersTab() {
       setActionError(
         extractErrorMessage(err, 'Brisanje naloga nije uspelo - nalog možda ima povezane podatke.'),
       )
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -91,17 +97,21 @@ export function UsersTab() {
 
   async function saveEdit(id: number) {
     setActionError(null)
+    setSavingEdit(true)
     try {
       await updateUser(id, editEmail)
       setEditingId(null)
       await reload()
     } catch (err) {
       setActionError(extractErrorMessage(err, 'Izmena naloga nije uspela.'))
+    } finally {
+      setSavingEdit(false)
     }
   }
 
   async function toggleManagerRole(user: UserDTO) {
     setActionError(null)
+    setTogglingRoleId(user.id)
     try {
       if (user.roles.includes('MANAGER')) {
         await removeUserRole(user.id, 'MANAGER')
@@ -111,6 +121,8 @@ export function UsersTab() {
       await reload()
     } catch (err) {
       setActionError(extractErrorMessage(err, 'Izmena role nije uspela.'))
+    } finally {
+      setTogglingRoleId(null)
     }
   }
 
@@ -187,9 +199,10 @@ export function UsersTab() {
                           <>
                             <button
                               onClick={() => saveEdit(u.id)}
-                              className="rounded-lg bg-brand-600 px-2 py-1 text-xs text-white hover:bg-brand-500"
+                              disabled={savingEdit}
+                              className="rounded-lg bg-brand-600 px-2 py-1 text-xs text-white hover:bg-brand-500 disabled:opacity-60"
                             >
-                              Sačuvaj
+                              {savingEdit ? 'Čuvanje...' : 'Sačuvaj'}
                             </button>
                             <button
                               onClick={() => setEditingId(null)}
@@ -209,7 +222,7 @@ export function UsersTab() {
                         {isAdmin && (
                           <button
                             onClick={() => toggleManagerRole(u)}
-                            disabled={u.roles.includes('MANAGER') && u.id === currentUserId}
+                            disabled={(u.roles.includes('MANAGER') && u.id === currentUserId) || togglingRoleId === u.id}
                             className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                             title={
                               u.roles.includes('MANAGER') && u.id === currentUserId
@@ -217,14 +230,17 @@ export function UsersTab() {
                                 : 'TRAINER/CLIENT role se dodeljuju kroz tabove Treneri/Klijenti, jer tamo se uz rolu kreira i domenski profil'
                             }
                           >
-                            {u.roles.includes('MANAGER') ? 'Oduzmi MANAGER' : 'Dodaj MANAGER'}
+                            {togglingRoleId === u.id
+                              ? '...'
+                              : u.roles.includes('MANAGER') ? 'Oduzmi MANAGER' : 'Dodaj MANAGER'}
                           </button>
                         )}
                         <button
                           onClick={() => handleDelete(u.id)}
-                          className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                          disabled={deletingId === u.id}
+                          className="rounded-lg border border-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
                         >
-                          Obriši
+                          {deletingId === u.id ? 'Brišem...' : 'Obriši'}
                         </button>
                       </div>
                     </td>

@@ -10,13 +10,47 @@ export const http = axios.create({ baseURL: API_BASE_URL })
 // so refreshing never recurses into the 401 handler below.
 const refreshClient = axios.create({ baseURL: API_BASE_URL })
 
+// Global in-flight request counter, backing the small floating activity indicator in AppShell
+// (components/GlobalActivityIndicator.tsx) - a page-level LoadingIndicator only ever covers one
+// screen's own fetch, so a background call (e.g. a mutation, or another panel's refresh) had no
+// visible sign anything was happening at all. A plain module-level subscriber list rather than a
+// store dependency, since this is the one cross-cutting piece of UI state that belongs next to
+// the axios instance itself, not a feature.
+let activeRequestCount = 0
+const activeRequestListeners = new Set<(count: number) => void>()
+
+function setActiveRequestCount(count: number) {
+  activeRequestCount = count
+  activeRequestListeners.forEach((listener) => listener(count))
+}
+
+export function subscribeToActiveRequests(listener: (count: number) => void): () => void {
+  activeRequestListeners.add(listener)
+  listener(activeRequestCount)
+  return () => {
+    activeRequestListeners.delete(listener)
+  }
+}
+
 http.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  setActiveRequestCount(activeRequestCount + 1)
   return config
 })
+
+http.interceptors.response.use(
+  (res) => {
+    setActiveRequestCount(activeRequestCount - 1)
+    return res
+  },
+  (error) => {
+    setActiveRequestCount(activeRequestCount - 1)
+    return Promise.reject(error)
+  },
+)
 
 let refreshPromise: Promise<string | null> | null = null
 

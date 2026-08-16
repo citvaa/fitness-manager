@@ -36,7 +36,7 @@ export function DailySchedulePage() {
   const [filterTrainerSchedule, setFilterTrainerSchedule] = useState<TrainerScheduleDTO[]>([])
 
   useEffect(() => {
-    void buildGymMutedReason().then(setGymMutedReason)
+    void buildGymMutedReason().then((fn) => setGymMutedReason(() => fn))
   }, [])
 
   // Only fetched when a specific trainer is selected in the filter above - the calendar has no

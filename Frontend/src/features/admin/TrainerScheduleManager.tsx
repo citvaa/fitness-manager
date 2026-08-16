@@ -44,6 +44,7 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
   const [unavailStart, setUnavailStart] = useState('')
   const [unavailEnd, setUnavailEnd] = useState('')
   const [unavailStatus, setUnavailStatus] = useState<WorkStatus>('VACATION')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   async function reload() {
     setLoading(true)
@@ -100,8 +101,13 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
   }
 
   async function handleDelete(id: number) {
-    await deleteTrainerScheduleEntry(id)
-    await reload()
+    setDeletingId(id)
+    try {
+      await deleteTrainerScheduleEntry(id)
+      await reload()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -196,9 +202,10 @@ export function TrainerScheduleManager({ trainerId }: { trainerId: number }) {
               </span>
               <button
                 onClick={() => handleDelete(e.id)}
-                className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40"
+                disabled={deletingId === e.id}
+                className="rounded-lg border border-red-900/50 px-2 py-0.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-60"
               >
-                Obriši
+                {deletingId === e.id ? 'Brišem...' : 'Obriši'}
               </button>
             </li>
           ))}

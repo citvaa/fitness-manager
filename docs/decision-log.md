@@ -4122,6 +4122,21 @@ pre-existing failures, neither touched by this session's change and both invisib
   `.user(...)`) - `assign()`'s test just wasn't fixed since it's unrelated to this session's actual
   change.
 
+**Addendum (found + fixed during the global-activity-indicator round's live verification, not at
+the time this entry was originally written)**: all 6 `MonthCalendar` call sites above had a real
+bug - `buildGymMutedReason().then(setGymMutedReason)` passed the resolved function straight to a
+React state setter. React special-cases a function argument to `setState` as a *functional update*
+(`(prevState) => newState`), so this silently called the resolved function with the previous state
+as its argument instead of storing it, leaving `gymMutedReason` as whatever that call returned
+(`undefined`) rather than the function itself. `DailySchedulePage` crashed outright
+(`TypeError: gymMutedReason is not a function`) the moment a `getMutedReason` callback tried to
+invoke it - caught live via `npm run dev` + Chrome, not by `tsc`/`vitest` (the type signature
+`((iso: string) => string | null) | null` doesn't distinguish "a function to store" from "an
+updater function" contextually, so this passed type-checking cleanly). Fixed at all 6 sites by
+wrapping: `.then((fn) => setGymMutedReason(() => fn))`. A reminder that `setState(fn)` always needs
+this wrapper when the value being stored is itself a function - type-checking alone did not catch
+it, only rendering the actual page did.
+
 ## Upgrade: ADMIN-role security hole
 
 **Problem**: `UserServiceImpl.addRole`/`removeRole` (backing `POST`/`DELETE /api/user/{id}/role`)
@@ -4197,3 +4212,52 @@ newly-injected repositories) and updated `TrainerServiceImplTest`'s two `delete(
 `TrainerServiceImplTest`/`ClientServiceImplTest` standalone (same pre-existing
 `ManagerInsightsServiceImplTest` compile-blocker workaround as earlier entries) - all pass. `mvn -o
 compile` and `npx tsc -b` both clean.
+
+## Upgrade: global activity indicator + button busy-state decisions
+
+**Problem**: the app had a page-level `LoadingIndicator`/`Spinner` (20+ call sites) but nothing
+cross-cutting - a mutation or a background refresh gave no visual sign anything was happening
+unless that specific page's own loading flag happened to cover it. Separately, button busy states
+were inconsistent: most "create"/"save" buttons already disabled themselves and swapped their text
+(`"Kreiranje..."`, `"Čuvanje..."`), but every plain delete/remove-type button
+(`Obriši`/`Ukloni`/`Ukloni trenera`) across the app fired with **no** disabled state and **no**
+text change at all - a genuinely different, worse gap than "disabled but same text" (`grep` found
+zero remaining `disabled={...}` buttons without matching busy text once this pass finished; the
+real gap was buttons with no `disabled`/busy state whatsoever).
+
+**Fix**:
+- `lib/http.ts` gained a module-level in-flight request counter (`activeRequestCount`) driven by a
+  request interceptor (increment) and a **new**, separate response interceptor (decrement on both
+  success and error) registered before the existing 401-retry response interceptor - axios runs
+  multiple response interceptors in registration order, and a retried request re-enters the request
+  interceptor so it's counted again correctly. `subscribeToActiveRequests(listener)` exposes it to
+  React via a plain `Set` of listeners (no store dependency, since this is the one truly
+  axios-instance-scoped piece of UI state).
+- `components/GlobalActivityIndicator.tsx` subscribes to that counter and renders a small
+  `fixed bottom-right` spinner+text pill (reusing `LoadingIndicator.tsx`'s `Spinner`) whenever
+  count > 0, `pointer-events-none` so it never blocks clicks. Mounted once in `AppShell`.
+- Every delete/remove-type button that previously had no busy state at all now tracks its own
+  in-flight id (or, for `AppointmentsTab`'s two per-appointment-row actions, a `Set<string>` of
+  `"trainer-{id}"`/`"client-{id}-{clientId}"` keys, since multiple different rows' remove actions
+  can be triggered independently) and shows `"Brišem..."`/`"Uklanjam..."` while awaiter, disabled
+  in the meantime: `AppointmentsTab` (remove-trainer, remove-client), `ClientsTab`/`TrainersTab`/
+  `UsersTab` (Obriši), `TrainerScheduleManager`/`TrainerSchedulePage` (Obriši), `RoomEditorPage`
+  (Obriši), `EntriesList`/`PersonalRecordsList` (Obriši). Also caught two non-delete gaps in the
+  same sweep: `TrainersTab`/`UsersTab`'s inline-edit "Sačuvaj" buttons had no busy state either, and
+  `UsersTab`'s "Dodaj/Oduzmi MANAGER" toggle button had none - all three fixed the same way.
+
+**Verification**: `npx tsc -b` and `npm run build` both clean. Live-tested against a freshly
+restarted backend+frontend (dev servers were stale from before this session's `npm install`/backend
+changes - both needed a restart to pick anything up; the backend additionally had a stale
+`target/classes` directory with an orphaned migration file causing a spurious Flyway "duplicate
+version" failure on start, cleaned via `rm -rf target/classes`, unrelated to source). Confirmed live
+via Chrome: `ConfirmDialog` renders centered with the dark-theme backdrop; the ADMIN-role block and
+operational-role cardinality guard both return the expected `403`/`400` via direct `curl` calls
+against the running backend; `ClientServiceImpl.delete()` end-to-end (created a throwaway client,
+deleted it, confirmed the `Client` row is gone from `GET /api/client` while the `User` account
+still appears in `GET /api/user` - a genuine role-less shell - then cleaned up the leftover `User`
+via `DELETE /api/user/{id}`); `MonthCalendar`'s muted-day banner (navigated to January 2027,
+confirmed 2027-01-01 renders struck-through with `title="Praznik: Novogodišnji praznici"` and,
+clicked, shows that exact text as the amber banner - see the addendum on "Upgrade: MonthCalendar
+unavailability decisions" above for a real bug this surfaced and fixed). `AppointmentsTab`'s
+Termini tab also confirmed to render with no console errors after the fix.

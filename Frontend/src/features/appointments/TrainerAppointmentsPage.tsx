@@ -100,7 +100,7 @@ export function TrainerAppointmentsPage() {
 
   useEffect(() => {
     void reload()
-    void buildGymMutedReason().then(setGymMutedReason)
+    void buildGymMutedReason().then((fn) => setGymMutedReason(() => fn))
   }, [])
 
   async function handleAssign(id: number) {
