@@ -2,11 +2,17 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { AuthResponse } from '../types'
 import { currentSession, useAuthStore } from '../auth/authStore'
 import { tokenExpiresSoon } from '../auth/token'
+import { loadingStore } from '../state/loadingStore'
 
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8088'
 export const api = axios.create({ baseURL: API_URL })
 const publicClient = axios.create({ baseURL: API_URL })
 let refreshPromise: Promise<string> | null = null
+
+for (const client of [api, publicClient]) {
+  client.interceptors.request.use(config => { loadingStore.start(); return config }, error => { loadingStore.finish(); return Promise.reject(error) })
+  client.interceptors.response.use(response => { loadingStore.finish(); return response }, error => { loadingStore.finish(); return Promise.reject(error) })
+}
 
 export async function refreshAccessToken(): Promise<string> {
   if (refreshPromise) return refreshPromise

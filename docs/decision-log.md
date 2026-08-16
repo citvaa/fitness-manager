@@ -1011,3 +1011,16 @@ real inbox; template rendering is independently covered. Captured UI states are
 - Verification: frontend production build succeeded. Live geometry inspection
   confirmed the 310px form is directly below the 310px calendar and the roster
   independently fills the 1207px right column.
+
+## 2026-08-16 - Upgrade part 4 global async loading feedback
+
+- Both authenticated and public Axios clients feed a single pending-request
+  store. One fixed, accessible loading pill is mounted above the entire route
+  tree and remains visible until all concurrent requests finish, covering page
+  loads, form submissions, refreshes, deletes, and previously silent actions.
+- Lazy-route fallbacks now reuse the same spinner component and typography.
+  Existing contextual busy labels remain useful local detail but are no longer
+  the only feedback for any server-backed action.
+- Verification: frontend production build succeeded. Live QA changed the
+  manager calendar date, observed the global “Sačekajte…” indicator during the
+  request, and confirmed that it disappeared after the response.

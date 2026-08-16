@@ -143,6 +143,10 @@ Every entity is also `@Audited` (Hibernate Envers).
   `confirm()` is not part of the UI contract.
 - Administration email changes use an in-app validated modal; browser-native
   `prompt()` is not used for account editing.
+- All Axios traffic, including public account flows, is tracked by one shared
+  loading store. `GlobalLoadingIndicator` renders the consistent fixed spinner
+  for page fetches and mutations, while route-code Suspense uses the same
+  `LoadingIndicator` visual rather than page-specific fallback markup.
 - **Payment** has no amount/currency; manager “revenue” is a purchased-
   appointment-count proxy.
 - Payment status is computed per `SessionType` from actually held client

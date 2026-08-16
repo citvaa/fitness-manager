@@ -6,6 +6,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { AccountFlowPage } from "./pages/AccountFlowPage";
 import { refreshAccessToken } from "./api/client";
 import { decodeJwt } from "./auth/token";
+import { GlobalLoadingIndicator, LoadingIndicator } from "./components/LoadingIndicator";
 const EditorPage = lazy(() =>
   import("./pages/EditorPage").then((m) => ({ default: m.EditorPage })),
 );
@@ -78,10 +79,10 @@ function PaymentAccess({ children }: { children: React.ReactNode }) {
   return role === "MANAGER" || role === "CLIENT" ? children : <Navigate to="/app" replace />;
 }
 function ClientOnly({ children }: { children: React.ReactNode }) { return useAuthStore((s)=>s.session?.activeRole)==="CLIENT"?children:<Navigate to="/app" replace/> }
-const loading = (text: string) => <div className="loading-page">{text}</div>;
+const loading = (text: string) => <LoadingIndicator page label={text}/>;
 export default function App() {
   return (
-    <Routes>
+    <><GlobalLoadingIndicator/><Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/complete-registration"
@@ -162,6 +163,6 @@ export default function App() {
         />
       </Route>
       <Route path="*" element={<Navigate to="/app" replace />} />
-    </Routes>
+    </Routes></>
   );
 }
