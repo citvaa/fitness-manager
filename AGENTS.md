@@ -318,8 +318,10 @@ for presentation but never recalculates the backend's numeric values.
   upcoming-only for future dates, and both sections today.
 - The manager daily schedule also uses `MonthCalendar`; changing the selected
   day reloads its date-scoped aggregate timeline. Its create-slot form sits
-  directly below the calendar in the left planning column, while the selected
-  day's roster occupies the full right column.
+  directly below the calendar in an independent left planning column, while the
+  selected day's roster is a separate right-column sibling whose content height
+  cannot create space between the calendar and form. The existing single-column
+  mobile flow stacks the complete planning column before the roster.
 - Activation/reset links use `app.frontend-url` (`FRONTEND_URL`, default
   `http://localhost:5173`); activation targets the frontend's real
   `/complete-registration?key=...` route, and user creation flushes before

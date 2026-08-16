@@ -2,6 +2,19 @@
 
 Puna istorija odluka i verifikacija za `upgrade/codex` granu — detaljna referenca, ne čita se automatski svaku sesiju; `AGENTS.md` sadrži trenutno-tačan sažetak.
 
+## 2026-08-16 - Independent manager appointment planning column
+
+- The month calendar and “Novi slot” form now share their own natural-height
+  planning column, with the selected-day roster as its separate grid sibling.
+  A long roster can no longer inflate spanning grid rows and introduce empty
+  space between the calendar and form.
+- The existing 850px breakpoint still stacks the planning column above the
+  roster, while calendar and form retain their normal internal spacing.
+- Verification: frontend production build succeeded. Live desktop QA measured
+  an 18px calendar-to-form gap both with 13 appointments (a 3028px-tall roster)
+  and with an empty holiday roster. At an 800px viewport the layout became one
+  column in calendar/form/roster order, retaining 18px between each section.
+
 ## Upgrade: schema decisions
 
 Phase 1 of the upgrade is deliberately limited to Flyway migrations, JPA
