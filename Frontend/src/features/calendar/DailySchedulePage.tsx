@@ -1,10 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { buildGymMutedReason } from '../../lib/gymAvailability'
 import { getDailySchedule, getRoomsForFilter, getTrainersForFilter } from './api'
+import { getTrainerSchedule } from '../admin/api'
+import type { TrainerScheduleDTO } from '../admin/types'
 import type { AppointmentDTO, RoomSummaryDTO, TrainerSummaryDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
+const WORK_STATUS_LABEL: Record<string, string> = {
+  HOLIDAY: 'Praznik',
+  SICK_LEAVE: 'Bolovanje',
+  VACATION: 'Odmor',
+}
 
 function todayIso(): string {
   const now = new Date()
@@ -24,6 +32,40 @@ export function DailySchedulePage() {
   const [filterSessionType, setFilterSessionType] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
+  const [filterTrainerSchedule, setFilterTrainerSchedule] = useState<TrainerScheduleDTO[]>([])
+
+  useEffect(() => {
+    void buildGymMutedReason().then(setGymMutedReason)
+  }, [])
+
+  // Only fetched when a specific trainer is selected in the filter above - the calendar has no
+  // single "current trainer" otherwise, unlike the TRAINER self-service pages. See AGENTS.md
+  // "Upgrade: MonthCalendar unavailability decisions".
+  useEffect(() => {
+    if (!filterTrainerId) {
+      setFilterTrainerSchedule([])
+      return
+    }
+    let cancelled = false
+    getTrainerSchedule(Number(filterTrainerId)).then((schedule) => {
+      if (!cancelled) setFilterTrainerSchedule(schedule)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [filterTrainerId])
+
+  const getMutedReason = useMemo(() => {
+    const nonWorkingByDate = new Map(
+      filterTrainerSchedule.filter((e) => e.status !== 'WORKING').map((e) => [e.date, WORK_STATUS_LABEL[e.status]]),
+    )
+    return (iso: string) => {
+      const own = nonWorkingByDate.get(iso)
+      if (own) return `Trener nedostupan: ${own}`
+      return gymMutedReason?.(iso) ?? null
+    }
+  }, [filterTrainerSchedule, gymMutedReason])
 
   useEffect(() => {
     Promise.all([getTrainersForFilter(), getRoomsForFilter()])
@@ -57,7 +99,7 @@ export function DailySchedulePage() {
       <p className="mb-6 text-sm text-slate-500">Svi termini zakazani za izabrani dan.</p>
 
       <div className="grid gap-4 lg:grid-cols-[auto,1fr]">
-        <MonthCalendar value={date} onChange={setDate} />
+        <MonthCalendar value={date} onChange={setDate} getMutedReason={getMutedReason} />
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { buildGymMutedReason } from '../../lib/gymAvailability'
 import { ClientCheckInPanel } from './ClientCheckInPanel'
 import {
   assignSelfToAppointment,
@@ -9,7 +10,15 @@ import {
   getMyAppointmentsAsTrainer,
   unassignSelfFromAppointment,
 } from './api'
+import { getMySchedule } from '../schedule/api'
+import type { TrainerScheduleDTO } from '../schedule/types'
 import type { AppointmentDTO } from './types'
+
+const WORK_STATUS_LABEL: Record<string, string> = {
+  HOLIDAY: 'Praznik',
+  SICK_LEAVE: 'Bolovanje',
+  VACATION: 'Odmor',
+}
 
 const SESSION_TYPE_LABEL: Record<string, string> = { INDIVIDUAL: 'Individualni', GROUP: 'Grupni' }
 
@@ -70,16 +79,20 @@ export function TrainerAppointmentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso())
   const [checkInPanelId, setCheckInPanelId] = useState<number | null>(null)
+  const [mySchedule, setMySchedule] = useState<TrainerScheduleDTO[]>([])
+  const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
 
   async function reload() {
     setLoading(true)
     try {
-      const [mineRes, unassignedRes] = await Promise.all([
+      const [mineRes, unassignedRes, scheduleRes] = await Promise.all([
         getMyAppointmentsAsTrainer(),
         getAppointmentsWithoutTrainer(),
+        getMySchedule(),
       ])
       setMine(mineRes)
       setUnassigned(unassignedRes)
+      setMySchedule(scheduleRes)
     } finally {
       setLoading(false)
     }
@@ -87,6 +100,7 @@ export function TrainerAppointmentsPage() {
 
   useEffect(() => {
     void reload()
+    void buildGymMutedReason().then(setGymMutedReason)
   }, [])
 
   async function handleAssign(id: number) {
@@ -116,6 +130,17 @@ export function TrainerAppointmentsPage() {
   }
 
   const highlightedDates = useMemo(() => new Set(mine.map((a) => a.date)), [mine])
+
+  const getMutedReason = useMemo(() => {
+    const nonWorkingByDate = new Map(
+      mySchedule.filter((e) => e.status !== 'WORKING').map((e) => [e.date, WORK_STATUS_LABEL[e.status]]),
+    )
+    return (iso: string) => {
+      const own = nonWorkingByDate.get(iso)
+      if (own) return `Nedostupnost: ${own}`
+      return gymMutedReason?.(iso) ?? null
+    }
+  }, [mySchedule, gymMutedReason])
 
   const visibleForDate = useMemo(
     () => mine.filter((a) => a.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
@@ -184,7 +209,12 @@ export function TrainerAppointmentsPage() {
       {error && <p className="mb-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       <div className="mb-6 grid gap-4 lg:grid-cols-[auto,1fr]">
-        <MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={highlightedDates} />
+        <MonthCalendar
+          value={selectedDate}
+          onChange={setSelectedDate}
+          highlightedDates={highlightedDates}
+          getMutedReason={getMutedReason}
+        />
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <h3 className="mb-3 text-sm font-semibold text-slate-300">

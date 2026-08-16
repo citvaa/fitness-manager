@@ -13,6 +13,7 @@ import com.example.demo.model.user.Client;
 import com.example.demo.model.user.ClientAppointment;
 import com.example.demo.model.user.ClientSessionTracking;
 import com.example.demo.model.user.Trainer;
+import com.example.demo.model.user.User;
 import com.example.demo.repository.AppointmentRepository;
 import com.example.demo.repository.SessionRepository;
 import com.example.demo.repository.gym.RoomRepository;
@@ -124,15 +125,25 @@ class AppointmentServiceImplTest {
 
     // ---------- reserve ----------
 
+    private com.example.demo.model.schedule.GymSchedule openAllDayGymSchedule() {
+        return com.example.demo.model.schedule.GymSchedule.builder()
+                .openingTime(LocalTime.of(8, 0)).closingTime(LocalTime.of(22, 0)).build();
+    }
+
     @Test
     void reserve_addsClientWhenSpotAvailable() {
         authenticateAsClient("client@gym.com");
-        Client client = Client.builder().id(5).build();
+        // reserve() sends a manager alert built from client.getUser().getEmail() - needs a real
+        // User here (unlike the other reserve tests below, which throw before reaching that line).
+        Client client = Client.builder().id(5).user(User.builder().email("client@gym.com").build()).build();
         when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
 
+        LocalDate date = LocalDate.now().plusDays(1);
         Session session = session(3);
-        Appointment appointment = Appointment.builder().id(10).session(session).clientAppointments(new HashSet<>()).build();
+        Appointment appointment = Appointment.builder().id(10).date(date).startTime(LocalTime.of(10, 0))
+                .endTime(LocalTime.of(11, 0)).session(session).clientAppointments(new HashSet<>()).build();
         when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(openAllDayGymSchedule()));
         when(clientSessionTrackingRepository.findByClientAndSession(client, session)).thenReturn(Optional.empty());
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
@@ -149,11 +160,14 @@ class AppointmentServiceImplTest {
         Client client = Client.builder().id(5).build();
         when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
 
+        LocalDate date = LocalDate.now().plusDays(1);
         Session session = session(1);
         HashSet<ClientAppointment> existing = new HashSet<>();
         existing.add(ClientAppointment.builder().id(1).client(Client.builder().id(99).build()).build());
-        Appointment appointment = Appointment.builder().id(10).session(session).clientAppointments(existing).build();
+        Appointment appointment = Appointment.builder().id(10).date(date).startTime(LocalTime.of(10, 0))
+                .endTime(LocalTime.of(11, 0)).session(session).clientAppointments(existing).build();
         when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(openAllDayGymSchedule()));
 
         assertThatThrownBy(() -> service.reserve(10))
                 .isInstanceOf(RuntimeException.class)
@@ -165,6 +179,29 @@ class AppointmentServiceImplTest {
     @Test
     void reserve_throwsWhenUnauthenticated() {
         assertThatThrownBy(() -> service.reserve(10)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void reserve_throwsWhenGymClosedForHolidaySinceCreation() {
+        // A holiday can be declared after the appointment was already created (create()'s own
+        // holiday check only ran once, at creation time) - reserve() must re-check. See AGENTS.md
+        // "Upgrade: reserve() gym-closure validation gap".
+        authenticateAsClient("client@gym.com");
+        Client client = Client.builder().id(5).build();
+        when(clientRepository.findByUserEmail("client@gym.com")).thenReturn(Optional.of(client));
+
+        LocalDate date = LocalDate.now().plusDays(1);
+        Session session = session(3);
+        Appointment appointment = Appointment.builder().id(10).date(date).startTime(LocalTime.of(10, 0))
+                .endTime(LocalTime.of(11, 0)).session(session).clientAppointments(new HashSet<>()).build();
+        when(appointmentRepository.findById(10)).thenReturn(Optional.of(appointment));
+        when(holidayService.isGymClosedOn(date)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.reserve(10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("praznika");
+
+        verify(appointmentRepository, never()).save(any());
     }
 
     // ---------- cancel ----------

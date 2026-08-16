@@ -28,12 +28,21 @@ export function MonthCalendar({
   value,
   onChange,
   highlightedDates,
+  getMutedReason,
 }: {
   value: string
   onChange: (isoDate: string) => void
   /** ISO ("YYYY-MM-DD") dates that should get a dot indicator - e.g. days that already have
    * appointments/schedule entries. */
   highlightedDates?: Set<string>
+  /** Returns a human-readable reason if the given ISO date should render as muted/struck-through
+   * (gym holiday, gym closed that weekday, trainer unavailable, ...) - or a falsy value for a
+   * normal date. A callback (rather than separate mutedDates/mutedWeekdays props) so callers can
+   * combine as many muting rules as they need (gym-wide + trainer-specific) without the component
+   * needing to know about each one, and so it works for any month the user navigates to, not just
+   * the currently-selected one. Selection is never blocked - a muted date can still be picked;
+   * when the *selected* date itself is muted, its reason is shown as a banner below the grid. */
+  getMutedReason?: (isoDate: string) => string | null | undefined
 }) {
   const initial = value ? new Date(value + 'T00:00:00') : new Date()
   const [viewYear, setViewYear] = useState(initial.getFullYear())
@@ -50,6 +59,7 @@ export function MonthCalendar({
   ]
 
   const today = todayIso()
+  const selectedReason = value ? getMutedReason?.(value) : null
 
   function goToPrevMonth() {
     if (viewMonth === 0) {
@@ -104,18 +114,22 @@ export function MonthCalendar({
           const isSelected = iso === value
           const isToday = iso === today
           const hasItems = highlightedDates?.has(iso) ?? false
+          const isMuted = !isSelected && Boolean(getMutedReason?.(iso))
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onChange(iso)}
+              title={isMuted ? getMutedReason?.(iso) ?? undefined : undefined}
               className={[
                 'relative rounded-lg py-1.5 text-xs transition-colors',
                 isSelected
                   ? 'bg-brand-600 text-white'
-                  : isToday
-                    ? 'bg-slate-800 text-slate-100'
-                    : 'text-slate-300 hover:bg-slate-800',
+                  : isMuted
+                    ? 'text-slate-600 line-through hover:bg-slate-800/50'
+                    : isToday
+                      ? 'bg-slate-800 text-slate-100'
+                      : 'text-slate-300 hover:bg-slate-800',
               ].join(' ')}
             >
               {day}
@@ -131,6 +145,11 @@ export function MonthCalendar({
           )
         })}
       </div>
+      {selectedReason && (
+        <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-400">
+          {selectedReason}
+        </p>
+      )}
     </div>
   )
 }

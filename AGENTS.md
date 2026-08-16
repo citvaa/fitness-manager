@@ -163,7 +163,11 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   `createRecurringWeekly()` still re-validate from scratch and remain the sole authority (a
   concurrent booking between listing and submit is still caught there). See `docs/decision-log.md`
   "Upgrade: appointment picker filtering decisions" for the endpoint shape and the room-capacity
-  criterion the frontend uses to filter session types once a room is picked.
+  criterion the frontend uses to filter session types once a room is picked. `reserve()` now also
+  re-runs `validateNotHoliday`/`validateGymSchedule` (previously only `create()` did, once, at
+  creation time) - a holiday declared, or gym hours changed, after an open appointment already
+  existed could otherwise still be reserved into. See `docs/decision-log.md` "Upgrade:
+  MonthCalendar unavailability decisions".
 - **ClientSessionTracking** - per (client, session type) remaining/reserved appointment counters,
   driven by `Payment`s. `PaymentService.getPaymentStatus(clientId)`/`getMyPaymentStatus()` (MANAGER/
   CLIENT-facing respectively, `GET /api/payment/status/{clientId}`/`GET /api/payment/me/status`)
@@ -510,7 +514,17 @@ short-text-out calls, not open-ended reasoning.
   holds cross-feature UI: `MonthCalendar` (a from-scratch month-grid day picker, used by the admin
   Termini tab, `/manager/dnevni-raspored`, both TRAINER self-service pages
   (`TrainerSchedulePage`/`TrainerAppointmentsPage`), and - as of a later round - both CLIENT
-  appointment pages (`ClientBookingPage`/`ClientAppointmentsPage`, see below)), `SearchableSelect`
+  appointment pages (`ClientBookingPage`/`ClientAppointmentsPage`, see below)). All 6 call sites
+  also pass `getMutedReason` (a `(isoDate) => string | null` callback, not separate
+  `mutedDates`/`mutedWeekdays` props - needed since the component owns month pagination itself, so
+  a caller-supplied `Set` can't cover months the user hasn't navigated to yet) - a muted day renders
+  struck-through but stays clickable, and the *selected* day's reason (if muted) shows as a banner
+  below the grid. `lib/gymAvailability.ts`'s `buildGymMutedReason()` supplies the gym-wide half
+  (holiday `description`, or a weekday with no `GymSchedule` row at all - mirrors
+  `AppointmentServiceImpl#validateGymSchedule`'s own "closed" definition) on every call site;
+  `TrainerSchedulePage`/`TrainerAppointmentsPage`/`DailySchedulePage` additionally layer the
+  relevant trainer's own non-WORKING `TrainerSchedule` entries on top (client-facing pages never
+  do). See `docs/decision-log.md` "Upgrade: MonthCalendar unavailability decisions". `SearchableSelect`
   (a from-scratch filterable combobox, used by Plaćanja's client picker), `DateInput` (see below),
   and `LoadingIndicator`/`Spinner` (see below) - all built without adding a dependency, since none
   existed for any of these needs. On both TRAINER pages that pair a `MonthCalendar` day-picker with

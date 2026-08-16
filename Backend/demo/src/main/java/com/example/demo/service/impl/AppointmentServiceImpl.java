@@ -238,6 +238,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Termin nije pronađen!"));
 
+        // A holiday can be declared, or the gym's weekly hours changed, after this appointment was
+        // originally created (create()'s own validateNotHoliday/validateGymSchedule only ran once,
+        // at creation time) - re-check both here so a client can't reserve into a slot that is no
+        // longer actually open. See AGENTS.md "Upgrade: reserve() gym-closure validation gap".
+        validateNotHoliday(appointment.getDate());
+        validateGymSchedule(appointment.getDate(), appointment.getStartTime(), appointment.getEndTime());
+
         if (appointment.getClientAppointments().size() >= appointment.getSession().getMaxParticipants()) {
             throw new RuntimeException("Nema slobodnih mesta za ovaj termin!");
         }

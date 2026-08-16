@@ -4052,3 +4052,72 @@ danger-button convention (seen on `TrainerAppointmentsPage`'s cancel-appointment
 session start). Not yet screenshotted live - worth a quick visual pass before fully trusting the
 modal's centering/backdrop-click behavior, same caveat as `NotificationPreferenceSelect` in Known
 issues.
+
+## Upgrade: MonthCalendar unavailability decisions
+
+**Problem**: `MonthCalendar` only ever showed a dot on days with existing data
+(`highlightedDates`) - it had no way to signal "this day is unavailable and here's why" (gym
+holiday, gym closed that weekday, or a trainer's own HOLIDAY/SICK_LEAVE/VACATION day), across any
+of its 6 call sites (`AppointmentsTab`, `ClientBookingPage`, `ClientAppointmentsPage`,
+`TrainerAppointmentsPage`, `DailySchedulePage`, `TrainerSchedulePage`).
+
+**Fix**: `MonthCalendar` gained one new optional prop, `getMutedReason?: (isoDate: string) =>
+string | null | undefined` - a callback rather than separate `mutedDates`/`mutedWeekdays` props,
+because it needs to work for any month the user navigates to (the component owns pagination
+internally, so a caller-supplied `Set`/`Map` couldn't cover future months) and because different
+call sites need to combine gym-wide + trainer-specific rules without the component knowing about
+either concern. A muted date renders `line-through`/dimmed but stays fully clickable - selection is
+never blocked, matching "reserve() still re-validates" being the actual authority. When the
+*selected* date itself is muted, its reason renders as an amber banner below the grid.
+
+`Frontend/src/lib/gymAvailability.ts` (`buildGymMutedReason()`) fetches `/api/schedule/holiday` +
+`/api/schedule/gym` once and returns the gym-wide half of the reason function: a specific date's
+`Holiday.description` (prefixed "Praznik: ") takes priority, otherwise a weekday with no
+`GymSchedule` row at all reads as closed - deliberately mirroring
+`AppointmentServiceImpl#validateGymSchedule`'s own "day closed = no schedule row" rule (closing
+time <= opening time means overnight hours, never "closed", per existing `GymSchedule` docs) so the
+calendar can never disagree with what `create()`/`reserve()` will actually accept. Applied to all 6
+call sites for the gym-wide half.
+
+Trainer-specific unavailability (only on trainer-facing screens, per the session brief - never on
+the CLIENT calendar) layers on top of the gym-wide reason:
+- `TrainerSchedulePage` (editing your own schedule) - checks the trainer's own already-fetched
+  `entries` for a non-WORKING status on that date.
+- `TrainerAppointmentsPage` (assigned-to-me / open-slot browsing) - now additionally fetches
+  `getMySchedule()` (previously unused on this page) for the same check.
+- `DailySchedulePage` (manager, all trainers) - only meaningful once a specific trainer is picked
+  in the existing filter dropdown; fetches that trainer's schedule via the admin API's
+  `getTrainerSchedule(trainerId)` and clears it when the filter is reset to "Svi treneri".
+
+**`reserve()` gym-closure validation gap** (found while auditing the same holiday/gym-schedule
+logic, per session brief): `AppointmentServiceImpl.reserve()` never called
+`validateNotHoliday`/`validateGymSchedule` at all - only `create()` did, once, at creation time. A
+holiday declared, or the gym's weekly hours changed, *after* an open appointment was created could
+still be reserved into by a client. Fixed by calling both validations at the top of `reserve()`
+(after fetching the appointment, before the capacity check) - same pattern already proven for
+`create()`. Covered by a new test, `reserve_throwsWhenGymClosedForHolidaySinceCreation`.
+
+**Verification**: `npx tsc -b` clean. Backend: `mvn -o compile` clean. Ran
+`AppointmentServiceImplTest` directly (the whole module's `mvn test` is still blocked by the
+pre-existing `ManagerInsightsServiceImplTest` compile failure documented in AGENTS.md's Known
+issues - temporarily moved that one file aside to run this class standalone, then restored it
+unchanged). All reserve()-related tests pass, including the two pre-existing ones (updated to stub
+`date`/`startTime`/`endTime` and a matching `GymSchedule`, which the new validation calls now
+require) and the new holiday-gap test.
+
+### Bugs found, not fixed (reported per session instructions)
+
+Running `AppointmentServiceImplTest` standalone (not otherwise possible - see above) surfaced two
+pre-existing failures, neither touched by this session's change and both invisible to a normal
+`mvn test` run because that never gets past the unrelated compile failure:
+- `create_rejectsMissingTrainer` (line ~415): doesn't stub `gymScheduleRepository.findByDay(...)`
+  for its `LocalDate.now().plusDays(1)` date, so `validateGymSchedule` throws "Radno vreme nije
+  definisano" before `validateTrainerWorkingSchedule` ever runs - the test's own
+  `.hasMessageContaining("Trener")` assertion fails. Needs the same `GymSchedule` stub pattern
+  already used by `create_wiresRoomWhenRoomIdProvided`.
+- `assign_setsCallingTrainerOnTheAppointment`: `assign()` calls
+  `trainer.getUser().getEmail()`/similar for its manager-alert message, but the test's `Trainer`
+  fixture has no `.user(...)` set, throwing a NullPointerException. Same root cause as the
+  `reserve_addsClientWhenSpotAvailable` fixture gap fixed in this session (a `Client` with no
+  `.user(...)`) - `assign()`'s test just wasn't fixed since it's unrelated to this session's actual
+  change.

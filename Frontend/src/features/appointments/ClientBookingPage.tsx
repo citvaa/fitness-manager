@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { buildGymMutedReason } from '../../lib/gymAvailability'
 import { getAvailableAppointments, reserveAppointment } from './api'
 import type { AppointmentDTO } from './types'
 
@@ -36,6 +37,11 @@ export function ClientBookingPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso())
+  const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
+
+  useEffect(() => {
+    void buildGymMutedReason().then(setGymMutedReason)
+  }, [])
 
   async function reload() {
     setLoading(true)
@@ -88,7 +94,12 @@ export function ClientBookingPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[auto,1fr]">
-        <MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={highlightedDates} />
+        <MonthCalendar
+          value={selectedDate}
+          onChange={setSelectedDate}
+          highlightedDates={highlightedDates}
+          getMutedReason={gymMutedReason ?? undefined}
+        />
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <h3 className="mb-3 text-sm font-semibold text-slate-300">

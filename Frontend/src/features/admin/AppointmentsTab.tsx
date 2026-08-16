@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import { DateInput } from '../../components/DateInput'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { buildGymMutedReason } from '../../lib/gymAvailability'
 import {
   addClientToAppointment,
   assignTrainerToAppointment,
@@ -105,6 +106,11 @@ export function AppointmentsTab() {
 
   const [rowError, setRowError] = useState<string | null>(null)
   const [addClientChoice, setAddClientChoice] = useState<Record<number, string>>({})
+  const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
+
+  useEffect(() => {
+    void buildGymMutedReason().then(setGymMutedReason)
+  }, [])
 
   // Trainer/room options for the "Novi termin" form specifically - narrowed to what's actually
   // available for the currently entered date/start/end (falls back to the full trainers/rooms
@@ -428,7 +434,12 @@ export function AppointmentsTab() {
       </form>
 
       <div className="grid gap-4 lg:grid-cols-[auto,1fr]">
-        <MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={highlightedDates} />
+        <MonthCalendar
+          value={selectedDate}
+          onChange={setSelectedDate}
+          highlightedDates={highlightedDates}
+          getMutedReason={gymMutedReason ?? undefined}
+        />
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

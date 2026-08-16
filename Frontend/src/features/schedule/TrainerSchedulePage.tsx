@@ -4,6 +4,7 @@ import { DateInput } from '../../components/DateInput'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
 import { useConfirm } from '../../components/ConfirmDialog'
+import { buildGymMutedReason } from '../../lib/gymAvailability'
 import {
   createMySchedule,
   createMyScheduleRecurring,
@@ -110,6 +111,11 @@ export function TrainerSchedulePage() {
   const [unavailStatus, setUnavailStatus] = useState<WorkStatus>('VACATION')
   const [savingUnavail, setSavingUnavail] = useState(false)
   const confirm = useConfirm()
+  const [gymMutedReason, setGymMutedReason] = useState<((iso: string) => string | null) | null>(null)
+
+  useEffect(() => {
+    void buildGymMutedReason().then(setGymMutedReason)
+  }, [])
 
   async function reload() {
     setLoading(true)
@@ -175,6 +181,21 @@ export function TrainerSchedulePage() {
   }
 
   const highlightedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries])
+
+  // Gym-wide closure (holiday/no weekly hours) plus this trainer's own non-WORKING entries
+  // (HOLIDAY/SICK_LEAVE/VACATION) - a trainer editing their schedule should see at a glance which
+  // days they've already marked unavailable. See AGENTS.md "Upgrade: MonthCalendar unavailability
+  // decisions".
+  const getMutedReason = useMemo(() => {
+    const nonWorkingByDate = new Map(
+      entries.filter((e) => e.status !== 'WORKING').map((e) => [e.date, STATUS_LABEL[e.status]]),
+    )
+    return (iso: string) => {
+      const own = nonWorkingByDate.get(iso)
+      if (own) return `Nedostupnost: ${own}`
+      return gymMutedReason?.(iso) ?? null
+    }
+  }, [entries, gymMutedReason])
 
   const entriesForDate = useMemo(
     () => entries.filter((e) => e.date === selectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime)),
@@ -305,7 +326,12 @@ export function TrainerSchedulePage() {
       {error && <ErrorMessage message={error} className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300" />}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[auto,1fr]">
-        <MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={highlightedDates} />
+        <MonthCalendar
+          value={selectedDate}
+          onChange={setSelectedDate}
+          highlightedDates={highlightedDates}
+          getMutedReason={getMutedReason}
+        />
 
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
