@@ -304,7 +304,11 @@ for presentation but never recalculates the backend's numeric values.
   client calendars also mute gym holidays and weekdays without valid GymSchedule
   coverage; CLIENT may read both lists, and booking controls are unavailable on
   those dates. Manager creation uses the same closure model while backend create
-  and reserve validation remains authoritative.
+  and reserve validation remains authoritative. Whenever a selected date is
+  muted, `MonthCalendar` shows the reason beneath its grid: gym holidays include
+  `Holiday.description`, missing GymSchedule coverage names the weekday, and
+  trainer-only calendars translate the persisted non-WORKING status. Gym-wide
+  reasons take precedence over a trainer reason for the same date.
 - Client booking is split into two routes: “Zakaži trening” contains only the
   date-scoped available marketplace, while “Moji termini” contains only the
   client's existing reservations. The latter shows held-only for past dates,

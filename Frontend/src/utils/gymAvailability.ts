@@ -4,6 +4,7 @@ const weekdayNumber: Record<string, number> = {
   SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3,
   THURSDAY: 4, FRIDAY: 5, SATURDAY: 6,
 }
+const closedWeekdayLabel = ['nedeljom','ponedeljkom','utorkom','sredom','četvrtkom','petkom','subotom']
 
 export function gymClosure(schedules: GymSchedule[], holidays: Holiday[]) {
   const covered = new Set(schedules
@@ -13,6 +14,9 @@ export function gymClosure(schedules: GymSchedule[], holidays: Holiday[]) {
   return {
     mutedDates: new Set(holidays.map(holiday => holiday.date)),
     mutedWeekdays: new Set(Array.from({ length: 7 }, (_, day) => day).filter(day => !covered.has(day))),
+    mutedDateReasons: new Map(holidays.map(holiday => [holiday.date, `Neradan dan – praznik: ${holiday.description}`])),
+    mutedWeekdayReasons: new Map(Array.from({ length: 7 }, (_, day) => day)
+      .filter(day => !covered.has(day)).map(day => [day, `Teretana ne radi ${closedWeekdayLabel[day]}`])),
   }
 }
 

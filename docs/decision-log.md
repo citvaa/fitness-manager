@@ -1057,6 +1057,23 @@ real inbox; template rendering is independently covered. Captured UI states are
   and seeder completed against isolated database `fm_codex`; the intermediate
   aggregate QA exposed and drove removal of a two-room distribution bias before
   the final round-robin implementation.
+
+## 2026-08-16 - Calendar closure reasons
+
+- `MonthCalendar` now accepts date- and weekday-specific reason maps and renders
+  the selected muted date's reason in an accessible status panel below the grid.
+  Its muted-day aria label carries the same explanation.
+- Shared gym closure derivation preserves holiday descriptions and supplies
+  natural Serbian weekday messages. Client appointment history, client booking,
+  and manager appointment planning all pass those reasons alongside their
+  existing muted sets.
+- Trainer appointment and own-schedule calendars add status-specific absence
+  messages for HOLIDAY, SICK_LEAVE, and VACATION. The current persistence model
+  has no free-text unavailability note, so the persisted status is the most
+  specific available reason; a gym holiday wins when both apply.
+- Verification: frontend production build succeeded. Live manager QA selected
+  the seeded equipment-service holiday and displayed its full name; live trainer
+  QA selected an isolated SICK_LEAVE fixture and displayed “bolovanje”.
 - Verification: frontend production build succeeded. Live visual QA rendered
   the hero, all four chart/KPI cards, and all nine current metrics at 1905px
   without horizontal overflow; the hierarchy and color system were inspected

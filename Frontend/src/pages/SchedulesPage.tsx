@@ -138,6 +138,16 @@ export function SchedulesPage() {
       setNotice(errorMessage(x));
     }
   }
+  const unavailableReasons:Record<TrainerSchedule['status'],string>={
+    WORKING:"",
+    HOLIDAY:"Trener nema radnu smenu – praznik.",
+    SICK_LEAVE:"Trener je nedostupan – bolovanje.",
+    VACATION:"Trener je nedostupan – odmor.",
+  };
+  const mutedDateReasons=new Map<string,string>([
+    ...rows.filter(row=>row.status!=="WORKING").map(row=>[row.date,unavailableReasons[row.status]||"Trener nema radnu smenu."] as [string,string]),
+    ...holidays.map(holiday=>[holiday.date,`Neradan dan – praznik: ${holiday.description}`] as [string,string]),
+  ]);
   return (
     <main className="workspace-page schedule-page">
       <header className="workspace-header">
@@ -317,7 +327,7 @@ export function SchedulesPage() {
             <button className="secondary-button">Dodaj odsustvo</button>
           </form>
         </div>
-        <div className={own?"calendar-list-layout":""}>{own&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(rows.map(row=>row.date))} mutedDates={new Set([...rows.filter(row=>row.status!=="WORKING").map(row=>row.date),...holidays.map(holiday=>holiday.date)])}/>}<div className="schedule-list">
+        <div className={own?"calendar-list-layout":""}>{own&&<MonthCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={new Set(rows.map(row=>row.date))} mutedDates={new Set([...rows.filter(row=>row.status!=="WORKING").map(row=>row.date),...holidays.map(holiday=>holiday.date)])} mutedDateReasons={mutedDateReasons}/>}<div className="schedule-list">
           {rows.filter(row=>!own||row.date===selectedDate).map((r) => (
             <article key={r.id}>
               <time>
