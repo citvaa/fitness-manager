@@ -329,14 +329,18 @@ for presentation but never recalculates the backend's numeric values.
 - Dev data can be destructively rebuilt through manager-only `POST
   /api/dev/reseed`; it preserves Flyway history and rebuilds all application
   tables plus the relative operational fixture. The fixture contains exactly
-  5 trainers and 50 clients, every day of the current month (~140 appointments,
-  25% trainer-less, group-weighted), WORKING ranges derived from assigned
-  appointments, 90% fully paid clients plus intentional debtors, seven six-month
-  measurements and three monthly personal-record points per client, two holidays,
-  and weekday/weekend gym hours. Reseed truncates all application tables in one
-  statement so the occupancy scheduler cannot deadlock a partially locked wipe.
-  Appointment generation queries the persisted holiday and gym-hour rows before
-  every candidate slot; skipped slots cannot produce derived WORKING shifts.
+  5 trainers and 50 clients, a rolling 30-day history through the end of the
+  current month, balanced use of every operational room, roughly one-third
+  individual sessions, reservation-derived historical attendance near 75%,
+  varied live room occupancy, and paid units dated inside the insight window.
+  Every appointment has a trainer and room; generated WORKING ranges cover all
+  of that trainer's appointments. A post-seed SQL audit fails the transaction on
+  trainer/room overlaps, missing shift coverage, or appointments/WORKING rows on
+  holidays or outside valid gym hours. The fixture also keeps 90% fully paid
+  clients plus intentional debtors, seven six-month measurements and three
+  monthly personal-record points per client, two holidays, and weekday/weekend
+  gym hours. Reseed truncates all application tables in one statement so the
+  occupancy scheduler cannot deadlock a partially locked wipe.
 - `docs/defense-demo-script.md` is the current end-to-end defense runbook. Keep
   its CORE + optional structure and update it only after the user-visible flows
   it demonstrates are final, so its roles, routes, credentials, and plans B do

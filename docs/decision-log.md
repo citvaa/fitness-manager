@@ -1036,6 +1036,27 @@ real inbox; template rendering is independently covered. Captured UI states are
   comments and use the same rating color in their accent and progress scale.
 - No numeric derivation moved to the browser; grouping is based only on stable
   metric keys, and every server metric still appears in the diagnostic grid.
+
+## 2026-08-16 - AI insight-ready demo fixture
+
+- Confirmed that manager insights use a rolling inclusive 30-day window: room
+  occupancy is a live snapshot, while session mix and attendance reservations
+  come from appointments dated `today - 29` through today, check-ins use the
+  matching timestamp window, and sold units use payments dated in that period.
+- The relative seeder now covers that complete history plus the rest of the
+  current month. All appointments have assigned trainers and rooms, parallel
+  slots rotate evenly through every operational room, and the deterministic mix
+  is approximately one-third individual to two-thirds group sessions.
+- Historical attendance is derived from real completed reservations at about
+  75%, payments remain inside the measured window, and active manual check-ins
+  put a small varied load in every operational room for the live occupancy chart.
+- A fail-fast post-seed SQL audit rejects trainer collisions, room collisions,
+  missing WORKING coverage, and any appointment or WORKING shift on a holiday or
+  outside valid gym hours.
+- Verification: `ManagerInsightServiceImplTest` passed. A clean live Flyway run
+  and seeder completed against isolated database `fm_codex`; the intermediate
+  aggregate QA exposed and drove removal of a two-room distribution bias before
+  the final round-robin implementation.
 - Verification: frontend production build succeeded. Live visual QA rendered
   the hero, all four chart/KPI cards, and all nine current metrics at 1905px
   without horizontal overflow; the hierarchy and color system were inspected

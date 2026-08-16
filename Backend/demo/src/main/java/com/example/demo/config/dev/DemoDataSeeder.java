@@ -136,10 +136,12 @@ public class DemoDataSeeder implements ApplicationRunner {
 
         Random random = new Random(20260815L);
         Map<Integer, Map<LocalDate, LocalTime[]>> workingRanges = new LinkedHashMap<>();
-        LocalDate date = LocalDate.now().withDayOfMonth(1);
-        LocalDate monthEnd = date.withDayOfMonth(date.lengthOfMonth());
+        LocalDate today = LocalDate.now();
+        LocalDate date = today.minusDays(29);
+        LocalDate endDate = today.withDayOfMonth(today.lengthOfMonth());
         int sequence = 0;
-        while (!date.isAfter(monthEnd)) {
+        int slotSequence = 0;
+        while (!date.isAfter(endDate)) {
             List<LocalTime> slots = switch (date.getDayOfWeek()) {
                 case SATURDAY -> List.of(LocalTime.of(8, 30), LocalTime.of(10, 30), LocalTime.of(13, 0), LocalTime.of(17, 0));
                 case SUNDAY -> List.of(LocalTime.of(9, 0), LocalTime.of(11, 0), LocalTime.of(17, 30));
@@ -147,23 +149,26 @@ public class DemoDataSeeder implements ApplicationRunner {
             };
             for (LocalTime start : slots) {
                 if (!isGymOpen(date, start, start.plusHours(1))) continue;
-                Integer trainer = sequence % 4 == 0 ? null : trainers.get(sequence % trainers.size());
-                int roll = random.nextInt(100);
-                int session = roll < 15 ? sessions.get(0) : roll < 50 ? sessions.get(1) : sessions.get(2);
-                int room = rooms.get(sequence % rooms.size());
-                Integer appointment = jdbc.queryForObject("INSERT INTO appointment(date,start_time,end_time,session_id,trainer_id,room_id) VALUES (?,?,?,?,?,?) RETURNING id", Integer.class, Date.valueOf(date), start, start.plusHours(1), session, trainer, room);
-                int capacity = session == sessions.get(0) ? 1 : session == sessions.get(1) ? 3 : 10;
-                int participants = session == sessions.get(0) ? 1 : Math.max(2, capacity - random.nextInt(Math.max(1, capacity / 2)));
-                for (int p = 0; p < participants; p++) {
-                    jdbc.update("INSERT INTO client_appointment(client_id,appointment_id) VALUES (?,?)", clients.get((sequence * 3 + p) % clients.size()), appointment);
-                }
-                if (trainer != null) {
+                int parallelAppointments = 2 + slotSequence % 2;
+                int participantCursor = sequence * 13;
+                for (int parallel = 0; parallel < parallelAppointments; parallel++) {
+                    Integer trainer = trainers.get(sequence % trainers.size());
+                    int roll = random.nextInt(100);
+                    int session = roll < 32 ? sessions.get(0) : roll < 65 ? sessions.get(1) : sessions.get(2);
+                    int room = rooms.get(sequence % rooms.size());
+                    Integer appointment = jdbc.queryForObject("INSERT INTO appointment(date,start_time,end_time,session_id,trainer_id,room_id) VALUES (?,?,?,?,?,?) RETURNING id", Integer.class, Date.valueOf(date), start, start.plusHours(1), session, trainer, room);
+                    int capacity = session == sessions.get(0) ? 1 : session == sessions.get(1) ? 3 : 10;
+                    int participants = session == sessions.get(0) ? 1 : Math.max(2, capacity - random.nextInt(Math.max(1, capacity / 2)));
+                    for (int p = 0; p < participants; p++) {
+                        jdbc.update("INSERT INTO client_appointment(client_id,appointment_id) VALUES (?,?)", clients.get((participantCursor++) % clients.size()), appointment);
+                    }
                     LocalTime[] range = workingRanges.computeIfAbsent(trainer, ignored -> new LinkedHashMap<>())
                             .computeIfAbsent(date, ignored -> new LocalTime[]{start, start.plusHours(1)});
                     if (start.isBefore(range[0])) range[0] = start;
                     if (start.plusHours(1).isAfter(range[1])) range[1] = start.plusHours(1);
+                    sequence++;
                 }
-                sequence++;
+                slotSequence++;
             }
             date = date.plusDays(1);
         }
@@ -173,11 +178,78 @@ public class DemoDataSeeder implements ApplicationRunner {
                         trainer, Date.valueOf(workingDate), range[0], range[1], "WORKING")));
 
         seedPaymentsAndTracking(clients, sessions);
+        seedAttendanceHistory();
+        seedLiveOccupancy(rooms, clients);
+        validateOperationalFixture();
+    }
 
-        for (int i = 0; i < 24; i++) {
-            LocalDateTime in = LocalDate.now().minusDays(3 + i * 2L).atTime(17 + i % 3, 0);
-            jdbc.update("INSERT INTO room_check_in(room_id,client_id,checked_in_at,checked_out_at) VALUES (?,?,?,?)", rooms.get(i % rooms.size()), clients.get(i % clients.size()), Timestamp.valueOf(in), Timestamp.valueOf(in.plusMinutes(55 + i % 20)));
+    private void seedAttendanceHistory() {
+        List<Map<String, Object>> completedReservations = jdbc.queryForList("""
+                SELECT a.room_id, ca.client_id, a.date, a.start_time, a.end_time
+                FROM client_appointment ca
+                JOIN appointment a ON a.id = ca.appointment_id
+                WHERE a.date BETWEEN CURRENT_DATE - 29 AND CURRENT_DATE
+                  AND (a.date < CURRENT_DATE OR a.end_time < LOCALTIME)
+                ORDER BY a.date, a.start_time, a.id, ca.client_id
+                """);
+        for (int i = 0; i < completedReservations.size(); i++) {
+            if (i % 4 == 0) continue; // realistic 75% attendance
+            Map<String, Object> reservation = completedReservations.get(i);
+            LocalDate appointmentDate = ((Date) reservation.get("date")).toLocalDate();
+            LocalTime start = ((java.sql.Time) reservation.get("start_time")).toLocalTime();
+            LocalTime end = ((java.sql.Time) reservation.get("end_time")).toLocalTime();
+            LocalDateTime checkedIn = appointmentDate.atTime(start).minusMinutes(8 + i % 8);
+            LocalDateTime checkedOut = appointmentDate.atTime(end).plusMinutes(3 + i % 12);
+            jdbc.update("INSERT INTO room_check_in(room_id,client_id,checked_in_at,checked_out_at) VALUES (?,?,?,?)",
+                    reservation.get("room_id"), reservation.get("client_id"), Timestamp.valueOf(checkedIn), Timestamp.valueOf(checkedOut));
         }
+    }
+
+    private void seedLiveOccupancy(List<Integer> rooms, List<Integer> clients) {
+        LocalDateTime now = LocalDateTime.now();
+        int clientCursor = clients.size() - rooms.size();
+        for (int roomIndex = 0; roomIndex < rooms.size(); roomIndex++) {
+            int occupants = 1 + roomIndex % 3;
+            for (int occupant = 0; occupant < occupants; occupant++) {
+                jdbc.update("INSERT INTO room_check_in(room_id,client_id,checked_in_at,checked_out_at) VALUES (?,?,?,NULL)",
+                        rooms.get(roomIndex), clients.get(clientCursor--), Timestamp.valueOf(now.minusMinutes(8L + roomIndex * 3L + occupant)));
+            }
+        }
+    }
+
+    private void validateOperationalFixture() {
+        assertNoRows("termin bez trenera ili sobe", "SELECT COUNT(*) FROM appointment WHERE trainer_id IS NULL OR room_id IS NULL");
+        assertNoRows("preklapanje termina trenera", """
+                SELECT COUNT(*) FROM appointment a JOIN appointment b ON a.id < b.id AND a.trainer_id=b.trainer_id
+                AND a.date=b.date AND a.start_time < b.end_time AND b.start_time < a.end_time
+                """);
+        assertNoRows("dvostruko zauzeta soba", """
+                SELECT COUNT(*) FROM appointment a JOIN appointment b ON a.id < b.id AND a.room_id=b.room_id
+                AND a.date=b.date AND a.start_time < b.end_time AND b.start_time < a.end_time
+                """);
+        assertNoRows("termin van WORKING smene", """
+                SELECT COUNT(*) FROM appointment a WHERE NOT EXISTS (
+                  SELECT 1 FROM trainer_schedule ts WHERE ts.trainer_id=a.trainer_id AND ts.date=a.date
+                    AND ts.status='WORKING' AND ts.start_time<=a.start_time AND ts.end_time>=a.end_time)
+                """);
+        assertNoRows("termin ili WORKING smena na zatvoren dan", """
+                SELECT COUNT(*) FROM (
+                  SELECT a.date, a.start_time, a.end_time FROM appointment a
+                  UNION ALL
+                  SELECT ts.date, ts.start_time, ts.end_time FROM trainer_schedule ts WHERE ts.status='WORKING'
+                ) item
+                LEFT JOIN gym_schedule gs ON gs.day=CASE EXTRACT(ISODOW FROM item.date)
+                  WHEN 1 THEN 'MONDAY' WHEN 2 THEN 'TUESDAY' WHEN 3 THEN 'WEDNESDAY'
+                  WHEN 4 THEN 'THURSDAY' WHEN 5 THEN 'FRIDAY' WHEN 6 THEN 'SATURDAY' ELSE 'SUNDAY' END
+                LEFT JOIN holiday h ON h.date=item.date
+                WHERE h.id IS NOT NULL OR gs.id IS NULL OR gs.opening_time>=gs.closing_time
+                   OR item.start_time<gs.opening_time OR item.end_time>gs.closing_time
+                """);
+    }
+
+    private void assertNoRows(String problem, String sql) {
+        Integer count = jdbc.queryForObject(sql, Integer.class);
+        if (count != null && count > 0) throw new IllegalStateException("Neispravan demo skup (" + problem + "): " + count);
     }
 
     private boolean isGymOpen(LocalDate date, LocalTime start, LocalTime end) {
