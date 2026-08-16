@@ -214,10 +214,11 @@ public class DevDataSeeder implements CommandLineRunner {
         // tracking rows (see class Javadoc "Appointment/payment scheme").
         Map<Integer, Map<Integer, Integer>> bookedCounts = new HashMap<>();
 
-        seedAppointmentsForCurrentMonth(trainers, clients, individual, smallGroup, bigGroup, rooms, bookedCounts);
+        GeneratedAppointments generated = seedAppointmentsForCurrentMonth(
+                trainers, clients, individual, smallGroup, bigGroup, rooms, bookedCounts);
         seedPayments(clients, individual, smallGroup, bigGroup, bookedCounts);
 
-        seedRoomCheckIns(clients, rooms);
+        seedRoomCheckIns(generated, clients, rooms);
         seedProgressData(clients);
 
         log.info("✅ Dev data seeded: 1 manager, {} trainers, {} clients, appointments across the current calendar month.",
@@ -476,7 +477,13 @@ public class DevDataSeeder implements CommandLineRunner {
         return List.of(LocalTime.of(8, 0), LocalTime.of(10, 0), LocalTime.of(12, 0), LocalTime.of(16, 0), LocalTime.of(18, 0), LocalTime.of(19, 30));
     }
 
-    private void seedAppointmentsForCurrentMonth(List<Trainer> trainers, List<Client> clients, Session individual,
+    /** Just enough of the generated data for seedRoomCheckIns() to auto-check-in clients into the
+     * rooms they were actually booked into, instead of picking a completely unrelated room/
+     * client/date combination - see AGENTS.md "Upgrade: seeder AI-insights data decisions". */
+    private record GeneratedAppointments(List<Appointment> appointments, List<ClientAppointment> clientAppointments) {
+    }
+
+    private GeneratedAppointments seedAppointmentsForCurrentMonth(List<Trainer> trainers, List<Client> clients, Session individual,
                                                   Session smallGroup, Session bigGroup, List<Room> rooms,
                                                   Map<Integer, Map<Integer, Integer>> bookedCounts) {
         LocalDate first = LocalDate.now().withDayOfMonth(1);
@@ -525,6 +532,18 @@ public class DevDataSeeder implements CommandLineRunner {
 
         for (LocalDate date = first; !date.isAfter(last); date = date.plusDays(1)) {
             DayOfWeek dow = date.getDayOfWeek();
+            // Never generate an appointment on a date the real validation
+            // (AppointmentServiceImpl#validateNotHoliday/#validateGymSchedule) would itself
+            // reject - a holiday, or a weekday with no GymSchedule row at all. In practice
+            // ensureHolidays()/ensureGymSchedule() never overlap the current-month generation
+            // window today (holidays sit 2 months back / next Jan 1, and every weekday has a
+            // schedule row), but this seeder writes directly via the repository, bypassing
+            // AppointmentServiceImpl.create()'s validation entirely - this guard keeps that true
+            // even if either of those changes later. See AGENTS.md "Upgrade: seeder AI-insights
+            // data decisions".
+            if (holidayRepository.existsByDate(date) || !gymScheduleRepository.existsByDay(dow)) {
+                continue;
+            }
             List<Trainer> workingTrainers = trainers.stream()
                     .filter(t -> trainerWorkdays.get(t.getId()).contains(dow))
                     .toList();
@@ -697,6 +716,8 @@ public class DevDataSeeder implements CommandLineRunner {
         appointmentRepository.saveAll(appointmentsToSave);
         clientAppointmentRepository.saveAll(clientAppointmentsToSave);
         trainerScheduleRepository.saveAll(trainerScheduleToSave);
+
+        return new GeneratedAppointments(appointmentsToSave, clientAppointmentsToSave);
     }
 
     // ---------------------------------------------------------------------------------- payments
@@ -727,11 +748,17 @@ public class DevDataSeeder implements CommandLineRunner {
                 int paid = fullyPaid ? booked : Math.max(0, booked - (1 + random.nextInt(3)));
 
                 if (paid > 0) {
+                    // Within the last 30 days (0-29 days back) - matches
+                    // ManagerInsightsServiceImpl's own 30-day window exactly, so the manager-
+                    // insights dashboard's "paid appointments per session type" aggregation
+                    // actually sees these payments instead of roughly half of them landing
+                    // outside the window it queries. See AGENTS.md "Upgrade: seeder AI-insights
+                    // data decisions".
                     payments.add(Payment.builder()
                             .client(client)
                             .session(session)
                             .paidAppointments(paid)
-                            .paymentDate(LocalDate.now().minusDays(5 + random.nextInt(50)))
+                            .paymentDate(LocalDate.now().minusDays(random.nextInt(30)))
                             .build());
                 }
 
@@ -755,23 +782,74 @@ public class DevDataSeeder implements CommandLineRunner {
 
     // ------------------------------------------------------------------------------- room check-ins
 
-    private void seedRoomCheckIns(List<Client> clients, List<Room> rooms) {
+    /** Auto-check-ins clients into the room they were actually booked into via a real generated
+     * appointment (rather than a completely independent random room/client/date pick, the
+     * previous behavior) - see AGENTS.md "Upgrade: seeder AI-insights data decisions" for why: it
+     * gives every room a check-in count that traces back to real occupancy, at a volume that
+     * scales with how many appointments were actually generated rather than a flat 15. */
+    private void seedRoomCheckIns(GeneratedAppointments generated, List<Client> clients, List<Room> rooms) {
         if (rooms.isEmpty()) return;
 
-        for (int i = 0; i < 15; i++) {
+        // Appointment's own clientAppointments Set is deliberately left empty by the generator
+        // above (see its own comment on the BaseEntity id-less equals()/hashCode() bug) - group
+        // the flat ClientAppointment list back by appointment *identity* (not equals()) instead.
+        Map<Appointment, List<Client>> clientsByAppointment = new java.util.IdentityHashMap<>();
+        for (ClientAppointment ca : generated.clientAppointments()) {
+            clientsByAppointment.computeIfAbsent(ca.getAppointment(), a -> new ArrayList<>()).add(ca.getClient());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<RoomCheckIn> checkIns = new ArrayList<>();
+
+        for (Appointment appointment : generated.appointments()) {
+            if (appointment.getRoom() == null) continue;
+            LocalDateTime end = LocalDateTime.of(appointment.getDate(), appointment.getEndTime());
+            if (end.isAfter(now)) continue; // hasn't happened yet - can't have been checked into
+
+            List<Client> booked = clientsByAppointment.get(appointment);
+            if (booked == null || booked.isEmpty()) continue;
+
+            // Not every past appointment has check-in records (a manager/trainer may simply not
+            // have bothered), and not every booked client who attended necessarily gets checked
+            // in either - keeps this looking like real, imperfect manual data entry rather than
+            // a suspiciously exact 1:1 mirror of the booking table.
+            if (random.nextInt(100) >= 65) continue;
+
+            LocalDateTime start = LocalDateTime.of(appointment.getDate(), appointment.getStartTime());
+            for (Client client : booked) {
+                if (random.nextInt(100) >= 70) continue;
+                LocalDateTime checkedIn = start.plusMinutes(random.nextInt(10));
+                LocalDateTime checkedOut = end.minusMinutes(random.nextInt(10));
+                if (!checkedOut.isAfter(checkedIn)) {
+                    checkedOut = checkedIn.plusMinutes(30);
+                }
+                checkIns.add(RoomCheckIn.builder()
+                        .room(appointment.getRoom())
+                        .client(client)
+                        .checkedInAt(checkedIn)
+                        .checkedOutAt(checkedOut)
+                        .build());
+            }
+        }
+
+        // A smaller top-up independent of any booked appointment (walk-in gym floor usage isn't
+        // exclusively tied to a session) - kept small since the bulk of volume now comes from
+        // real appointments above, unlike the previous flat-15-total approach.
+        for (int i = 0; i < 10; i++) {
             Client client = clients.get(random.nextInt(clients.size()));
             Room room = rooms.get(random.nextInt(rooms.size()));
-            LocalDate date = LocalDate.now().minusDays(1 + random.nextInt(30));
+            LocalDate date = LocalDate.now().minusDays(1 + random.nextInt(29));
             LocalDateTime checkedIn = date.atTime(7 + random.nextInt(13), random.nextInt(60));
             LocalDateTime checkedOut = checkedIn.plusMinutes(30 + random.nextInt(90));
-
-            roomCheckInRepository.save(RoomCheckIn.builder()
+            checkIns.add(RoomCheckIn.builder()
                     .room(room)
                     .client(client)
                     .checkedInAt(checkedIn)
                     .checkedOutAt(checkedOut)
                     .build());
         }
+
+        roomCheckInRepository.saveAll(checkIns);
 
         // One still-open check-in so the live floor plan shows real, non-zero occupancy the
         // instant it's opened, without requiring a manual curl check-in first. Uses the first

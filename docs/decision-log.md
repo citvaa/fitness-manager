@@ -4261,3 +4261,56 @@ confirmed 2027-01-01 renders struck-through with `title="Praznik: Novogodišnji 
 clicked, shows that exact text as the amber banner - see the addendum on "Upgrade: MonthCalendar
 unavailability decisions" above for a real bug this surfaced and fixed). `AppointmentsTab`'s
 Termini tab also confirmed to render with no console errors after the fix.
+
+## Upgrade: seeder AI-insights data decisions
+
+**Problem**: `ManagerInsightsServiceImpl` aggregates the last 30 days of `RoomCheckIn`/`Payment`
+data for the manager-insights dashboard, but `DevDataSeeder` fed it poorly:
+- `seedRoomCheckIns()` generated exactly 15 check-ins total, each an independently random
+  (client, room, date) triple with **no relationship** to any appointment the seeder itself had
+  just generated - room-occupancy numbers were essentially noise, and any one room could easily
+  end up with a near-zero count purely by chance.
+- `seedPayments()` set `paymentDate = now - (5 + random 0..49)` - a 5-to-54-day range against a
+  service that only ever queries the last exactly-30 days. Roughly half of all seeded payments
+  landed outside that window and were invisible to the "paid appointments per session type"
+  aggregation.
+- The appointment-generation loop wrote directly via `appointmentRepository`, bypassing
+  `AppointmentServiceImpl.create()`'s validation (holiday/gym-hours) entirely - harmless today only
+  because `ensureHolidays()`/`ensureGymSchedule()` happen to never overlap the current-month
+  generation window, not because anything actually stops it from generating an invalid date if that
+  ever changed.
+
+**Fix**:
+- `seedRoomCheckIns()` now takes the actual generated appointments/client-bookings
+  (`GeneratedAppointments`, a new small record returned by `seedAppointmentsForCurrentMonth()`) and,
+  for every past appointment (`date`+`endTime` already elapsed) with a room, auto-checks in a
+  random subset of its actually-booked clients (65% of past appointments get any check-ins at all,
+  70% of each one's booked clients individually) into that exact room, with `checkedInAt`/
+  `checkedOutAt` timestamps close to the appointment's own start/end. A small top-up of 10
+  still-fully-random check-ins remains for "walk-in, not tied to a booked session" realism. Since
+  `Appointment`'s own `clientAppointments` Set is deliberately left empty by the generator (the
+  pre-existing `BaseEntity` id-less `equals()`/`hashCode()` workaround, see "Known issues"), the
+  flat `List<ClientAppointment>` is re-grouped by appointment *identity* via an `IdentityHashMap`,
+  same pattern the generator itself already uses for `participantCount`.
+- `seedPayments()`'s `paymentDate` is now `LocalDate.now().minusDays(random.nextInt(30))` - always
+  within the exact window `ManagerInsightsServiceImpl` queries.
+- The appointment-generation date loop now `continue`s past any date that's a holiday
+  (`holidayRepository.existsByDate`) or has no `GymSchedule` row
+  (`!gymScheduleRepository.existsByDay`) - a defensive mirror of
+  `AppointmentServiceImpl#validateNotHoliday`/`#validateGymSchedule`, so the seeder can never
+  silently produce appointments that direct API validation would itself reject, even if
+  `ensureHolidays()`/`ensureGymSchedule()` change later to actually overlap the generation window.
+
+**Live verification**: restarted the backend against the recompiled seeder, called `POST
+/api/dev/reseed` (MANAGER JWT), then `POST /api/insights/manager/refresh`. Before this round's
+data (documented in AGENTS.md's own text and re-confirmed by reading the old seeder code): 15-16
+total check-ins, ~half of payments outside the 30-day window. After: **151 total check-ins**
+across all 5 rooms with no room below 25 (`Sala za tegove` 36, `Boks studio` 33, `Kardio zona` 30,
+`TRX sala` 27, `Joga studio` 25 - `sharePercent` 16.6-23.8%, no room reads as a rounding error
+anymore), 49 distinct clients, and 589 total paid appointments (503 GROUP + 86 INDIVIDUAL) feeding
+the session-type breakdown - a much larger, more evenly-distributed dataset for Claude's narrative
+to describe meaningfully. `mvn -o compile` clean; ran `DevDataSeederTest` standalone (same
+pre-existing `ManagerInsightsServiceImplTest` compile-blocker workaround as earlier entries in this
+log) - both existing tests (the idempotency-guard skip, and the "guard doesn't short-circuit early"
+check) still pass unchanged, since neither reaches the appointment-generation code this round
+touched.

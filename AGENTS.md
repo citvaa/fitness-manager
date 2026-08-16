@@ -526,7 +526,20 @@ short-text-out calls, not open-ended reasoning.
   only ever mattered for the newer client-side coverage check
   (`TrainerSchedulePage.tsx`'s "Termini dodeljeni od menadžera" panel) reading directly from a
   seeded-but-incomplete `TrainerSchedule` table. See `docs/decision-log.md` "Upgrade: dev-seeder
-  trainer-schedule gap fix".
+  trainer-schedule gap fix". `seedAppointmentsForCurrentMonth()`'s date loop also now skips any
+  date that's a holiday or has no `GymSchedule` row (mirrors
+  `AppointmentServiceImpl#validateNotHoliday`/`#validateGymSchedule` - the seeder writes directly
+  via the repository, bypassing that validation entirely, so nothing previously stopped it from
+  generating an appointment `create()` itself would reject). `seedRoomCheckIns()` now derives most
+  of its check-ins from the appointments/clients `seedAppointmentsForCurrentMonth()` actually
+  generated (auto-checking a subset of each past appointment's booked clients into the room they
+  were really scheduled in, at that appointment's actual time), instead of a flat 15 fully-random
+  room/client/date picks independent of any booking - see `docs/decision-log.md` "Upgrade: seeder
+  AI-insights data decisions" for why (feeds `ManagerInsightsServiceImpl`'s room-occupancy
+  aggregation with volume that traces back to real bookings). `seedPayments()`'s `paymentDate` is
+  now always within the last 30 days (`minusDays(random.nextInt(30))`, was `minusDays(5 +
+  random.nextInt(50))`, a 5-54-day range that put roughly half of all seeded payments outside
+  `ManagerInsightsServiceImpl`'s own exact 30-day query window).
 - **Do not edit existing Flyway migration files** (`db/migration/V1.00XX__*` or
   `db/dev-data/V1.00XX__*`) - their checksums are locked once applied. If schema changes are
   needed, add a new `V1.00XX__*.sql` file (either location - they share one version sequence).
