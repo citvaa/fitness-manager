@@ -142,7 +142,9 @@ Every entity is also `@Audited` (Hibernate Envers).
   and the existing in-app overlay/card visual language; browser-native
   `confirm()` is not part of the UI contract.
 - Administration email changes use an in-app validated modal; browser-native
-  `prompt()` is not used for account editing.
+  `prompt()` is not used for account editing. The email field spans the modal's
+  usable width and its right-aligned save action uses standard compact button
+  proportions.
 - All Axios traffic, including public account flows, is tracked by one shared
   loading store. `GlobalLoadingIndicator` renders the consistent fixed spinner
   for page fetches and mutations, while route-code Suspense uses the same

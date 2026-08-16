@@ -1041,6 +1041,14 @@ real inbox; template rendering is independently covered. Captured UI states are
   without horizontal overflow; the hierarchy and color system were inspected
   from a real screenshot rather than DOM structure alone.
 
+## 2026-08-16 - Upgrade part 6 email modal proportions
+
+- The email edit modal is constrained to 520px, its only field now spans the
+  full usable width with standard control height, and the save action is a
+  compact right-aligned button instead of visually competing with the input.
+- Verification: frontend production build succeeded; live geometry measured a
+  464×46px input and 148×42px action inside the 520px modal.
+
 ## 2026-08-16 - Upgrade part 5 manager insights command center
 
 - Reframed AI insights as an executive dashboard: the dark command-center hero

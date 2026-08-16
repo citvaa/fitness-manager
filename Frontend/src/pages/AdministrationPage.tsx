@@ -312,7 +312,7 @@ export function AdministrationPage() {
       </section>
       {emailEdit && (
         <div className="modal-backdrop" onMouseDown={() => setEmailEdit(null)}>
-          <section className="modal" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="modal email-edit-modal" onMouseDown={(event) => event.stopPropagation()}>
             <form onSubmit={saveEmail}>
               <div className="modal-head">
                 <div><p className="eyebrow">Izmena naloga</p><h2>Promena email adrese</h2></div>
@@ -321,7 +321,7 @@ export function AdministrationPage() {
               <div className="form-grid">
                 <label>Email<input autoFocus required type="email" value={emailEdit.value} onChange={(event) => setEmailEdit({ ...emailEdit, value: event.target.value })} /></label>
               </div>
-              <button className="primary-button">Sačuvaj email</button>
+              <div className="email-modal-actions"><button className="primary-button">Sačuvaj email</button></div>
             </form>
           </section>
         </div>
