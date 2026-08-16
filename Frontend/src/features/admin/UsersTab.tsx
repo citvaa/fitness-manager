@@ -5,6 +5,7 @@ import { useAuthStore } from '../../auth/store'
 import { addUserRole, deleteUser, getUsers, removeUserRole, updateUser } from './api'
 import type { UserDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
+import { useConfirm } from '../../components/ConfirmDialog'
 
 /** See the same helper in features/schedule/TrainerSchedulePage.tsx - surfaces
  * GlobalExceptionHandler's real validation/access-denied message instead of failing silently. */
@@ -46,6 +47,7 @@ export function UsersTab() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editEmail, setEditEmail] = useState('')
+  const confirm = useConfirm()
 
   async function reload() {
     setLoading(true)
@@ -70,7 +72,7 @@ export function UsersTab() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Obrisati ovaj nalog?')) return
+    if (!(await confirm('Obrisati ovaj nalog?'))) return
     setActionError(null)
     try {
       await deleteUser(id)

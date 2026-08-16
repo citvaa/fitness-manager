@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { DateInput } from '../../components/DateInput'
+import { useConfirm } from '../../components/ConfirmDialog'
 import { deleteEntry, updateEntry } from './api'
 import type { ClientProgressEntryDTO } from './types'
 
@@ -52,6 +53,7 @@ export function EntriesList({
   const [editForm, setEditForm] = useState(toEditForm({} as ClientProgressEntryDTO))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const sorted = [...entries].sort((a, b) => b.entryDate.localeCompare(a.entryDate))
 
@@ -88,7 +90,7 @@ export function EntriesList({
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Obrisati ovo merenje?')) return
+    if (!(await confirm('Obrisati ovo merenje?'))) return
     await deleteEntry(id)
     onChanged?.()
   }

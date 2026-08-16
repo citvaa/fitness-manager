@@ -4,6 +4,7 @@ import { createTrainer, deleteTrainer, getTrainers, updateTrainer } from './api'
 import { TrainerScheduleManager } from './TrainerScheduleManager'
 import type { EmploymentStatus, TrainerDTO } from './types'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
+import { useConfirm } from '../../components/ConfirmDialog'
 
 const STATUS_LABEL: Record<EmploymentStatus, string> = {
   FULL_TIME: 'Puno radno vreme',
@@ -29,6 +30,7 @@ export function TrainersTab() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
+  const confirm = useConfirm()
 
   async function reload() {
     setLoading(true)
@@ -75,7 +77,7 @@ export function TrainersTab() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Obrisati ovog trenera? Ovo briše i njegov raspored.')) return
+    if (!(await confirm('Obrisati ovog trenera? Ovo briše i njegov raspored.'))) return
     await deleteTrainer(id)
     await reload()
   }

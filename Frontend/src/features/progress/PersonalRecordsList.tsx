@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { DateInput } from '../../components/DateInput'
+import { useConfirm } from '../../components/ConfirmDialog'
 import {
   CartesianGrid,
   Line,
@@ -126,6 +127,7 @@ export function PersonalRecordsList({
   const [editForm, setEditForm] = useState(toEditForm({ unit: 'KG' } as ClientPersonalRecordDTO))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const sorted = [...records].sort((a, b) => b.recordDate.localeCompare(a.recordDate))
 
@@ -159,7 +161,7 @@ export function PersonalRecordsList({
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Obrisati ovaj rekord?')) return
+    if (!(await confirm('Obrisati ovaj rekord?'))) return
     await deleteRecord(id)
     onChanged?.()
   }

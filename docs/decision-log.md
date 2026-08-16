@@ -4028,3 +4028,27 @@ truncation, no overlap, matching every other room tile's layout exactly.
 
 - None found while implementing this change - the `grep` sweep for other RECEPTION/LOCKER_ROOM/
   OFFICE assumptions came back clean (see above).
+
+## Upgrade: custom confirm-dialog decisions
+
+**Problem**: 5 call sites (`TrainersTab.tsx`, `UsersTab.tsx`, `EntriesList.tsx`,
+`PersonalRecordsList.tsx`, `TrainerSchedulePage.tsx`, all delete-confirmations) used the browser's
+native `window.confirm(...)`, the app's only remaining native-dialog pattern (destructive actions
+elsewhere already avoided modals entirely per AGENTS.md's existing convention note - `confirm()`
+was the one exception, not a second pattern). A native dialog can't be styled to match the app's
+dark theme and blocks Chrome DevTools/automation the same way `alert`/`prompt` do.
+
+**Fix**: `Frontend/src/components/ConfirmDialog.tsx` - a `ConfirmProvider` (mounted once in
+`AppShell`, same idiom as `NotificationProvider`) plus a `useConfirm()` hook returning
+`(message, options?) => Promise<boolean>`. Internally it queues one pending request in state and
+resolves a stored `Promise` executor on Potvrdi/Otkaži click or backdrop click (backdrop treated as
+cancel). Every call site's change was mechanical: `if (!confirm(msg))` -> `if (!(await
+confirm(msg)))` (all 5 handlers were already `async function`s), plus the import and a
+`const confirm = useConfirm()` inside the component. Styled consistent with the existing
+`NotificationBell` dropdown (`bg-slate-900`/`border-slate-800` panel) and the app's `red-600`
+danger-button convention (seen on `TrainerAppointmentsPage`'s cancel-appointment button).
+
+**Verification**: `npx tsc -b` clean after `npm install` (repo's `node_modules` wasn't present at
+session start). Not yet screenshotted live - worth a quick visual pass before fully trusting the
+modal's centering/backdrop-click behavior, same caveat as `NotificationPreferenceSelect` in Known
+issues.

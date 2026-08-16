@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { NotificationProvider } from '../features/notifications/NotificationContext'
 import { NotificationBell } from '../features/notifications/NotificationBell'
 import { NotificationPreferenceSelect } from '../features/notifications/NotificationPreferenceSelect'
+import { ConfirmProvider } from '../components/ConfirmDialog'
 
 // ADMIN is additive to MANAGER, never a switchable active role on its own (see
 // auth/types.ts) - it has no entry in ROLE_PRIORITY/the role switcher and these two maps'
@@ -53,6 +54,7 @@ export function AppShell() {
   const switchableRoles = user.roles.filter((r) => r !== 'ADMIN')
 
   return (
+    <ConfirmProvider>
     <NotificationProvider>
     <div className="flex h-screen bg-slate-950 text-slate-100">
       <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900/40">
@@ -121,5 +123,6 @@ export function AppShell() {
       </main>
     </div>
     </NotificationProvider>
+    </ConfirmProvider>
   )
 }

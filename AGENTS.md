@@ -553,8 +553,12 @@ short-text-out calls, not open-ended reasoning.
   should render it through a small heading-plus-bulleted-list helper instead (see
   `AppointmentsTab.tsx`'s local `ErrorMessage` component) rather than a bare paragraph; this has not
   yet been swept across every feature that calls `extractErrorMessage`, only the appointment form
-  where the multi-line message was found. Destructive actions use the browser's native
-  `window.confirm(...)`, not a custom modal (no modal/dialog pattern exists in this frontend). Multi-role accounts get a role
+  where the multi-line message was found. Destructive actions go through `components/
+  ConfirmDialog.tsx`'s `useConfirm()` hook (a promise-based `ConfirmProvider` mounted once in
+  `AppShell`) - the app's one and only modal/dialog pattern, replacing all 5 former bare
+  `window.confirm(...)` call sites (`TrainersTab`/`UsersTab`/`EntriesList`/`PersonalRecordsList`/
+  `TrainerSchedulePage`, all delete-confirmations). See `docs/decision-log.md` "Upgrade: custom
+  confirm-dialog decisions". Multi-role accounts get a role
   *switcher*, not a merged view - one "active role" at a time gates routes/nav
   (`RequireActiveRole`). `AdminPage`'s tabs (`features/admin/`) each own one domain: `UsersTab`
   is the full cross-role account list (search/edit/delete/toggle MANAGER); `ManagersTab`/

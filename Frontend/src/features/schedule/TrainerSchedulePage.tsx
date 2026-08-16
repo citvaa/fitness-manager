@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import { DateInput } from '../../components/DateInput'
 import { LoadingIndicator } from '../../components/LoadingIndicator'
 import { MonthCalendar } from '../../components/MonthCalendar'
+import { useConfirm } from '../../components/ConfirmDialog'
 import {
   createMySchedule,
   createMyScheduleRecurring,
@@ -108,6 +109,7 @@ export function TrainerSchedulePage() {
   const [unavailEnd, setUnavailEnd] = useState('')
   const [unavailStatus, setUnavailStatus] = useState<WorkStatus>('VACATION')
   const [savingUnavail, setSavingUnavail] = useState(false)
+  const confirm = useConfirm()
 
   async function reload() {
     setLoading(true)
@@ -167,7 +169,7 @@ export function TrainerSchedulePage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Obrisati ovaj unos rasporeda?')) return
+    if (!(await confirm('Obrisati ovaj unos rasporeda?'))) return
     await deleteMyScheduleEntry(id)
     await reload()
   }
