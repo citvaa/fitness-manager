@@ -1,7 +1,10 @@
 package com.example.demo.service.impl.insights;
 
 import com.example.demo.config.cache.RedisConfig;
+import com.example.demo.dto.insights.InsightRating;
 import com.example.demo.dto.insights.ManagerInsightsDTO;
+import com.example.demo.dto.insights.RoomOccupancyInsightDTO;
+import com.example.demo.dto.insights.SessionTypeInsightDTO;
 import com.example.demo.enums.SessionType;
 import com.example.demo.model.Payment;
 import com.example.demo.model.Session;
@@ -12,6 +15,7 @@ import com.example.demo.repository.PaymentRepository;
 import com.example.demo.repository.gym.RoomCheckInRepository;
 import com.example.demo.repository.gym.RoomRepository;
 import com.example.demo.service.ai.ClaudeInsightService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +42,10 @@ import static org.mockito.Mockito.*;
  * plain-Mockito unit test, so we instead verify the underlying generateInsights() logic and the
  * refreshInsights() manual evict+repopulate path against a mocked CacheManager/Cache, per
  * AGENTS.md "Upgrade: service layer decisions").
+ *
+ * <p>The mocked Claude client returns the strict-JSON shape the service actually asks for (see
+ * {@link ClaudeManagerInsightResponse}); a real {@link ObjectMapper} is used rather than a mock
+ * so the parse/merge path is exercised end to end.
  */
 @ExtendWith(MockitoExtension.class)
 class ManagerInsightsServiceImplTest {
@@ -60,21 +68,40 @@ class ManagerInsightsServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ManagerInsightsServiceImpl(roomRepository, roomCheckInRepository, paymentRepository,
-                claudeInsightService, cacheManager);
+                claudeInsightService, cacheManager, new ObjectMapper());
     }
 
-    @Test
-    void getInsights_generatesTextViaClaudeAndSetsPeriodDays() {
+    /** Minimal valid response in the exact JSON shape SYSTEM_PROMPT asks Claude for. */
+    private static String aiJson(String summary) {
+        return """
+                {
+                  "summary": "%s",
+                  "recommendations": ["Prva preporuka"],
+                  "roomRatings": [],
+                  "sessionTypeRatings": [],
+                  "attendanceRating": {"rating": "GOOD", "comment": "Solidna poseta."}
+                }
+                """.formatted(summary);
+    }
+
+    private void stubEmptyData() {
         when(roomRepository.findAll()).thenReturn(List.of());
         when(roomCheckInRepository.findByCheckedInAtAfter(any())).thenReturn(List.of());
         when(paymentRepository.findByPaymentDateAfter(any())).thenReturn(List.of());
-        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("Generated summary.");
+    }
+
+    @Test
+    void getInsights_parsesStructuredJsonAndSetsPeriodDays() {
+        stubEmptyData();
+        when(claudeInsightService.generate(anyString(), anyString())).thenReturn(aiJson("Generated summary."));
 
         ManagerInsightsDTO dto = service.getInsights();
 
-        assertThat(dto.getInsightText()).isEqualTo("Generated summary.");
+        assertThat(dto.getSummary()).isEqualTo("Generated summary.");
+        assertThat(dto.getRecommendations()).containsExactly("Prva preporuka");
         assertThat(dto.getPeriodDays()).isEqualTo(30);
         assertThat(dto.getGeneratedAt()).isNotNull();
+        assertThat(dto.getAttendance().getRating()).isEqualTo(InsightRating.GOOD);
     }
 
     @Test
@@ -103,49 +130,69 @@ class ManagerInsightsServiceImplTest {
         when(roomRepository.findAll()).thenReturn(List.of(studio));
         when(roomCheckInRepository.findByCheckedInAtAfter(any())).thenReturn(List.of(closedCheckIn, openCheckIn));
         when(paymentRepository.findByPaymentDateAfter(any())).thenReturn(List.of(payment));
-        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("summary");
+        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("""
+                {
+                  "summary": "Sazetak",
+                  "recommendations": [],
+                  "roomRatings": [{"roomName": "Studio A", "rating": "EXCELLENT", "comment": "Odlicna popunjenost."}],
+                  "sessionTypeRatings": [{"sessionType": "GROUP", "rating": "POOR", "comment": "Mali udeo."}],
+                  "attendanceRating": {"rating": "AVERAGE", "comment": "Prosecno."}
+                }
+                """);
 
-        service.getInsights();
+        ManagerInsightsDTO dto = service.getInsights();
 
         ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> dataCaptor = ArgumentCaptor.forClass(String.class);
         verify(claudeInsightService).generate(systemPromptCaptor.capture(), dataCaptor.capture());
 
-        // Revenue-proxy caveat must be explicit in the prompt - see AGENTS.md.
-        assertThat(systemPromptCaptor.getValue()).contains("Respond in Serbian");
-        assertThat(dataCaptor.getValue()).contains("Total rooms: 1");
+        // Revenue-proxy caveat and the Serbian-output instruction must be explicit in the prompt.
+        assertThat(systemPromptCaptor.getValue()).contains("Serbian");
+        assertThat(systemPromptCaptor.getValue()).contains("Do not invent");
         assertThat(dataCaptor.getValue()).contains("Total room check-ins: 2");
         assertThat(dataCaptor.getValue()).contains("Distinct clients checked in: 2");
         assertThat(dataCaptor.getValue()).contains("Studio A: 2");
         assertThat(dataCaptor.getValue()).contains("proxy for revenue");
         assertThat(dataCaptor.getValue()).contains("GROUP: 4");
+
+        // The numbers on the DTO are computed in Java; Claude only contributes rating/comment.
+        RoomOccupancyInsightDTO room = dto.getRoomOccupancy().getFirst();
+        assertThat(room.getRoomName()).isEqualTo("Studio A");
+        assertThat(room.getCheckIns()).isEqualTo(2);
+        assertThat(room.getSharePercent()).isEqualTo(100.0);
+        assertThat(room.getRating()).isEqualTo(InsightRating.EXCELLENT);
+
+        SessionTypeInsightDTO group = dto.getSessionTypeBreakdown().getFirst();
+        assertThat(group.getSessionType()).isEqualTo("GROUP");
+        assertThat(group.getPaidAppointments()).isEqualTo(4);
+        assertThat(group.getRating()).isEqualTo(InsightRating.POOR);
+
+        assertThat(dto.getAttendance().getDistinctClients()).isEqualTo(2);
+        assertThat(dto.getAttendance().getTotalCheckIns()).isEqualTo(2);
+        assertThat(dto.getAttendance().getAvgCheckInDurationMinutes()).isEqualTo(60.0);
     }
 
     @Test
     void refreshInsights_regeneratesAndRepopulatesCache() {
-        when(roomRepository.findAll()).thenReturn(List.of());
-        when(roomCheckInRepository.findByCheckedInAtAfter(any())).thenReturn(List.of());
-        when(paymentRepository.findByPaymentDateAfter(any())).thenReturn(List.of());
-        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("Fresh text");
+        stubEmptyData();
+        when(claudeInsightService.generate(anyString(), anyString())).thenReturn(aiJson("Fresh text"));
         when(cacheManager.getCache(RedisConfig.MANAGER_INSIGHTS_CACHE)).thenReturn(cache);
 
         ManagerInsightsDTO result = service.refreshInsights();
 
-        assertThat(result.getInsightText()).isEqualTo("Fresh text");
+        assertThat(result.getSummary()).isEqualTo("Fresh text");
         verify(cache).put(eq("current"), eq(result));
     }
 
     @Test
     void refreshInsights_doesNotThrowWhenCacheRegionMissing() {
-        when(roomRepository.findAll()).thenReturn(List.of());
-        when(roomCheckInRepository.findByCheckedInAtAfter(any())).thenReturn(List.of());
-        when(paymentRepository.findByPaymentDateAfter(any())).thenReturn(List.of());
-        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("text");
+        stubEmptyData();
+        when(claudeInsightService.generate(anyString(), anyString())).thenReturn(aiJson("text"));
         when(cacheManager.getCache(RedisConfig.MANAGER_INSIGHTS_CACHE)).thenReturn(null);
 
         ManagerInsightsDTO result = service.refreshInsights();
 
-        assertThat(result.getInsightText()).isEqualTo("text");
+        assertThat(result.getSummary()).isEqualTo("text");
         // No cache to put into - just verifying no NPE was thrown getting here.
     }
 
@@ -154,10 +201,9 @@ class ManagerInsightsServiceImplTest {
         // Distinguishes refreshInsights() from getInsights(): it must always regenerate, not
         // check the cache first - see AGENTS.md's "getInsights()/refreshInsights() never call
         // each other internally" note.
-        when(roomRepository.findAll()).thenReturn(List.of());
-        when(roomCheckInRepository.findByCheckedInAtAfter(any())).thenReturn(List.of());
-        when(paymentRepository.findByPaymentDateAfter(any())).thenReturn(List.of());
-        when(claudeInsightService.generate(anyString(), anyString())).thenReturn("a").thenReturn("b");
+        stubEmptyData();
+        when(claudeInsightService.generate(anyString(), anyString()))
+                .thenReturn(aiJson("a")).thenReturn(aiJson("b"));
         when(cacheManager.getCache(RedisConfig.MANAGER_INSIGHTS_CACHE)).thenReturn(cache);
 
         service.refreshInsights();

@@ -273,9 +273,10 @@ All entities extend `model/common/BaseEntity` (`@MappedSuperclass`): `version`,
   into a `Room`; `checkedOutAt == null` means currently inside. At most one active check-in per
   client is enforced **globally** (not per-room) by a DB unique partial index
   (`uq_room_check_in_one_active_per_client ON room_check_in (client_id) WHERE checked_out_at IS
-  NULL`), not just at the service layer. Computed room occupancy additively combines active
-  check-ins with clients on in-progress appointments in that room, without deduplication (a client
-  counted both ways is double-counted - a deliberate simplicity trade, not a bug). The
+  NULL`), not just at the service layer. Computed room occupancy counts **only**
+  active check-ins. Clients booked on an in-progress appointment in that room are reported
+  separately as `appointmentOccupantCount` and are deliberately NOT added to `totalOccupancy`,
+  `occupancyPercent` or `atCapacity`, because a booked client may simply not show up. The
   `POST /api/gym/room/{roomId}/check-in`/`check-out` endpoints (MANAGER+TRAINER) existed fully
   wired since an earlier round but had zero frontend caller - only `DevDataSeeder` ever hit them.
   A later round added a TRAINER-facing caller: `TrainerAppointmentsPage.tsx`'s "Započni trening"
@@ -768,20 +769,16 @@ the `upgrade/claude-code` branch's work are documented, with full fix/verificati
   rule, not a bug - just worth knowing before assuming appointment creation is broken.
   `DevDataSeeder` could be extended to seed matching `TrainerSchedule` rows for its generated
   trainers; left out of this round's scope.
-- `ManagerInsightsServiceImplTest` (`src/test/java/.../service/impl/insights/`) does not compile
-  against the current `ManagerInsightsServiceImpl`/`ManagerInsightsDTO` shape - it still constructs
-  the service with a 5-arg constructor (missing the `ObjectMapper` param) and asserts on a
-  `dto.getInsightText()` getter that no longer exists on the structured DTO. This blocks `mvn test`
-  for the **entire module** (a test-compile failure is global), not just this one test class -
-  confirmed pre-existing on `main`/before the appointment-conflict-message session's changes (via
-  `git stash`), not caused by any session's work. Left unfixed as out of scope for the appointment
-  work that found it; whoever picks this up next should update the test to match the current
-  constructor/DTO shape from the "Upgrade: manager-insights dashboard decisions" entry in
-  `docs/decision-log.md`.
-- `RoomServiceImplTest.create_buildsRoomFromRequestAndSaves` fails (not a compile error, an
-  assertion/thrown-exception failure) against the current room minimum-size formula - it builds a
-  room named "Studio A" that the "Upgrade: room minimum-size decisions" formula now rejects as
-  smaller than the computed minimum (6.0m x 5.0m) for that name. Found while running the full
-  suite to verify the appointment-conflict-message changes above; not caused by this session's
-  appointment work and left unfixed as out of scope - the fix is either changing the test's room
-  dimensions/name or reviewing whether the minimum-size formula is too strict for that case.
+- Both test-suite defects previously listed here are fixed. `ManagerInsightsServiceImplTest`
+  now constructs the service with its current 6-arg constructor (including `ObjectMapper`)
+  and asserts on the structured `ManagerInsightsDTO` (`summary`/`recommendations`/
+  `roomOccupancy`/`sessionTypeBreakdown`/`attendance`) instead of the removed
+  `getInsightText()`; its mocked Claude client now returns the strict-JSON shape the service
+  actually asks for. `RoomServiceImplTest.create_buildsRoomFromRequestAndSaves` now builds a
+  6.0 x 5.0 room, which is exactly `RoomSizingPolicy`'s minimum for the name "Studio A".
+  `mvn test` compiles and runs for the whole module again. NOTE: the earlier entry called the
+  compile failure "pre-existing on main, not caused by any session's work" - that was wrong.
+  The test file does not exist on `baseline-v1`; it was added on this branch and broken on
+  this branch by the manager-insights DTO redesign, which updated the service, controller and
+  frontend but not the test. `git stash` only proved the session that found it was not the
+  cause. Fixed manually, outside the tool comparison, after the comparison was finished.

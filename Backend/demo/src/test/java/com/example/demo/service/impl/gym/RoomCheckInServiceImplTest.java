@@ -222,7 +222,7 @@ class RoomCheckInServiceImplTest {
     }
 
     @Test
-    void getOccupancy_combinesCheckInsAndInProgressAppointmentsAdditively_noDeduplication() {
+    void getOccupancy_countsOnlyActiveCheckIns_appointmentOccupantsReportedSeparately() {
         Room room = room(1, 10);
         when(roomRepository.findById(1)).thenReturn(Optional.of(room));
 
@@ -250,10 +250,10 @@ class RoomCheckInServiceImplTest {
 
         assertThat(dto.getCheckedInCount()).isEqualTo(2);
         assertThat(dto.getAppointmentOccupantCount()).isEqualTo(3);
-        // Additive, no dedup - see AGENTS.md.
-        assertThat(dto.getTotalOccupancy()).isEqualTo(5);
+        // Only active check-ins count - a booked client may not show up. See AGENTS.md.
+        assertThat(dto.getTotalOccupancy()).isEqualTo(2);
         assertThat(dto.getCapacity()).isEqualTo(10);
-        assertThat(dto.getOccupancyPercent()).isEqualTo(50.0);
+        assertThat(dto.getOccupancyPercent()).isEqualTo(20.0);
         assertThat(dto.isAtCapacity()).isFalse();
     }
 

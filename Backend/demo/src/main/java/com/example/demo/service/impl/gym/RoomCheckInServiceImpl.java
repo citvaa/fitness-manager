@@ -127,7 +127,7 @@ public class RoomCheckInServiceImpl implements RoomCheckInService {
                 .mapToInt(appointment -> appointment.getClientAppointments().size())
                 .sum();
 
-        int total = checkedInCount + appointmentOccupantCount;
+        int total = checkedInCount;
         Integer capacity = room.getCapacity();
         Double percent = (capacity != null && capacity > 0) ? (total * 100.0) / capacity : null;
 

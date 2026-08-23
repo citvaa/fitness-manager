@@ -276,7 +276,9 @@ class AppointmentServiceImplTest {
     @Test
     void assign_setsCallingTrainerOnTheAppointment() {
         authenticateAsTrainer("trener@gym.com");
-        Trainer trainer = Trainer.builder().id(7).build();
+        // assign() sends a manager alert built from trainer.getUser().getEmail() - needs a real
+        // User here (unlike unassign() below, which never reads it).
+        Trainer trainer = Trainer.builder().id(7).user(User.builder().email("trener@gym.com").build()).build();
         when(trainerRepository.findByUserEmail("trener@gym.com")).thenReturn(Optional.of(trainer));
 
         Appointment appointment = Appointment.builder().id(10).trainer(null).build();
@@ -287,6 +289,7 @@ class AppointmentServiceImplTest {
         service.assign(10);
 
         assertThat(appointment.getTrainer()).isSameAs(trainer);
+        verify(notificationService).sendManagerAlert(contains("trener@gym.com"));
     }
 
     @Test
@@ -430,11 +433,12 @@ class AppointmentServiceImplTest {
         assertThat(captor.getValue().getRoom()).isSameAs(room);
     }
 
-    // Trainer and room became mandatory as of the manager-testing round 3 restructure (see
-    // AGENTS.md "Upgrade: fixed weekly appointment decisions") - an unassigned trainer/room made
-    // occupancy tracking meaningless. These two tests replace the old
-    // "create_leavesRoomNullWhenRoomIdOmitted" test, which exercised behavior that is no longer
-    // legal.
+    // Room is mandatory (manager-testing round 3, see AGENTS.md "Upgrade: fixed weekly
+    // appointment decisions") - an unassigned room made occupancy tracking meaningless.
+    // A trainer is NOT: it was made mandatory in that same round and then deliberately made
+    // optional again by the trainer-self-assign round, because the "termin bez trenera"
+    // marketplace only works if create() can produce a trainer-less appointment. See AGENTS.md
+    // "Upgrade: trainer self-assign decisions".
     @Test
     void create_rejectsMissingRoom() {
         LocalDate date = LocalDate.now().plusDays(1);
@@ -449,16 +453,27 @@ class AppointmentServiceImplTest {
     }
 
     @Test
-    void create_rejectsMissingTrainer() {
+    void create_allowsMissingTrainer_producingAnOpenMarketplaceSlot() throws Exception {
         LocalDate date = LocalDate.now().plusDays(1);
         com.example.demo.service.params.request.appointment.CreateAppointmentRequest request =
                 new com.example.demo.service.params.request.appointment.CreateAppointmentRequest(
                         date, LocalTime.of(10, 0), LocalTime.of(11, 0), 1, null, 3, null, false);
 
-        assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Trener");
-        verify(appointmentRepository, never()).save(any());
+        when(gymScheduleRepository.findByDay(date.getDayOfWeek())).thenReturn(Optional.of(openAllDayGymSchedule()));
+        when(sessionRepository.findById(1)).thenReturn(Optional.of(session(3)));
+        com.example.demo.model.gym.Room room = com.example.demo.model.gym.Room.builder().id(3).build();
+        when(roomRepository.findById(3)).thenReturn(Optional.of(room));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(appointmentMapper.toDto(any(Appointment.class))).thenReturn(new AppointmentDTO());
+
+        service.create(request);
+
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getTrainer()).isNull();
+        // No trainer to notify - the manager-assignment notification must be skipped, not sent
+        // with a null trainer.
+        verify(notificationService, never()).sendTrainerAssignmentNotification(any(), any());
     }
 
     // ---------- getAll (MANAGER slot management, Faza 9) ----------

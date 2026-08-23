@@ -61,8 +61,10 @@ class RoomServiceImplTest {
     @Test
     void create_buildsRoomFromRequestAndSaves() {
         Gym gym = Gym.builder().id(1).name("Gym").timezone("UTC").build();
+        // 6.0 x 5.0 is exactly RoomSizingPolicy's minimum for the name "Studio A" - see
+        // AGENTS.md "Upgrade: room minimum-size decisions". A smaller height is rejected.
         CreateRoomRequest request = new CreateRoomRequest(1, "Studio A", RoomType.STUDIO, 10,
-                1.0, 2.0, 6.0, 4.0, 90.0, "#00FF00");
+                1.0, 2.0, 6.0, 5.0, 90.0, "#00FF00");
 
         when(gymRepository.findById(1)).thenReturn(Optional.of(gym));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -81,7 +83,7 @@ class RoomServiceImplTest {
         assertThat(saved.getPosX()).isEqualTo(1.0);
         assertThat(saved.getPosY()).isEqualTo(2.0);
         assertThat(saved.getWidth()).isEqualTo(6.0);
-        assertThat(saved.getHeight()).isEqualTo(4.0);
+        assertThat(saved.getHeight()).isEqualTo(5.0);
         assertThat(saved.getRotationDegrees()).isEqualTo(90.0);
         assertThat(saved.getColor()).isEqualTo("#00FF00");
     }
