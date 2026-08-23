@@ -78,7 +78,7 @@ public class OccupancyServiceImpl implements OccupancyService {
         List<RoomOccupancyResponse> result = rooms.stream().map(room -> {
             long manualCount = manual.getOrDefault(room.getId(), 0L);
             long scheduledCount = scheduled.getOrDefault(room.getId(), 0L);
-            return new RoomOccupancyResponse(room.getId(), room.getName(), room.getCapacity(), manualCount, scheduledCount, manualCount + scheduledCount);
+            return new RoomOccupancyResponse(room.getId(), room.getName(), room.getCapacity(), manualCount, scheduledCount, manualCount);
         }).toList();
         return new OccupancySnapshotResponse(now, result);
     }

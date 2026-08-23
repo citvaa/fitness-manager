@@ -117,8 +117,10 @@ Every entity is also `@Audited` (Hibernate Envers).
 - **Room** - belongs to Gym; capacity and rotated-rectangle geometry
   (`posX`/`posY`/`width`/`height`/`rotationDegrees`).
 - **RoomCheckIn** - historical manual check-in/out. A DB partial unique index
-  permits one active check-in per client globally. Occupancy adds manual and
-  in-progress appointment counts without deduplication. Managers receive every
+  permits one active check-in per client globally. Occupancy counts only active
+  manual check-ins; participants of an in-progress appointment are reported
+  separately as `scheduledParticipants` and are deliberately not added to
+  `totalOccupancy`, because a booked client may simply not show up. Managers receive every
   remaining appointment today across the gym, while trainers receive only their next two
   not-yet-started appointments today; “Započni trening” exposes that appointment's
   roster and fixed room. Manager and trainer rosters use one stateful attendance

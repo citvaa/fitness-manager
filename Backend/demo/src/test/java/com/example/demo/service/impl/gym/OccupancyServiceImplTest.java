@@ -40,7 +40,7 @@ class OccupancyServiceImplTest {
         service = new OccupancyServiceImpl(checkIns, rooms, gyms, clients, appointments, mapper, messaging);
     }
 
-    @Test void sumsManualAndScheduledOccupancyByRoom() {
+    @Test void countsOnlyActiveCheckInsAsOccupancyByRoom() {
         when(gyms.findFirstByOrderByIdAsc()).thenReturn(Optional.of(Gym.builder().id(1).timezone("Europe/Belgrade").build()));
         Room room = Room.builder().id(7).name("Studio").capacity(12).build();
         when(rooms.findByGymIdOrderByNameAsc(1)).thenReturn(List.of(room));
@@ -49,7 +49,7 @@ class OccupancyServiceImplTest {
                 .thenReturn(List.of(Appointment.builder().room(room).clientAppointments(Set.of(mock(), mock())).build()));
         var result = service.currentOccupancy().rooms().getFirst();
         assertAll(() -> assertEquals(1, result.manualCheckIns()), () -> assertEquals(2, result.scheduledParticipants()),
-                () -> assertEquals(3, result.totalOccupancy()));
+                () -> assertEquals(1, result.totalOccupancy()));
     }
 
     @Test void rejectsSecondActiveCheckInForClientAcrossAllRooms() {
