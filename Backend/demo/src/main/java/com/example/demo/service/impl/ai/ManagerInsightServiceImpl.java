@@ -17,6 +17,7 @@ import com.example.demo.service.params.response.gym.OccupancySnapshotResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ManagerInsightServiceImpl implements ManagerInsightService {
@@ -90,6 +92,7 @@ public class ManagerInsightServiceImpl implements ManagerInsightService {
             List<String> finalRecommendations = recommendations.isEmpty() ? fallbackRecommendations() : recommendations;
             return new AiCopy(root.path("summary").asText("Pregled operativnih pokazatelja za poslednjih 30 dana."), finalRecommendations, root.path("metrics"));
         } catch (Exception ignored) {
+            log.warn("Falling back to default manager insight copy", ignored);
             return new AiCopy("Pregled operativnih pokazatelja za poslednjih 30 dana.", fallbackRecommendations(), objectMapper.createObjectNode());
         }
     }

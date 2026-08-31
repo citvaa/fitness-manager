@@ -260,6 +260,14 @@ occupancy, individual/group mix, check-in ratio, and paid appointment units).
 Claude receives those fixed values and returns JSON containing only summary,
 recommendations, and per-key rating/comment. Missing or invalid AI fields fall
 back to `AVERAGE` and a generic comment without hiding the calculated cards.
+`app.anthropic.max-tokens` must stay comfortably above the token cost of one
+rating+comment per room plus summary/recommendations - with 5 seeded rooms
+(9 metrics total) the old value of 500 silently truncated Claude's JSON
+mid-response, which `generateCopy()`'s catch-all swallowed with no logging,
+so every insight card looked identical (all `AVERAGE`, generic fallback copy)
+even though the API key/model were fine. Fixed by raising it to 1500 and
+adding a `log.warn` in that catch block so a future truncation or API failure
+is visible instead of silently indistinguishable from "AI never called."
 The manager dashboard presents the executive summary and numbered actions first,
 then rating-colored room bars, session-mix donut, attendance gauge, sold-units
 KPI, and a complete diagnostic card grid. The frontend groups stable metric keys
