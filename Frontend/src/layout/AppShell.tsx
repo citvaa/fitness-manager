@@ -97,7 +97,7 @@ export function AppShell() {
                 clsx(
                   'block rounded-lg px-3 py-2 text-sm font-medium transition',
                   isActive
-                    ? 'bg-slate-800 text-white'
+                    ? 'bg-slate-800 text-slate-100'
                     : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200',
                 )
               }

@@ -10,10 +10,10 @@ export const RATING_LABEL: Record<InsightRating, string> = {
 // Same traffic-light convention as LiveFloorPlanPage's occupancy coloring (green/amber/red),
 // extended with a distinct blue step for GOOD so all four ratings stay visually distinguishable.
 export const RATING_COLOR: Record<InsightRating, string> = {
-  EXCELLENT: '#22c55e',
-  GOOD: '#38bdf8',
-  AVERAGE: '#f59e0b',
-  POOR: '#ef4444',
+  EXCELLENT: '#008e27',
+  GOOD: '#0072ad',
+  AVERAGE: '#a85100',
+  POOR: '#ff7272',
 }
 
 export interface RoomOccupancyInsight {

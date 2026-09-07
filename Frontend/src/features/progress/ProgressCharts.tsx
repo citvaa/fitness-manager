@@ -15,12 +15,12 @@ import type { ClientProgressEntryDTO } from './types'
 // hex here since Recharts needs literal color values, not Tailwind classes.
 const LINE_COLORS = {
   weight: '#2f83fb', // brand-500
-  bodyFat: '#f59e0b', // occ-busy
-  waist: '#22c55e', // occ-free
-  chest: '#a78bfa',
-  hip: '#ef4444', // occ-full
-  thigh: '#38bdf8',
-  arm: '#e6e9f0',
+  bodyFat: '#a85100', // occ-busy
+  waist: '#008e27', // occ-free
+  chest: '#7458c7',
+  hip: '#ff7272', // occ-full
+  thigh: '#0072ad',
+  arm: '#13161d',
 }
 
 function formatDate(iso: string) {
@@ -63,12 +63,12 @@ export function ProgressCharts({ entries }: { entries: ClientProgressEntryDTO[] 
       <ChartCard title="Telesna masa i procenat masti">
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={data}>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-            <YAxis stroke="#64748b" fontSize={12} />
+            <CartesianGrid stroke="#cdd8ea" strokeDasharray="3 3" />
+            <XAxis dataKey="date" stroke="#7e8ea5" fontSize={12} />
+            <YAxis stroke="#7e8ea5" fontSize={12} />
             <Tooltip
-              contentStyle={{ background: '#0b1220', border: '1px solid #1e293b', borderRadius: 8 }}
-              labelStyle={{ color: '#e6e9f0' }}
+              contentStyle={{ background: '#e6edfb', border: '1px solid #cdd8ea', borderRadius: 8 }}
+              labelStyle={{ color: '#13161d' }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="Težina" stroke={LINE_COLORS.weight} connectNulls dot={{ r: 3 }} />
@@ -80,12 +80,12 @@ export function ProgressCharts({ entries }: { entries: ClientProgressEntryDTO[] 
       <ChartCard title="Obimi tela (cm)">
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={data}>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-            <YAxis stroke="#64748b" fontSize={12} />
+            <CartesianGrid stroke="#cdd8ea" strokeDasharray="3 3" />
+            <XAxis dataKey="date" stroke="#7e8ea5" fontSize={12} />
+            <YAxis stroke="#7e8ea5" fontSize={12} />
             <Tooltip
-              contentStyle={{ background: '#0b1220', border: '1px solid #1e293b', borderRadius: 8 }}
-              labelStyle={{ color: '#e6e9f0' }}
+              contentStyle={{ background: '#e6edfb', border: '1px solid #cdd8ea', borderRadius: 8 }}
+              labelStyle={{ color: '#13161d' }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="Struk" stroke={LINE_COLORS.waist} connectNulls dot={{ r: 3 }} />

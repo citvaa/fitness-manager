@@ -83,7 +83,7 @@ function RoomShape({
           y={room.posY * PX_PER_UNIT + 6}
           text={room.name}
           fontSize={13}
-          fill="#e6e9f0"
+          fill="#13161d"
           listening={false}
         />
       </Group>
@@ -248,7 +248,7 @@ export function RoomEditorPage() {
             onMouseDown={(e) => {
               if (e.target === e.target.getStage()) setSelectedId(null)
             }}
-            className="rounded-lg bg-[radial-gradient(circle_at_1px_1px,#1e293b_1px,transparent_0)] [background-size:20px_20px]"
+            className="rounded-lg bg-[radial-gradient(circle_at_1px_1px,#cdd8ea_1px,transparent_0)] [background-size:20px_20px]"
           >
             <Layer>
               {rooms.map((room) => (
@@ -284,7 +284,7 @@ export function RoomEditorPage() {
                 onClick={() => setSelectedId(room.id)}
                 className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                   room.id === selectedId
-                    ? 'bg-slate-800 text-white'
+                    ? 'bg-slate-800 text-slate-100'
                     : 'text-slate-400 hover:bg-slate-800/60'
                 }`}
               >

@@ -82,12 +82,12 @@ export function PersonalRecordChart({ records }: { records: ClientPersonalRecord
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={data}>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-            <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-            <YAxis stroke="#64748b" fontSize={12} unit={unit ? ` ${RECORD_UNIT_LABEL[unit]}` : undefined} />
+            <CartesianGrid stroke="#cdd8ea" strokeDasharray="3 3" />
+            <XAxis dataKey="date" stroke="#7e8ea5" fontSize={12} />
+            <YAxis stroke="#7e8ea5" fontSize={12} unit={unit ? ` ${RECORD_UNIT_LABEL[unit]}` : undefined} />
             <Tooltip
-              contentStyle={{ background: '#0b1220', border: '1px solid #1e293b', borderRadius: 8 }}
-              labelStyle={{ color: '#e6e9f0' }}
+              contentStyle={{ background: '#e6edfb', border: '1px solid #cdd8ea', borderRadius: 8 }}
+              labelStyle={{ color: '#13161d' }}
               formatter={(value) => [`${value} ${unit ? RECORD_UNIT_LABEL[unit] : ''}`, activeExercise]}
             />
             <Line type="monotone" dataKey="value" stroke={CHART_LINE_COLOR} dot={{ r: 3 }} />

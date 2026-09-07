@@ -14,10 +14,10 @@ const PX_PER_UNIT = 20
 const NEAR_CAPACITY_PERCENT = 85
 
 function occupancyColor(percent: number, atCapacity: boolean) {
-  if (atCapacity || percent >= 100) return { bg: 'rgba(239,68,68,0.35)', ring: '#ef4444' }
-  if (percent >= 60) return { bg: 'rgba(245,158,11,0.30)', ring: '#f59e0b' }
-  if (percent > 0) return { bg: 'rgba(34,197,94,0.28)', ring: '#22c55e' }
-  return { bg: 'rgba(100,116,139,0.15)', ring: '#334155' }
+  if (atCapacity || percent >= 100) return { bg: 'rgba(255,114,114,0.35)', ring: '#ff7272' }
+  if (percent >= 60) return { bg: 'rgba(168,81,0,0.30)', ring: '#a85100' }
+  if (percent > 0) return { bg: 'rgba(0,142,39,0.28)', ring: '#008e27' }
+  return { bg: 'rgba(126,142,165,0.15)', ring: '#b3c1d5' }
 }
 
 function RoomTile({ room, occ }: { room: RoomDTO; occ: RoomOccupancyDTO | undefined }) {
@@ -63,7 +63,7 @@ function RoomTile({ room, occ }: { room: RoomDTO; occ: RoomOccupancyDTO | undefi
       </div>
 
       <div>
-        <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
+        <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/10">
           <div
             className="h-full rounded-full transition-[width] duration-700 ease-out"
             style={{ width: `${barWidth}%`, backgroundColor: ring }}
@@ -140,14 +140,14 @@ export function LiveFloorPlanPage() {
       )}
 
       <div className="mb-4 flex gap-4 text-xs text-slate-400">
-        <Legend color="#334155" label="Slobodno" />
-        <Legend color="#22c55e" label="Nizak broj ljudi" />
-        <Legend color="#f59e0b" label="Popunjeno &gt;60%" />
-        <Legend color="#ef4444" label="Blizu/pun kapacitet" glow />
+        <Legend color="#b3c1d5" label="Slobodno" />
+        <Legend color="#008e27" label="Nizak broj ljudi" />
+        <Legend color="#a85100" label="Popunjeno &gt;60%" />
+        <Legend color="#ff7272" label="Blizu/pun kapacitet" glow />
       </div>
 
       <div
-        className="relative rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_1px_1px,#1e293b_1px,transparent_0)] [background-size:20px_20px]"
+        className="relative rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_1px_1px,#cdd8ea_1px,transparent_0)] [background-size:20px_20px]"
         style={{ width: maxX, height: maxY }}
       >
         {rooms.length === 0 && (

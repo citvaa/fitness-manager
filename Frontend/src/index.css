@@ -12,9 +12,47 @@
   --color-brand-800: #17408d;
   --color-brand-900: #17376f;
 
-  --color-occ-free: #22c55e;
-  --color-occ-busy: #f59e0b;
-  --color-occ-full: #ef4444;
+  --color-occ-free: #008e27;
+  --color-occ-busy: #a85100;
+  --color-occ-full: #ff7272;
+
+  /*
+   * The default Tailwind slate/red/amber/emerald scales below are overridden, not extended -
+   * this app was built dark-first (slate-950 as the darkest surface, slate-100 as the lightest
+   * ink; red/amber/emerald-9xx/950 as dark alert-box surfaces with light-3xx/400 text on top).
+   * Every value here is that same original dark-theme hex run through invert(1) hue-rotate(180deg)
+   * (verified against slate-950 #020617 -> #f4f8ff), so every existing bg-slate-900/text-slate-400/
+   * border-red-900/etc. class in the app repaints as its light-theme counterpart with no class
+   * renames anywhere else in the codebase. red-500/600 are deliberately left at their normal
+   * Tailwind values, not inverted - they're used as solid danger-button/badge fills
+   * (bg-red-600 + text-white), not as part of the dark-surface-plus-light-text alert idiom, and
+   * a plain red button reads fine unchanged on a light page.
+   */
+  --color-slate-50: #040608;
+  --color-slate-100: #070b0f;
+  --color-slate-200: #121820;
+  --color-slate-300: #222c38;
+  --color-slate-400: #505f74;
+  --color-slate-500: #7e8ea5;
+  --color-slate-600: #9fadc1;
+  --color-slate-700: #b3c1d5;
+  --color-slate-800: #cdd8ea;
+  --color-slate-900: #e0e8fb;
+  --color-slate-950: #f4f8ff;
+
+  --color-red-300: #8c3535;
+  --color-red-400: #db5454;
+  --color-red-900: #ffb8b8;
+  --color-red-950: #ffdcdc;
+
+  --color-amber-300: #572e00;
+  --color-amber-400: #793d00;
+  --color-amber-900: #f6b38d;
+  --color-amber-950: #ffd6bf;
+
+  --color-emerald-300: #005222;
+  --color-emerald-400: #00783e;
+  --color-emerald-950: #bce6dc;
 }
 
 html,
@@ -24,23 +62,23 @@ body,
 }
 
 body {
-  background-color: #0b1220;
-  color: #e6e9f0;
+  background-color: #e6edfb;
+  color: #13161d;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /*
- * The browser's native calendar-picker icon on <input type="date"> defaults to a dark glyph
- * that's invisible against this app's dark inputs (bg-slate-950/900) - `color-scheme: dark`
- * tells the browser to render its native form-control chrome (icon + the date/time popup
- * itself) in light-on-dark instead. This is the one part of a date input's native UI that CSS
- * can actually restyle - the empty-value segment placeholders (dd/mm/yyyy) are not exposed to
- * CSS at all; those are addressed per-input via the `lang="sr-Latn-RS"` attribute instead (see
- * AGENTS.md "Upgrade: manager-testing fixes").
+ * The browser's native calendar-picker icon on <input type="date"> defaults to a dark glyph,
+ * which is exactly what's needed against this app's light inputs (bg-slate-950/900, now pale
+ * surfaces) - `color-scheme: light` tells the browser to render its native form-control chrome
+ * (icon + the date/time popup itself) in dark-on-light. This is the one part of a date input's
+ * native UI that CSS can actually restyle - the empty-value segment placeholders (dd/mm/yyyy)
+ * are not exposed to CSS at all; those are addressed per-input via the `lang="sr-Latn-RS"`
+ * attribute instead (see AGENTS.md "Upgrade: manager-testing fixes").
  */
 input[type='date'],
 input[type='time'] {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /*

@@ -37,15 +37,15 @@ export function StatTile({ label, value, suffix }: { label: string; value: strin
 }
 
 const CHART_TOOLTIP_STYLE = {
-  contentStyle: { background: '#0b1220', border: '1px solid #1e293b', borderRadius: 8 },
-  labelStyle: { color: '#e6e9f0' },
-  itemStyle: { color: '#e6e9f0' },
+  contentStyle: { background: '#e6edfb', border: '1px solid #cdd8ea', borderRadius: 8 },
+  labelStyle: { color: '#13161d' },
+  itemStyle: { color: '#13161d' },
 }
 
 // Value labels are rendered outside the bar (to the right), not inside it - a bar can be too
-// short to fit text at a small value, and #e6e9f0 (same light ink as the rest of the dark theme)
-// stays readable against the chart's dark surface either way, unlike text drawn over a fill color.
-const VALUE_LABEL_STYLE = { fill: '#e6e9f0', fontSize: 12, fontWeight: 600 }
+// short to fit text at a small value, and #13161d (same dark ink as the rest of the light theme)
+// stays readable against the chart's light surface either way, unlike text drawn over a fill color.
+const VALUE_LABEL_STYLE = { fill: '#13161d', fontSize: 12, fontWeight: 600 }
 
 export function RoomOccupancyChart({ rooms }: { rooms: RoomOccupancyInsight[] }) {
   const data = [...rooms].sort((a, b) => b.checkIns - a.checkIns)
@@ -53,9 +53,9 @@ export function RoomOccupancyChart({ rooms }: { rooms: RoomOccupancyInsight[] })
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44)}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 36 }}>
-        <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" stroke="#64748b" fontSize={12} allowDecimals={false} />
-        <YAxis type="category" dataKey="roomName" stroke="#94a3b8" fontSize={12} width={110} />
+        <CartesianGrid stroke="#cdd8ea" strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" stroke="#7e8ea5" fontSize={12} allowDecimals={false} />
+        <YAxis type="category" dataKey="roomName" stroke="#505f74" fontSize={12} width={110} />
         <Tooltip
           {...CHART_TOOLTIP_STYLE}
           formatter={(value) => [`${value} prijava`, 'Broj check-in-a']}
@@ -75,9 +75,9 @@ export function SessionTypeChart({ sessions }: { sessions: SessionTypeInsight[] 
   return (
     <ResponsiveContainer width="100%" height={Math.max(120, sessions.length * 56)}>
       <BarChart data={sessions} layout="vertical" margin={{ left: 8, right: 36 }}>
-        <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" stroke="#64748b" fontSize={12} unit="%" domain={[0, 100]} />
-        <YAxis type="category" dataKey="sessionType" stroke="#94a3b8" fontSize={12} width={90} />
+        <CartesianGrid stroke="#cdd8ea" strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" stroke="#7e8ea5" fontSize={12} unit="%" domain={[0, 100]} />
+        <YAxis type="category" dataKey="sessionType" stroke="#505f74" fontSize={12} width={90} />
         <Tooltip
           {...CHART_TOOLTIP_STYLE}
           formatter={(value, _name, item) => [
