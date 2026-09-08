@@ -71,7 +71,7 @@ function RoomTile({ room, occ }: { room: RoomDTO; occ: RoomOccupancyDTO | undefi
         </div>
         <div className="flex items-end justify-between">
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums text-white transition-colors duration-700"
+            className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums text-slate-100 transition-colors duration-700"
             style={{ backgroundColor: ring }}
           >
             {Math.round(animatedCount)}/{room.capacity}
